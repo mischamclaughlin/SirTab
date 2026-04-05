@@ -27,18 +27,18 @@ document.addEventListener("DOMContentLoaded", async () => {
                   ? "light"
                   : savedTheme === "catppuccin-dark"
                     ? "mocha"
-                  : savedTheme === "catppuccin-light"
+                    : savedTheme === "catppuccin-light"
                       ? "latte"
                       : savedTheme === "cappucin-light"
                         ? "latte"
-                      : savedTheme === "claude" || savedTheme === "retro"
-                    ? "retro-dark"
-                    : savedTheme;
+                        : savedTheme === "claude" || savedTheme === "retro"
+                          ? "retro-dark"
+                          : savedTheme;
         const theme = THEMES.includes(savedTheme as SidebarTheme)
             ? (savedTheme as SidebarTheme)
             : THEMES.includes(normalizedSavedTheme as SidebarTheme)
               ? (normalizedSavedTheme as SidebarTheme)
-            : "dark";
+              : "dark";
         applyTheme(theme);
     }
 
@@ -46,6 +46,32 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Action Section
     const actions = document.getElementById("actions");
+
+    const searchInput = document.createElement("input");
+    searchInput.type = "text";
+    searchInput.placeholder = "search tabs and bookmarks";
+    searchInput.className = "search-input";
+    searchInput.autofocus = true;
+    actions?.appendChild(searchInput);
+    let searchQuery = "";
+
+    searchInput.addEventListener("input", () => {
+        searchQuery = searchInput.value.trim().toLowerCase();
+        queueRender();
+    });
+
+    searchInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || searchInput.value.length === 0) return;
+        searchInput.value = "";
+        searchQuery = "";
+        queueRender();
+    });
+
+    chrome.sidePanel.onOpened.addListener(() => {
+        window.focus();
+        searchInput.focus();
+    });
+
     const actionBtnSection = document.createElement("div");
     actionBtnSection.className = "action-btn-section";
     actions?.appendChild(actionBtnSection);
@@ -317,10 +343,67 @@ document.addEventListener("DOMContentLoaded", async () => {
     function isAllowedBookmarkUrl(rawUrl: string) {
         try {
             const parsedUrl = new URL(rawUrl);
-            return parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:";
+            return (
+                parsedUrl.protocol === "http:" ||
+                parsedUrl.protocol === "https:"
+            );
         } catch {
             return false;
         }
+    }
+
+    function includesNormalized(value: string | undefined, query: string) {
+        if (query.length === 0) return true;
+        if (!value) return false;
+        return value.toLowerCase().includes(query);
+    }
+
+    function tabMatchesQuery(tab: chrome.tabs.Tab, query: string) {
+        return (
+            includesNormalized(tab.title, query) ||
+            includesNormalized(tab.url, query)
+        );
+    }
+
+    function groupMatchesQuery(
+        group: chrome.tabGroups.TabGroup,
+        query: string,
+    ) {
+        return includesNormalized(group.title, query);
+    }
+
+    function bookmarkNodeMatchesQuery(
+        node: chrome.bookmarks.BookmarkTreeNode,
+        query: string,
+    ) {
+        return (
+            includesNormalized(node.title, query) ||
+            includesNormalized(node.url, query)
+        );
+    }
+
+    function filterBookmarkNodes(
+        nodes: chrome.bookmarks.BookmarkTreeNode[],
+        query: string,
+    ): chrome.bookmarks.BookmarkTreeNode[] {
+        if (query.length === 0) return nodes;
+
+        const filteredNodes: chrome.bookmarks.BookmarkTreeNode[] = [];
+        for (const node of nodes) {
+            const filteredChildren = node.children
+                ? filterBookmarkNodes(node.children, query)
+                : undefined;
+            const matchesSelf = bookmarkNodeMatchesQuery(node, query);
+            const hasMatchingChildren = (filteredChildren?.length ?? 0) > 0;
+            if (!matchesSelf && !hasMatchingChildren) continue;
+
+            filteredNodes.push({
+                ...node,
+                children: filteredChildren,
+            });
+        }
+
+        return filteredNodes;
     }
 
     function cycleTabs(
@@ -424,6 +507,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function cycleBookmarks(
         parentElement: HTMLElement,
         nodes: chrome.bookmarks.BookmarkTreeNode[],
+        forceExpandFolders = false,
     ) {
         for (const node of nodes) {
             const nodeTitle = node.title?.trim() ?? "";
@@ -448,7 +532,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 btn.type = "button";
                 btn.addEventListener("click", async () => {
                     if (!isAllowedBookmarkUrl(node.url!)) {
-                        console.warn("Blocked bookmark URL with unsupported scheme:", node.url);
+                        console.warn(
+                            "Blocked bookmark URL with unsupported scheme:",
+                            node.url,
+                        );
                         return;
                     }
                     await chrome.tabs.create({ url: node.url });
@@ -469,14 +556,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             const hasChildren = (node.children?.length ?? 0) > 0;
-            const isCollapsed = isBookmarkFolderCollapsed(node.id);
+            const isCollapsed =
+                !forceExpandFolders && isBookmarkFolderCollapsed(node.id);
             const toggleIcon = isCollapsed ? "▸" : "▾";
 
             const btn = document.createElement("button");
             btn.className = "group-toggle";
             btn.type = "button";
             btn.addEventListener("click", async () => {
-                if (!hasChildren) return;
+                if (forceExpandFolders || !hasChildren) return;
                 await toggleBookmarkFolderInList(node.id);
                 void render();
             });
@@ -497,9 +585,16 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const nestedList = document.createElement("ul");
                 nestedList.className = "bookmark-nested-list";
                 li.appendChild(nestedList);
-                cycleBookmarks(nestedList, node.children!);
+                cycleBookmarks(nestedList, node.children!, forceExpandFolders);
             }
         }
+    }
+
+    function createEmptyState(message: string) {
+        const li = document.createElement("li");
+        li.className = "empty-state-message";
+        li.textContent = message;
+        return li;
     }
 
     let renderToken = 0;
@@ -604,16 +699,44 @@ document.addEventListener("DOMContentLoaded", async () => {
             else tabsByGroup.set(tab.groupId, [tab]);
         }
 
-        const next = document.createElement("ul");
-        cycleTabs(next, ungroupedTabs, false);
+        const isSearching = searchQuery.length > 0;
+        const visibleUngroupedTabs = isSearching
+            ? ungroupedTabs.filter((tab) => tabMatchesQuery(tab, searchQuery))
+            : ungroupedTabs;
 
-        const li = document.createElement("li");
-        li.className = "group-section";
-        next.appendChild(li);
+        const next = document.createElement("ul");
+        cycleTabs(next, visibleUngroupedTabs, false);
+
+        let renderedTabResults = visibleUngroupedTabs.length > 0;
+        let hasRenderedGroupSection = false;
 
         for (const group of groups) {
             const groupId = group.id;
             if (groupId == null) continue;
+
+            const tabsInGroup = tabsByGroup.get(groupId) ?? [];
+            const groupTitleMatches = isSearching
+                ? groupMatchesQuery(group, searchQuery)
+                : false;
+            const visibleTabsInGroup = isSearching
+                ? groupTitleMatches
+                    ? tabsInGroup
+                    : tabsInGroup.filter((tab) =>
+                          tabMatchesQuery(tab, searchQuery),
+                      )
+                : tabsInGroup;
+            const shouldRenderGroup =
+                !isSearching ||
+                groupTitleMatches ||
+                visibleTabsInGroup.length > 0;
+            if (!shouldRenderGroup) continue;
+
+            if (!hasRenderedGroupSection) {
+                const li = document.createElement("li");
+                li.className = "group-section";
+                next.appendChild(li);
+                hasRenderedGroupSection = true;
+            }
 
             const groupColour = group.color;
 
@@ -627,7 +750,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 ? chromeToUiColor[groupColour]
                 : "var(--blue)";
 
-            const isCollapsed = isCollapsedInList(groupId);
+            const isCollapsed = !isSearching && isCollapsedInList(groupId);
             const toggleIcon = isCollapsed ? "▸" : "▾";
             const groupTitle = group.title?.trim() || "(untitled)";
             const toggleIconLabel = document.createElement("h4");
@@ -647,41 +770,57 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const groupRow = document.createElement("div");
             groupRow.className = "group-row";
-            const deleteGroupBtn = createDeleteButton("Close group", async () => {
-                const tabIds = (tabsByGroup.get(groupId) ?? [])
-                    .map((tab) => tab.id)
-                    .filter((tabId): tabId is number => tabId != null);
-                if (tabIds.length === 0) return;
+            const deleteGroupBtn = createDeleteButton(
+                "Close group",
+                async () => {
+                    const tabIds = (tabsByGroup.get(groupId) ?? [])
+                        .map((tab) => tab.id)
+                        .filter((tabId): tabId is number => tabId != null);
+                    if (tabIds.length === 0) return;
 
-                const tabCount = tabIds.length;
-                const confirmed = window.confirm(
-                    `Close group "${groupTitle}" and ${tabCount} tab${tabCount === 1 ? "" : "s"}?`,
-                );
-                if (!confirmed) return;
+                    const tabCount = tabIds.length;
+                    const confirmed = window.confirm(
+                        `Close group "${groupTitle}" and ${tabCount} tab${tabCount === 1 ? "" : "s"}?`,
+                    );
+                    if (!confirmed) return;
 
-                await chrome.tabs.remove(tabIds);
-                if (collapsedGroups.has(groupId)) {
-                    collapsedGroups.delete(groupId);
-                    await persistCollapsedGroups();
-                }
-            });
+                    await chrome.tabs.remove(tabIds);
+                    if (collapsedGroups.has(groupId)) {
+                        collapsedGroups.delete(groupId);
+                        await persistCollapsedGroups();
+                    }
+                },
+            );
             groupRow.append(btn, deleteGroupBtn);
 
             if (!isCollapsed) {
-                cycleTabs(li, tabsByGroup.get(groupId) ?? [], true, groupColour);
+                cycleTabs(li, visibleTabsInGroup, true, groupColour);
             }
 
             next.appendChild(groupRow);
             if (!isCollapsed) {
                 next.appendChild(li);
             }
+            renderedTabResults = true;
+        }
+
+        if (isSearching && !renderedTabResults) {
+            next.appendChild(createEmptyState("No matching tabs."));
         }
 
         list?.replaceChildren(...Array.from(next.children));
 
         if (bookmarksList) {
             const nextBookmarks = document.createElement("ul");
-            cycleBookmarks(nextBookmarks, tree);
+            const bookmarkNodes = isSearching
+                ? filterBookmarkNodes(tree, searchQuery)
+                : tree;
+            cycleBookmarks(nextBookmarks, bookmarkNodes, isSearching);
+            if (isSearching && nextBookmarks.childElementCount === 0) {
+                nextBookmarks.appendChild(
+                    createEmptyState("No matching bookmarks."),
+                );
+            }
             bookmarksList.replaceChildren(
                 ...Array.from(nextBookmarks.children),
             );

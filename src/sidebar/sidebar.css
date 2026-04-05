@@ -125,7 +125,6 @@
 }
 
 :root[data-theme="latte"] {
-    /* Catppuccin Latte */
     --bg-colour-RGB: 239, 241, 245;
     --border-colour-RGB: 188, 192, 204;
     --border-faded-colour-RGB: 204, 208, 218;
@@ -264,6 +263,29 @@ textarea {
     padding: 1rem 0;
     display: grid;
     align-items: start;
+    gap: 1rem;
+}
+
+.search-input {
+    width: 100%;
+    border: 1px solid var(--border-faded);
+    border-radius: 0.25rem;
+    background: transparent;
+    color: var(--subtext);
+    padding: 0.25rem 0.5rem;
+    font-family:
+        "JetBrains Mono", "Fira Code", "Cascadia Mono", "SF Mono", Consolas,
+        monospace;
+    font-variant-ligatures: none;
+    caret-color: var(--text);
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--border-light);
+    background: var(--surface-light);
+    color: var(--text);
+    box-shadow: 0 0 0 2px rgba(var(--blue-colour-RGB), 0.2);
 }
 
 .action-btn-section {
@@ -302,8 +324,8 @@ textarea {
     cursor: pointer;
 }
 
-.group-name-input::placeholder {
-    color: var(--subsubtext);
+.group-name-input::placeholder,
+.search-input::placeholder {
     font-family:
         "JetBrains Mono", "Fira Code", "Cascadia Mono", "SF Mono", Consolas,
         monospace;
@@ -454,6 +476,13 @@ textarea {
 
 .tab-item {
     z-index: 5;
+}
+
+.empty-state-message {
+    border: 1px dashed var(--border-faded);
+    border-radius: 0.25rem;
+    color: var(--subsubtext);
+    padding: 0.35rem 0.5rem;
 }
 
 .tab-row,
