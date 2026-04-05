@@ -314,6 +314,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         return deleteBtn;
     }
 
+    function isAllowedBookmarkUrl(rawUrl: string) {
+        try {
+            const parsedUrl = new URL(rawUrl);
+            return parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:";
+        } catch {
+            return false;
+        }
+    }
+
     function cycleTabs(
         tabElement: HTMLElement,
         tabList: chrome.tabs.Tab[],
@@ -438,6 +447,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 btn.className = "ungroup-tab";
                 btn.type = "button";
                 btn.addEventListener("click", async () => {
+                    if (!isAllowedBookmarkUrl(node.url!)) {
+                        console.warn("Blocked bookmark URL with unsupported scheme:", node.url);
+                        return;
+                    }
                     await chrome.tabs.create({ url: node.url });
                 });
 
@@ -639,6 +652,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                     .map((tab) => tab.id)
                     .filter((tabId): tabId is number => tabId != null);
                 if (tabIds.length === 0) return;
+
+                const tabCount = tabIds.length;
+                const confirmed = window.confirm(
+                    `Close group "${groupTitle}" and ${tabCount} tab${tabCount === 1 ? "" : "s"}?`,
+                );
+                if (!confirmed) return;
+
                 await chrome.tabs.remove(tabIds);
                 if (collapsedGroups.has(groupId)) {
                     collapsedGroups.delete(groupId);
