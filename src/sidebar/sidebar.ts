@@ -3,26 +3,46 @@ document.addEventListener("DOMContentLoaded", async () => {
         "src/sidebar/assets/default-tab-icon.svg",
     );
     const THEME_STORAGE_KEY = "sidebarTheme";
+    const THEMES = [
+        "dark",
+        "light",
+        "mocha",
+        "latte",
+        "retro-dark",
+        "retro-light",
+    ] as const;
+    type SidebarTheme = (typeof THEMES)[number];
 
-    function applyTheme(theme: "light" | "dark") {
+    function applyTheme(theme: SidebarTheme) {
         document.documentElement.setAttribute("data-theme", theme);
     }
 
     async function loadThemePreference() {
         const storage = await chrome.storage.local.get(THEME_STORAGE_KEY);
         const savedTheme = storage[THEME_STORAGE_KEY];
-        const theme = savedTheme === "light" ? "light" : "dark";
+        const normalizedSavedTheme =
+            savedTheme === "standard-dark"
+                ? "dark"
+                : savedTheme === "standard-light"
+                  ? "light"
+                  : savedTheme === "catppuccin-dark"
+                    ? "mocha"
+                  : savedTheme === "catppuccin-light"
+                      ? "latte"
+                      : savedTheme === "cappucin-light"
+                        ? "latte"
+                      : savedTheme === "claude" || savedTheme === "retro"
+                    ? "retro-dark"
+                    : savedTheme;
+        const theme = THEMES.includes(savedTheme as SidebarTheme)
+            ? (savedTheme as SidebarTheme)
+            : THEMES.includes(normalizedSavedTheme as SidebarTheme)
+              ? (normalizedSavedTheme as SidebarTheme)
+            : "dark";
         applyTheme(theme);
     }
 
     await loadThemePreference();
-
-    function updateThemeToggleButtonLabel(button: HTMLButtonElement) {
-        const currentTheme =
-            document.documentElement.getAttribute("data-theme");
-        button.textContent =
-            currentTheme === "light" ? "switch to dark" : "switch to light";
-    }
 
     // Action Section
     const actions = document.getElementById("actions");
@@ -52,15 +72,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     type GroupColorChoice = keyof typeof groupColorMap;
 
     const chromeToUiColor: Record<string, string> = {
-        grey: "var(--bg)",
-        blue: "var(--blue)",
-        red: "var(--red)",
-        yellow: "var(--yellow)",
-        green: "var(--green)",
-        pink: "var(--pink)",
-        purple: "var(--lavender)",
-        cyan: "var(--sky)",
-        orange: "var(--peach)",
+        grey: "var(--group-grey)",
+        blue: "var(--group-blue)",
+        red: "var(--group-red)",
+        yellow: "var(--group-yellow)",
+        green: "var(--group-green)",
+        pink: "var(--group-pink)",
+        purple: "var(--group-lavender)",
+        cyan: "var(--group-sky)",
+        orange: "var(--group-peach)",
     };
 
     function resetGroupCreationState() {
@@ -158,26 +178,51 @@ document.addEventListener("DOMContentLoaded", async () => {
     settingInfoSection.className = "setting-info-section";
     settingInfoSection.hidden = true;
 
-    const themeToggleBtn = document.createElement("button");
-    themeToggleBtn.type = "button";
-    themeToggleBtn.className = "theme-toggle-btn";
-    updateThemeToggleButtonLabel(themeToggleBtn);
-    settingInfoSection.appendChild(themeToggleBtn);
+    const themeOptions = document.createElement("div");
+    themeOptions.className = "theme-options";
+
+    const themeLabels: Record<SidebarTheme, string> = {
+        dark: "dark",
+        light: "light",
+        mocha: "mocha",
+        latte: "latte",
+        "retro-dark": "retro dark",
+        "retro-light": "retro light",
+    };
+
+    const themeButtons = new Map<SidebarTheme, HTMLButtonElement>();
+    for (const theme of THEMES) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "theme-option-btn";
+        button.textContent = themeLabels[theme];
+        button.addEventListener("click", async () => {
+            applyTheme(theme);
+            await chrome.storage.local.set({ [THEME_STORAGE_KEY]: theme });
+            for (const [id, btn] of themeButtons) {
+                btn.classList.toggle("active-theme", id === theme);
+            }
+        });
+        themeButtons.set(theme, button);
+        themeOptions.append(button);
+    }
+
+    const currentTheme = document.documentElement.getAttribute(
+        "data-theme",
+    ) as SidebarTheme | null;
+    const initialTheme =
+        currentTheme && THEMES.includes(currentTheme) ? currentTheme : "dark";
+    for (const [id, btn] of themeButtons) {
+        btn.classList.toggle("active-theme", id === initialTheme);
+    }
+
+    settingInfoSection.appendChild(themeOptions);
 
     let isSettingOpen = false;
 
     settingsBtn.addEventListener("click", () => {
         isSettingOpen = !isSettingOpen;
         settingInfoSection.hidden = !isSettingOpen;
-    });
-
-    themeToggleBtn.addEventListener("click", async () => {
-        const currentTheme =
-            document.documentElement.getAttribute("data-theme");
-        const newTheme = currentTheme === "light" ? "dark" : "light";
-        applyTheme(newTheme);
-        await chrome.storage.local.set({ [THEME_STORAGE_KEY]: newTheme });
-        updateThemeToggleButtonLabel(themeToggleBtn);
     });
 
     actionBtnSection?.append(settingsBtn, settingInfoSection);
