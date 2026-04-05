@@ -1,0 +1,326 @@
+:root {
+    /* Backgrounds */
+    --bg-colour-RGB: 30, 30, 46;
+
+    /* Borders */
+    --border-colour-RGB: 69, 71, 90;
+    --border-faded-colour-RGB: 49, 50, 68;
+    --border-light-colour-RGB: 88, 91, 112;
+
+    /* Surfaces */
+    --surface-colour-RGB: 69, 71, 90;
+    --surface-light-colour-RGB: 49, 50, 68;
+
+    /* Colours */
+    --dark-colour-RGB: 17, 17, 27;
+    --lavender-colour-RGB: 180, 190, 254;
+    --peach-colour-RGB: 250, 179, 135;
+    --red-colour-RGB: 243, 139, 168;
+    --yellow-colour-RGB: 249, 226, 175;
+    --green-colour-RGB: 166, 227, 161;
+    --pink-colour-RGB: 245, 194, 231;
+    --sky-colour-RGB: 137, 220, 235;
+    --blue-colour-RGB: 137, 180, 250;
+
+    /* Texts */
+    --text-colour-RGB: 205, 214, 244;
+    --subtext-colour-RGB: 186, 194, 222;
+    --subsubtext-colour-RGB: 166, 173, 200;
+
+    --dark: rgba(var(--dark-colour-RGB), 0.25);
+    --blue: rgba(var(--blue-colour-RGB), 0.25);
+    --red: rgba(var(--red-colour-RGB), 0.25);
+    --yellow: rgba(var(--yellow-colour-RGB), 0.25);
+    --green: rgba(var(--green-colour-RGB), 0.25);
+    --pink: rgba(var(--pink-colour-RGB), 0.25);
+    --lavender: rgba(var(--lavender-colour-RGB), 0.25);
+    --sky: rgba(var(--sky-colour-RGB), 0.25);
+    --peach: rgba(var(--peach-colour-RGB), 0.25);
+
+    --bg: rgb(var(--bg-colour-RGB));
+    --border: rgb(var(--border-colour-RGB));
+    --border-faded: rgb(var(--border-faded-colour-RGB));
+    --border-light: rgb(var(--border-light-colour-RGB));
+    --surface: rgb(var(--surface-colour-RGB));
+    --surface-light: rgb(var(--surface-light-colour-RGB));
+    --subtext: rgb(var(--subtext-colour-RGB));
+    --subsubtext: rgb(var(--subsubtext-colour-RGB));
+    --text: rgb(var(--text-colour-RGB));
+}
+
+:root[data-theme="light"] {
+    /* Catppuccin Latte */
+    --bg-colour-RGB: 239, 241, 245;
+    --border-colour-RGB: 188, 192, 204;
+    --border-faded-colour-RGB: 204, 208, 218;
+    --border-light-colour-RGB: 172, 176, 190;
+    --surface-colour-RGB: 230, 233, 239;
+    --surface-light-colour-RGB: 220, 224, 232;
+
+    --dark-colour-RGB: 108, 111, 133;
+    --lavender-colour-RGB: 114, 135, 253;
+    --peach-colour-RGB: 254, 100, 11;
+    --red-colour-RGB: 210, 15, 57;
+    --yellow-colour-RGB: 223, 142, 29;
+    --green-colour-RGB: 64, 160, 43;
+    --pink-colour-RGB: 234, 118, 203;
+    --sky-colour-RGB: 4, 165, 229;
+    --blue-colour-RGB: 30, 102, 245;
+
+    --text-colour-RGB: 76, 79, 105;
+    --subtext-colour-RGB: 92, 95, 119;
+    --subsubtext-colour-RGB: 108, 111, 133;
+}
+
+* {
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+    font-family: inherit;
+}
+
+html {
+    background: transparent;
+    padding: 0.3rem;
+    min-height: 100vh;
+    min-width: none;
+    font-family:
+        "JetBrains Mono", "Fira Code", "Cascadia Mono", "SF Mono", Consolas,
+        monospace;
+}
+
+body {
+    width: 100%;
+    min-height: 99vh;
+    height: 100%;
+    padding: 1rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+}
+
+#actions {
+    width: 100%;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1rem;
+    padding: 1rem 0;
+    display: grid;
+    align-items: center;
+    gap: 1rem;
+}
+
+.action-btn-section {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+.action-btn {
+    text-align: center;
+}
+
+.group-info-dropdown {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.group-name-input,
+.group-colour-select,
+.group-confirm-btn {
+    border: 1px solid var(--border-faded);
+    border-radius: 0.25rem;
+    background: transparent;
+    color: var(--subtext);
+    padding: 0.25rem 0.5rem;
+    font-family:
+        "JetBrains Mono", "Fira Code", "Cascadia Mono", "SF Mono", Consolas,
+        monospace;
+    font-variant-ligatures: none;
+}
+
+.group-confirm-btn {
+    cursor: pointer;
+}
+
+.group-name-input::placeholder {
+    color: var(--subsubtext);
+    font-family:
+        "JetBrains Mono", "Fira Code", "Cascadia Mono", "SF Mono", Consolas,
+        monospace;
+    font-variant-ligatures: none;
+}
+
+.group-colour-select {
+    padding-right: 1.5rem;
+}
+
+#tabs-and-groups {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 1rem;
+}
+
+.group {
+    width: calc(100% - 0.5rem);
+    margin-left: 0.5rem;
+    display: grid;
+    gap: 0.5rem;
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+}
+
+.collapsed-group {
+    padding: 0;
+    gap: 0;
+    height: 0;
+    width: 0;
+}
+
+.group-section {
+    margin: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.group-toggle {
+    width: 100%;
+    min-height: 1.5rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    color: var(--subtext);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+}
+
+.group-toggle-icon {
+    width: 1ch;
+    text-align: center;
+    color: var(--text);
+    flex-shrink: 0;
+}
+
+.group-toggle-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--subtext);
+    font-family:
+        "JetBrains Mono", "Fira Code", "Cascadia Mono", "SF Mono", Consolas,
+        monospace;
+    font-variant-ligatures: none;
+}
+
+.ungroup-tab,
+.group-tab,
+.action-btn {
+    width: 100%;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    z-index: 10;
+}
+
+.ungroup-tab,
+.group-tab {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+    align-items: center;
+    gap: 1rem;
+    color: var(--subsubtext);
+    text-align: left;
+}
+
+.action-btn {
+    color: var(--subtext);
+    font-family:
+        "JetBrains Mono", "Fira Code", "Cascadia Mono", "SF Mono", Consolas,
+        monospace;
+    font-variant-ligatures: none;
+}
+
+.tab-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: 0.2rem;
+    object-fit: cover;
+    display: block;
+}
+
+.tab-label {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family:
+        "JetBrains Mono", "Fira Code", "Cascadia Mono", "SF Mono", Consolas,
+        monospace;
+    font-variant-ligatures: none;
+}
+
+.tab-label,
+.action-btn {
+    border: 1px solid var(--border-faded);
+    border-radius: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    transition:
+        border-color 150ms ease-in-out,
+        background 200ms ease-in-out;
+}
+.tab-label:hover,
+.action-btn:hover {
+    background: var(--surface);
+    border: 1px solid var(--border);
+}
+
+.active-tab {
+    background: var(--surface-light);
+    border: 1px solid var(--border-light);
+    color: var(--text);
+}
+
+.tab-item {
+    z-index: 5;
+}
+
+.setting-info-section {
+    width: 100%;
+    grid-column: 1 / -1;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    padding: 0.75rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    color: var(--subtext);
+}
+
+.setting-info-section[hidden] {
+    display: none;
+}
+
+.theme-toggle-btn {
+    width: 100%;
+    border: 1px solid var(--border-faded);
+    border-radius: 0.25rem;
+    background: transparent;
+    color: var(--subtext);
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    font-family:
+        "JetBrains Mono", "Fira Code", "Cascadia Mono", "SF Mono", Consolas,
+        monospace;
+    font-variant-ligatures: none;
+}
