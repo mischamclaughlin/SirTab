@@ -17,8 +17,8 @@
     "commands": {
         "_execute_action": {
             "suggested_key": {
-                "default": "Ctrl+Shift+L",
-                "mac": "Command+Shift+L"
+                "default": "Ctrl+B",
+                "mac": "Command+B"
             }
         },
         "cycle_next_visible_tab": {
