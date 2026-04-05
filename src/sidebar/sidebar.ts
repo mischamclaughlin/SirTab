@@ -183,63 +183,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     actionBtnSection?.append(settingsBtn, settingInfoSection);
 
     // Tabs & Groups Section
-    const list = document.getElementById("tabs-and-groups");
-    if (!list) return;
-
-    function cycleTabs(
-        tabElement: HTMLElement,
-        tabList: chrome.tabs.Tab[],
-        groupId?: number,
-        groupColour?: string,
-    ) {
-        for (const tab of tabList) {
-            if (tab.id == null) continue;
-            if (groupId != null && tab.groupId !== groupId) continue;
-            if (
-                groupId == null &&
-                tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE
-            )
-                continue;
-
-            const li = document.createElement("li");
-            li.className = "tab-item";
-
-            const btn = document.createElement("button");
-            btn.className = groupId ? "group-tab" : "ungroup-tab";
-            btn.type = "button";
-
-            const icon = document.createElement("img");
-            icon.className = "tab-icon";
-            icon.src = tab.favIconUrl || DEFAULT_TAB_ICON_URL;
-            icon.alt = "";
-            icon.width = 16;
-            icon.height = 16;
-            icon.addEventListener("error", () => {
-                icon.src = DEFAULT_TAB_ICON_URL;
-            });
-
-            const label = document.createElement("span");
-            label.className = "tab-label";
-
-            if (tab.active) label.className += " active-tab";
-            const title = tab.title?.trim() ?? "";
-            const text = title || tab.url || "(Untitled tab)";
-            label.textContent = text;
-
-            btn.append(icon, label);
-
-            btn.addEventListener("click", async () => {
-                await chrome.tabs.update(tab.id!, { active: true });
-            });
-
-            li.appendChild(btn);
-            tabElement.appendChild(li);
-            tabElement.style.background = groupColour
-                ? chromeToUiColor[groupColour]
-                : "var(--blue)";
-        }
-    }
-
     const collapsedGroups = new Set<number>();
     const COLLAPSED_GROUPS_STORAGE_KEY = "collapsedGroupsByWindow";
     let currentWindowId: number | null = null;
@@ -293,14 +236,212 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     async function toggleGroupInList(groupId: number) {
-        if (collapsedGroups.has(groupId)) collapsedGroups.delete(groupId);
-        else collapsedGroups.add(groupId);
+        const willCollapse = !collapsedGroups.has(groupId);
+        if (willCollapse) collapsedGroups.add(groupId);
+        else collapsedGroups.delete(groupId);
 
         await persistCollapsedGroups();
+        await chrome.tabGroups.update(groupId, { collapsed: willCollapse });
     }
 
     function isCollapsedInList(groupId: number) {
         return collapsedGroups.has(groupId);
+    }
+
+    const list = document.getElementById("tabs-and-groups");
+    if (!list) return;
+
+    function createDeleteButton(
+        title: string,
+        onClick: () => Promise<void> | void,
+    ) {
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "row-delete-btn";
+        deleteBtn.title = title;
+        deleteBtn.setAttribute("aria-label", title);
+        deleteBtn.textContent = "x";
+        deleteBtn.addEventListener("click", async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            await onClick();
+        });
+        return deleteBtn;
+    }
+
+    function cycleTabs(
+        tabElement: HTMLElement,
+        tabList: chrome.tabs.Tab[],
+        grouped = false,
+        groupColour?: string,
+    ) {
+        for (const tab of tabList) {
+            if (tab.id == null) continue;
+
+            const li = document.createElement("li");
+            li.className = "tab-item";
+
+            const btn = document.createElement("button");
+            btn.className = grouped ? "group-tab" : "ungroup-tab";
+            btn.type = "button";
+
+            const icon = document.createElement("img");
+            icon.className = "tab-icon";
+            icon.src = tab.favIconUrl || DEFAULT_TAB_ICON_URL;
+            icon.alt = "";
+            icon.width = 16;
+            icon.height = 16;
+            icon.addEventListener("error", () => {
+                icon.src = DEFAULT_TAB_ICON_URL;
+            });
+
+            const label = document.createElement("span");
+            label.className = "tab-label";
+
+            if (tab.active) label.className += " active-tab";
+            const title = tab.title?.trim() ?? "";
+            const text = title || tab.url || "(Untitled tab)";
+            label.textContent = text;
+
+            btn.append(icon, label);
+
+            btn.addEventListener("click", async () => {
+                await chrome.tabs.update(tab.id!, { active: true });
+            });
+
+            const row = document.createElement("div");
+            row.className = "tab-row";
+
+            const deleteBtn = createDeleteButton("Close tab", async () => {
+                await chrome.tabs.remove(tab.id!);
+            });
+
+            row.append(btn, deleteBtn);
+            li.appendChild(row);
+            tabElement.appendChild(li);
+            tabElement.style.background = groupColour
+                ? chromeToUiColor[groupColour]
+                : "var(--blue)";
+        }
+    }
+
+    // Bookmarks Section
+    const bookmarksList = document.getElementById("bookmarks-list");
+    const collapsedBookmarkFolders = new Set<string>();
+    const COLLAPSED_BOOKMARK_FOLDERS_STORAGE_KEY = "collapsedBookmarkFolders";
+
+    async function loadCollapsedBookmarkFolders() {
+        const storage = await chrome.storage.local.get(
+            COLLAPSED_BOOKMARK_FOLDERS_STORAGE_KEY,
+        );
+        const raw = storage[COLLAPSED_BOOKMARK_FOLDERS_STORAGE_KEY];
+        const folderIds = Array.isArray(raw)
+            ? raw.filter((id): id is string => typeof id === "string")
+            : [];
+
+        collapsedBookmarkFolders.clear();
+        for (const folderId of folderIds) {
+            collapsedBookmarkFolders.add(folderId);
+        }
+    }
+
+    async function persistCollapsedBookmarkFolders() {
+        await chrome.storage.local.set({
+            [COLLAPSED_BOOKMARK_FOLDERS_STORAGE_KEY]: Array.from(
+                collapsedBookmarkFolders,
+            ),
+        });
+    }
+
+    async function toggleBookmarkFolderInList(folderId: string) {
+        if (collapsedBookmarkFolders.has(folderId)) {
+            collapsedBookmarkFolders.delete(folderId);
+        } else {
+            collapsedBookmarkFolders.add(folderId);
+        }
+
+        await persistCollapsedBookmarkFolders();
+    }
+
+    function isBookmarkFolderCollapsed(folderId: string) {
+        return collapsedBookmarkFolders.has(folderId);
+    }
+
+    function cycleBookmarks(
+        parentElement: HTMLElement,
+        nodes: chrome.bookmarks.BookmarkTreeNode[],
+    ) {
+        for (const node of nodes) {
+            const nodeTitle = node.title?.trim() ?? "";
+            if (nodeTitle === "Other bookmarks") continue;
+
+            const isRootPlaceholder = !node.url && nodeTitle.length === 0;
+            const isBookmarksBar =
+                node.folderType === "bookmarks-bar" ||
+                node.id === "1" ||
+                nodeTitle.toLowerCase() === "bookmarks bar";
+            if (isRootPlaceholder || isBookmarksBar) {
+                if (node.children) cycleBookmarks(parentElement, node.children);
+                continue;
+            }
+
+            const li = document.createElement("li");
+            li.className = "tab-item";
+
+            if (node.url) {
+                const btn = document.createElement("button");
+                btn.className = "ungroup-tab";
+                btn.type = "button";
+                btn.addEventListener("click", async () => {
+                    await chrome.tabs.create({ url: node.url });
+                });
+
+                const icon = document.createElement("img");
+                icon.className = "tab-icon";
+                icon.src = DEFAULT_TAB_ICON_URL;
+
+                const label = document.createElement("span");
+                label.className = "tab-label";
+                label.textContent = nodeTitle || node.url || "(Untitled tab)";
+
+                btn.append(icon, label);
+                li.appendChild(btn);
+                parentElement.appendChild(li);
+                continue;
+            }
+
+            const hasChildren = (node.children?.length ?? 0) > 0;
+            const isCollapsed = isBookmarkFolderCollapsed(node.id);
+            const toggleIcon = isCollapsed ? "▸" : "▾";
+
+            const btn = document.createElement("button");
+            btn.className = "group-toggle";
+            btn.type = "button";
+            btn.addEventListener("click", async () => {
+                if (!hasChildren) return;
+                await toggleBookmarkFolderInList(node.id);
+                void render();
+            });
+
+            const toggleIconLabel = document.createElement("h4");
+            toggleIconLabel.className = "group-toggle-icon";
+            toggleIconLabel.textContent = hasChildren ? toggleIcon : " ";
+
+            const label = document.createElement("h4");
+            label.className = "group-toggle-title";
+            label.textContent = nodeTitle || "(untitled)";
+
+            btn.append(toggleIconLabel, label);
+            li.appendChild(btn);
+            parentElement.appendChild(li);
+
+            if (hasChildren && !isCollapsed) {
+                const nestedList = document.createElement("ul");
+                nestedList.className = "bookmark-nested-list";
+                li.appendChild(nestedList);
+                cycleBookmarks(nestedList, node.children!);
+            }
+        }
     }
 
     let renderToken = 0;
@@ -318,6 +459,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const handleTabChange = () => queueRender();
     const handleTabGroupChange = () => queueRender();
+    const handleBookmarkChange = () => queueRender();
 
     chrome.tabs.onCreated.addListener(handleTabChange);
     chrome.tabs.onRemoved.addListener(handleTabChange);
@@ -330,6 +472,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     chrome.tabGroups.onRemoved.addListener(handleTabGroupChange);
     chrome.tabGroups.onUpdated.addListener(handleTabGroupChange);
     chrome.tabGroups.onMoved.addListener(handleTabGroupChange);
+    chrome.bookmarks.onCreated.addListener(handleBookmarkChange);
+    chrome.bookmarks.onRemoved.addListener(handleBookmarkChange);
+    chrome.bookmarks.onChanged.addListener(handleBookmarkChange);
+    chrome.bookmarks.onMoved.addListener(handleBookmarkChange);
+    chrome.bookmarks.onChildrenReordered.addListener(handleBookmarkChange);
+    chrome.bookmarks.onImportEnded.addListener(handleBookmarkChange);
 
     window.addEventListener("unload", () => {
         chrome.tabs.onCreated.removeListener(handleTabChange);
@@ -343,18 +491,30 @@ document.addEventListener("DOMContentLoaded", async () => {
         chrome.tabGroups.onRemoved.removeListener(handleTabGroupChange);
         chrome.tabGroups.onUpdated.removeListener(handleTabGroupChange);
         chrome.tabGroups.onMoved.removeListener(handleTabGroupChange);
+        chrome.bookmarks.onCreated.removeListener(handleBookmarkChange);
+        chrome.bookmarks.onRemoved.removeListener(handleBookmarkChange);
+        chrome.bookmarks.onChanged.removeListener(handleBookmarkChange);
+        chrome.bookmarks.onMoved.removeListener(handleBookmarkChange);
+        chrome.bookmarks.onChildrenReordered.removeListener(
+            handleBookmarkChange,
+        );
+        chrome.bookmarks.onImportEnded.removeListener(handleBookmarkChange);
     });
 
+    await loadCollapsedBookmarkFolders();
     await loadCollapsedGroups();
     queueRender();
 
     async function render() {
         const token = ++renderToken;
 
-        const tabs = await chrome.tabs.query({ currentWindow: true });
-        const groups = await chrome.tabGroups.query({
-            windowId: chrome.windows.WINDOW_ID_CURRENT,
-        });
+        const [tabs, groups, tree] = await Promise.all([
+            chrome.tabs.query({ currentWindow: true }),
+            chrome.tabGroups.query({
+                windowId: chrome.windows.WINDOW_ID_CURRENT,
+            }),
+            chrome.bookmarks.getTree(),
+        ]);
         if (token !== renderToken) return;
 
         const activeGroupIds = new Set(
@@ -373,8 +533,21 @@ document.addEventListener("DOMContentLoaded", async () => {
             await persistCollapsedGroups();
         }
 
+        const tabsByGroup = new Map<number, chrome.tabs.Tab[]>();
+        const ungroupedTabs: chrome.tabs.Tab[] = [];
+        for (const tab of tabs) {
+            if (tab.groupId == null) continue;
+            if (tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE) {
+                ungroupedTabs.push(tab);
+                continue;
+            }
+            const groupedTabs = tabsByGroup.get(tab.groupId);
+            if (groupedTabs) groupedTabs.push(tab);
+            else tabsByGroup.set(tab.groupId, [tab]);
+        }
+
         const next = document.createElement("ul");
-        cycleTabs(next, tabs);
+        cycleTabs(next, ungroupedTabs, false);
 
         const li = document.createElement("li");
         li.className = "group-section";
@@ -414,16 +587,39 @@ document.addEventListener("DOMContentLoaded", async () => {
                 void render();
             });
 
+            const groupRow = document.createElement("div");
+            groupRow.className = "group-row";
+            const deleteGroupBtn = createDeleteButton("Close group", async () => {
+                const tabIds = (tabsByGroup.get(groupId) ?? [])
+                    .map((tab) => tab.id)
+                    .filter((tabId): tabId is number => tabId != null);
+                if (tabIds.length === 0) return;
+                await chrome.tabs.remove(tabIds);
+                if (collapsedGroups.has(groupId)) {
+                    collapsedGroups.delete(groupId);
+                    await persistCollapsedGroups();
+                }
+            });
+            groupRow.append(btn, deleteGroupBtn);
+
             if (!isCollapsed) {
-                cycleTabs(li, tabs, groupId, groupColour);
+                cycleTabs(li, tabsByGroup.get(groupId) ?? [], true, groupColour);
             }
 
-            next.appendChild(btn);
+            next.appendChild(groupRow);
             if (!isCollapsed) {
                 next.appendChild(li);
             }
         }
 
         list?.replaceChildren(...Array.from(next.children));
+
+        if (bookmarksList) {
+            const nextBookmarks = document.createElement("ul");
+            cycleBookmarks(nextBookmarks, tree);
+            bookmarksList.replaceChildren(
+                ...Array.from(nextBookmarks.children),
+            );
+        }
     }
 });
