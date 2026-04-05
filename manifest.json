@@ -20,6 +20,20 @@
                 "default": "Ctrl+Shift+L",
                 "mac": "Command+Shift+L"
             }
+        },
+        "cycle_next_visible_tab": {
+            "suggested_key": {
+                "default": "Ctrl+Shift+J",
+                "mac": "Alt+Period"
+            },
+            "description": "Switch to the next visible tab in sidebar order"
+        },
+        "cycle_previous_visible_tab": {
+            "suggested_key": {
+                "default": "Ctrl+Shift+K",
+                "mac": "Alt+Comma"
+            },
+            "description": "Switch to the previous visible tab in sidebar order"
         }
     }
 }
