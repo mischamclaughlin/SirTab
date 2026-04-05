@@ -241,7 +241,7 @@ html {
 body {
     width: 100%;
     min-height: calc(100vh - 0.5rem);
-    padding: 0.25rem 0.5rem;
+    padding: 0 0.5rem;
     border-left: 1px solid var(--border);
     background: var(--bg);
     display: flex;
