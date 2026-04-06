@@ -298,29 +298,41 @@ textarea {
     text-align: center;
 }
 
-.group-info-dropdown {
+.group-info-dropdown,
+.bookmark-info-dropdown {
     display: grid;
     grid-template-columns: 1fr auto auto;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
+    gap: 0.25rem;
 }
 
 .group-name-input,
+.bookmark-name-input,
+.add-current-tab-btn,
+.group-confirm-btn,
+.bookmark-confirm-btn,
 .group-colour-select,
-.group-confirm-btn {
+.bookmark-select {
     border: 1px solid var(--border-faded);
     border-radius: 0.25rem;
     background: transparent;
     color: var(--subtext);
-    padding: 0.25rem 0.5rem;
+    padding: 0.25rem 0.25rem;
     font-family:
         "JetBrains Mono", "Fira Code", "Cascadia Mono", "SF Mono", Consolas,
         monospace;
     font-variant-ligatures: none;
 }
 
-.group-confirm-btn {
+.group-confirm-btn,
+.bookmark-confirm-btn,
+.add-current-tab-btn {
     cursor: pointer;
+}
+
+.add-current-tab-btn--active {
+    background: var(--surface-light);
+    border: 1px solid var(--border-light);
+    color: var(--text);
 }
 
 .group-name-input::placeholder,
@@ -410,7 +422,6 @@ textarea {
     border: none;
     background: transparent;
     cursor: pointer;
-    z-index: 10;
 }
 
 .ungroup-tab,
@@ -462,7 +473,9 @@ textarea {
 .tab-label:hover,
 .action-btn:hover,
 .group-confirm-btn:hover,
-.theme-option-btn:hover {
+.theme-option-btn:hover,
+.bookmark-confirm-btn:hover,
+.add-current-tab-btn:hover {
     background: var(--surface);
     border: 1px solid var(--border);
 }
@@ -471,10 +484,6 @@ textarea {
     background: var(--surface-light);
     border: 1px solid var(--border-light);
     color: var(--text);
-}
-
-.tab-item {
-    z-index: 5;
 }
 
 .empty-state-message {
@@ -572,6 +581,14 @@ textarea {
     list-style-type: none;
     margin-top: 0.5rem;
     margin-left: 1rem;
+    display: grid;
+    gap: 0.5rem;
+}
+
+#settings {
+    width: 100%;
+    margin-top: auto;
+    padding-top: 0.5rem;
     display: grid;
     gap: 0.5rem;
 }

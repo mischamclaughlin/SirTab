@@ -47,6 +47,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Action Section
     const actions = document.getElementById("actions");
 
+    //  -- Search
     const searchInput = document.createElement("input");
     searchInput.type = "text";
     searchInput.placeholder = "search tabs and bookmarks";
@@ -68,6 +69,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     chrome.sidePanel.onOpened.addListener(() => {
+        window.focus();
+        searchInput.focus();
+    });
+
+    document.addEventListener("keydown", (event) => {
+        const isFocusShortcut =
+            (event.metaKey || event.ctrlKey) &&
+            event.key.toLowerCase() === "b";
+        if (!isFocusShortcut) return;
+
+        event.preventDefault();
         window.focus();
         searchInput.focus();
     });
@@ -157,9 +169,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         confirmBtn.addEventListener("click", async () => {
-            const groupName = textInput.value.trim() || "";
-
-            const selectedColour = colourSelect.value as GroupColorChoice;
             const homeTab = await chrome.tabs.create({
                 url: "chrome://newtab",
                 active: false,
@@ -170,6 +179,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
 
+            const groupName = textInput.value.trim() || "";
+            const selectedColour = colourSelect.value as GroupColorChoice;
+
             const groupId = await chrome.tabs.group({ tabIds: [homeTab.id] });
             await chrome.tabGroups.update(groupId, {
                 title: groupName,
@@ -178,6 +190,160 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
 
             resetGroupCreationState();
+        });
+    });
+
+    // -- Bookmark +
+    const btnNewBookmark = document.createElement("button");
+    btnNewBookmark.textContent = "bookmark +";
+    btnNewBookmark.className = "action-btn";
+    actionBtnSection.appendChild(btnNewBookmark);
+
+    let isAddCurrentTab = false;
+    let creatingBookmark = false;
+    type BookmarkFolderChoice = {
+        id: string;
+        label: string;
+    };
+
+    function collectBookmarkFolderChoices(
+        nodes: chrome.bookmarks.BookmarkTreeNode[],
+        depth = 0,
+        choices: BookmarkFolderChoice[] = [],
+    ) {
+        for (const node of nodes) {
+            const isFolder = !node.url;
+            if (!isFolder) continue;
+            if (node.title === "Other bookmarks") continue;
+
+            const nodeTitle = node.title?.trim() ?? "";
+            const isRootPlaceholder = node.id === "0" && nodeTitle.length === 0;
+            const nextDepth = isRootPlaceholder ? depth : depth + 1;
+
+            if (!isRootPlaceholder) {
+                const depthPrefix =
+                    depth > 0 ? `${"\u00A0\u00A0".repeat(depth)}] ` : "";
+                choices.push({
+                    id: node.id,
+                    label: `${depthPrefix}${nodeTitle || "(untitled folder)"}`,
+                });
+            }
+
+            if (node.children?.length) {
+                collectBookmarkFolderChoices(node.children, nextDepth, choices);
+            }
+        }
+
+        return choices;
+    }
+
+    function resetBookmarkCreationState() {
+        for (const el of actions?.querySelectorAll(".bookmark-info-dropdown") ??
+            []) {
+            el.remove();
+        }
+        for (const el of actions?.querySelectorAll(".add-current-tab-btn") ??
+            []) {
+            el.remove();
+        }
+        creatingBookmark = false;
+        btnNewBookmark.textContent = "bookmark +";
+    }
+
+    btnNewBookmark.addEventListener("click", async () => {
+        if (creatingBookmark) {
+            resetBookmarkCreationState();
+            return;
+        }
+
+        const addCurrentTab = document.createElement("button");
+        addCurrentTab.type = "button";
+        addCurrentTab.className = "add-current-tab-btn";
+        addCurrentTab.textContent = `add current tab: ${isAddCurrentTab}`;
+        actions?.append(addCurrentTab);
+
+        const bookmarkInfoDropdown = document.createElement("div");
+        bookmarkInfoDropdown.className = "bookmark-info-dropdown";
+        addCurrentTab.className = isAddCurrentTab
+            ? "add-current-tab-btn add-current-tab-btn--active"
+            : "add-current-tab-btn";
+
+        creatingBookmark = true;
+        btnNewBookmark.textContent = "cancel !";
+
+        actions?.append(bookmarkInfoDropdown);
+
+        addCurrentTab.addEventListener("click", async () => {
+            isAddCurrentTab = !isAddCurrentTab;
+            addCurrentTab.className = isAddCurrentTab
+                ? "add-current-tab-btn add-current-tab-btn--active"
+                : "add-current-tab-btn";
+            addCurrentTab.textContent = `add current tab: ${isAddCurrentTab}`;
+        });
+
+        const textInput = document.createElement("input");
+        textInput.type = "text";
+        textInput.placeholder = "folder / bookmark name";
+        textInput.className = "bookmark-name-input";
+
+        const bookmarkTree: chrome.bookmarks.BookmarkTreeNode[] =
+            await chrome.bookmarks.getTree();
+        const folderChoices = collectBookmarkFolderChoices(bookmarkTree);
+        if (folderChoices.length === 0) {
+            resetBookmarkCreationState();
+            return;
+        }
+
+        const bookmarkSelect = document.createElement("select");
+        bookmarkSelect.className = "bookmark-select";
+
+        for (const folder of folderChoices) {
+            const option = document.createElement("option");
+            option.value = folder.id;
+            option.textContent = folder.label;
+            bookmarkSelect.append(option);
+        }
+
+        const confirmBtn = document.createElement("button");
+        confirmBtn.type = "button";
+        confirmBtn.textContent = "confirm";
+        confirmBtn.className = "bookmark-confirm-btn";
+
+        bookmarkInfoDropdown.append(textInput, bookmarkSelect, confirmBtn);
+        textInput.focus();
+
+        textInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") confirmBtn.click();
+        });
+
+        confirmBtn.addEventListener("click", async () => {
+            const selectedFolderId = bookmarkSelect.value;
+            if (!selectedFolderId) return;
+
+            const typedName = textInput.value.trim();
+
+            if (isAddCurrentTab) {
+                const bookmarkName = typedName || "new bookmark";
+                const [currentTab] = await chrome.tabs.query({
+                    active: true,
+                    lastFocusedWindow: true,
+                });
+                if (!currentTab) return;
+
+                await chrome.bookmarks.create({
+                    title: bookmarkName,
+                    url: currentTab.url,
+                    parentId: selectedFolderId,
+                });
+            } else if (!isAddCurrentTab) {
+                const folderName = typedName || "new folder";
+
+                await chrome.bookmarks.create({
+                    title: folderName,
+                    parentId: selectedFolderId,
+                });
+            }
+            resetBookmarkCreationState();
         });
     });
 
@@ -195,6 +361,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     // -- Settings
+    const settings = document.getElementById("settings");
+
     const settingsBtn = document.createElement("button");
     settingsBtn.type = "button";
     settingsBtn.textContent = "settings";
@@ -251,7 +419,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         settingInfoSection.hidden = !isSettingOpen;
     });
 
-    actionBtnSection?.append(settingsBtn, settingInfoSection);
+    settings?.append(settingsBtn, settingInfoSection);
 
     // Tabs & Groups Section
     const collapsedGroups = new Set<number>();
@@ -504,12 +672,52 @@ document.addEventListener("DOMContentLoaded", async () => {
         return collapsedBookmarkFolders.has(folderId);
     }
 
+    function removeBookmarkFolderSubtreeFromCollapsed(
+        node: chrome.bookmarks.BookmarkTreeNode,
+    ) {
+        if (node.url) return;
+
+        collapsedBookmarkFolders.delete(node.id);
+        if (!node.children) return;
+
+        for (const childNode of node.children) {
+            removeBookmarkFolderSubtreeFromCollapsed(childNode);
+        }
+    }
+
+    function orderBookmarkNodesForDisplay(
+        nodes: chrome.bookmarks.BookmarkTreeNode[],
+    ) {
+        const passthroughNodes: chrome.bookmarks.BookmarkTreeNode[] = [];
+        const bookmarkNodes: chrome.bookmarks.BookmarkTreeNode[] = [];
+        const folderNodes: chrome.bookmarks.BookmarkTreeNode[] = [];
+
+        for (const node of nodes) {
+            const nodeTitle = node.title?.trim() ?? "";
+            const isRootPlaceholder = !node.url && nodeTitle.length === 0;
+            const isBookmarksBar =
+                node.folderType === "bookmarks-bar" ||
+                node.id === "1" ||
+                nodeTitle.toLowerCase() === "bookmarks bar";
+            if (isRootPlaceholder || isBookmarksBar) {
+                passthroughNodes.push(node);
+                continue;
+            }
+
+            if (node.url) bookmarkNodes.push(node);
+            else folderNodes.push(node);
+        }
+
+        return [...passthroughNodes, ...bookmarkNodes, ...folderNodes];
+    }
+
     function cycleBookmarks(
         parentElement: HTMLElement,
         nodes: chrome.bookmarks.BookmarkTreeNode[],
         forceExpandFolders = false,
     ) {
-        for (const node of nodes) {
+        const orderedNodes = orderBookmarkNodesForDisplay(nodes);
+        for (const node of orderedNodes) {
             const nodeTitle = node.title?.trim() ?? "";
             if (nodeTitle === "Other bookmarks") continue;
 
@@ -550,7 +758,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                 label.textContent = nodeTitle || node.url || "(Untitled tab)";
 
                 btn.append(icon, label);
-                li.appendChild(btn);
+
+                const row = document.createElement("div");
+                row.className = "tab-row";
+                const deleteBookmarkBtn = createDeleteButton(
+                    "Delete bookmark",
+                    async () => {
+                        await chrome.bookmarks.remove(node.id);
+                    },
+                );
+                row.append(btn, deleteBookmarkBtn);
+                li.appendChild(row);
                 parentElement.appendChild(li);
                 continue;
             }
@@ -578,7 +796,32 @@ document.addEventListener("DOMContentLoaded", async () => {
             label.textContent = nodeTitle || "(untitled)";
 
             btn.append(toggleIconLabel, label);
-            li.appendChild(btn);
+
+            const row = document.createElement("div");
+            row.className = "group-row";
+            const deleteFolderBtn = createDeleteButton(
+                "Delete folder",
+                async () => {
+                    if (hasChildren) {
+                        const folderName = nodeTitle || "(untitled)";
+                        const confirmed = window.confirm(
+                            `Delete folder "${folderName}" and all nested bookmarks?`,
+                        );
+                        if (!confirmed) return;
+                    }
+
+                    removeBookmarkFolderSubtreeFromCollapsed(node);
+                    await persistCollapsedBookmarkFolders();
+
+                    if (hasChildren) {
+                        await chrome.bookmarks.removeTree(node.id);
+                    } else {
+                        await chrome.bookmarks.remove(node.id);
+                    }
+                },
+            );
+            row.append(btn, deleteFolderBtn);
+            li.appendChild(row);
             parentElement.appendChild(li);
 
             if (hasChildren && !isCollapsed) {
