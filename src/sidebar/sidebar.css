@@ -298,8 +298,8 @@ textarea {
     text-align: center;
 }
 
-.group-info-dropdown,
-.bookmark-info-dropdown {
+.info-dropdown,
+.info-dropdown {
     display: grid;
     grid-template-columns: 1fr auto auto;
     gap: 0.25rem;
