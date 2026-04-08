@@ -4,8 +4,38 @@ import {
     DEFAULT_TAB_ICON_URL,
     chromeToUiColor,
 } from "./config.js";
+import { THEME_STORAGE_KEY, THEMES, SidebarTheme } from "./config.js";
 
-export function buildCycle(
+export function applyTheme(theme: SidebarTheme) {
+    document.documentElement.setAttribute("data-theme", theme);
+}
+
+export async function loadThemePreference() {
+    const storage = await chrome.storage.local.get(THEME_STORAGE_KEY);
+    const savedTheme = storage[THEME_STORAGE_KEY];
+    const normalizedSavedTheme =
+        savedTheme === "standard-dark"
+            ? "dark"
+            : savedTheme === "standard-light"
+              ? "light"
+              : savedTheme === "catppuccin-dark"
+                ? "mocha"
+                : savedTheme === "catppuccin-light"
+                  ? "latte"
+                  : savedTheme === "cappucin-light"
+                    ? "latte"
+                    : savedTheme === "claude" || savedTheme === "retro"
+                      ? "retro-dark"
+                      : savedTheme;
+    const theme = THEMES.includes(savedTheme as SidebarTheme)
+        ? (savedTheme as SidebarTheme)
+        : THEMES.includes(normalizedSavedTheme as SidebarTheme)
+          ? (normalizedSavedTheme as SidebarTheme)
+          : "dark";
+    applyTheme(theme);
+}
+
+export function cycleTabs(
     tabElement: HTMLElement,
     tabList: chrome.tabs.Tab[],
     grouped = false,
@@ -80,54 +110,63 @@ export function createDeleteButton(
     return deleteBtn;
 }
 
-export type ToggleNode = chrome.tabs.Tab | chrome.bookmarks.BookmarkTreeNode;
-export type ToggleType = "tab" | "bookmark";
-
-export type NodeType =
-    | chrome.tabs.Tab
+export type ToggleNode =
     | chrome.bookmarks.BookmarkTreeNode
     | chrome.tabGroups.TabGroup;
+export type ToggleType = "tab" | "bookmark";
 
-function isBookmarkNode(
-    node: ToggleNode,
-): node is chrome.bookmarks.BookmarkTreeNode {
-    return !("active" in node);
+export type NodeType = chrome.tabs.Tab | ToggleNode;
+
+function isTabNode(node: NodeType): node is chrome.tabs.Tab {
+    return "active" in node;
 }
 
-function isGroupNode(node: NodeType): node is chrome.tabGroups.TabGroup {
-    return !("active" in node);
+function isGroupNode(
+    node: ToggleNode | NodeType,
+): node is chrome.tabGroups.TabGroup {
+    return "collapsed" in node;
 }
 
-export function isCollpased(id: string, list: Set<string>) {
-    return list.has(id);
+export function isCollpased(id: string | number, list: Set<string>) {
+    return list.has(String(id));
 }
 
-export function removeNodeFromCollapsed(node: ToggleNode, list: Set<string>) {
+export function removeNodeFromCollapsed(
+    node: chrome.bookmarks.BookmarkTreeNode,
+    list: Set<string>,
+) {
     if (node.url) return;
 
     const nodeId = String(node.id);
     list.delete(nodeId);
 
-    const isBookmark = isBookmarkNode(node);
+    const childrenNodes = node.children;
+    if (!childrenNodes) return;
 
-    if (isBookmark) {
-        const childrenNodes = node.children;
-        if (!childrenNodes) return;
-
-        for (const cNode of childrenNodes) {
-            removeNodeFromCollapsed(cNode, list);
-        }
+    for (const cNode of childrenNodes) {
+        removeNodeFromCollapsed(cNode, list);
     }
 }
+
+type ToggleViewOptions = {
+    type?: ToggleType;
+    onToggle?: () => void;
+    hasChildren?: boolean;
+    colour?: string;
+    canToggle?: boolean;
+};
 
 export function toggleView(
     isCollapsed: boolean,
     node: ToggleNode,
     list: Set<string>,
-    type: ToggleType = "bookmark",
-    onToggle?: () => void,
-    hasChildren?: boolean,
-    colour?: string,
+    {
+        type = "bookmark",
+        onToggle,
+        hasChildren = true,
+        colour,
+        canToggle = hasChildren,
+    }: ToggleViewOptions = {},
 ) {
     const nodeId = String(node.id);
 
@@ -140,15 +179,15 @@ export function toggleView(
     icon.className = "group-toggle-icon";
     const toggleIcon = hasChildren ? (isCollapsed ? "▸" : "▾") : " ";
     icon.textContent = toggleIcon;
-    icon.textContent = hasChildren ? toggleIcon : " ";
 
     const title = document.createElement("h4");
     title.className = "group-toggle-title";
-    title.textContent = node.title?.trim() || "(unititled)";
+    title.textContent = node.title?.trim() || "(untitled)";
 
     btn.append(icon, title);
 
     btn.addEventListener("click", async () => {
+        if (!canToggle || !hasChildren) return;
         await toggleInList(list, nodeId, type);
         onToggle?.();
     });
@@ -156,7 +195,11 @@ export function toggleView(
     return btn;
 }
 
-export async function toggleInList(list: Set<string>, id: string, type: ToggleType) {
+export async function toggleInList(
+    list: Set<string>,
+    id: string,
+    type: ToggleType,
+) {
     list.has(id) ? list.delete(id) : list.add(id);
 
     await persistCollapse(list, type);
@@ -167,6 +210,49 @@ export async function getCurrentWindowId() {
     if (currentWindow.id == null) return null;
 
     return currentWindow.id;
+}
+
+export async function loadCollapse(
+    list: Set<string>,
+    type: ToggleType,
+): Promise<void> {
+    const key =
+        type === "tab"
+            ? COLLAPSED_GROUPS_STORAGE_KEY
+            : COLLAPSED_BOOKMARK_FOLDERS_STORAGE_KEY;
+    const storage = await chrome.storage.local.get(key);
+
+    list.clear();
+
+    if (type === "tab") {
+        const windowId = await getCurrentWindowId();
+        if (windowId === null) return;
+
+        const rawByWindow = storage[key];
+        const byWindow: Record<string, unknown> =
+            typeof rawByWindow === "object" && rawByWindow != null
+                ? (rawByWindow as Record<string, unknown>)
+                : {};
+        const storedIds = byWindow[String(windowId)];
+        if (!Array.isArray(storedIds)) return;
+
+        for (const id of storedIds) {
+            if (typeof id === "string" || typeof id === "number") {
+                list.add(String(id));
+            }
+        }
+
+        return;
+    }
+
+    const storedIds = storage[key];
+    if (!Array.isArray(storedIds)) return;
+
+    for (const id of storedIds) {
+        if (typeof id === "string" || typeof id === "number") {
+            list.add(String(id));
+        }
+    }
 }
 
 export async function persistCollapse(
@@ -205,23 +291,105 @@ export function resetCreationState(
     actions.querySelector(".info-dropdown")?.remove();
     if (type === "bookmark")
         actions.querySelector(".add-current-tab-btn")?.remove();
-    btn.textContent = type === "bookmark" ? "bookmark +" : "book +";
+    btn.textContent = type === "bookmark" ? "bookmark +" : "group +";
 
     return false;
 }
 
-function includesNormalised(value: string | undefined, query: string) {
+function includesNormalized(value: string | undefined, query: string) {
     if (query.length === 0) return true;
     if (!value) return false;
     return value.toLowerCase().includes(query);
 }
 
 export function nodeQuery(node: NodeType, query: string) {
-    const isGroup = isGroupNode(node);
-    if (isGroup) return includesNormalised(node.title, query);
+    if (isGroupNode(node)) return includesNormalized(node.title, query);
+    if (isTabNode(node)) {
+        return (
+            includesNormalized(node.title, query) ||
+            includesNormalized(node.url, query)
+        );
+    }
 
     return (
-        includesNormalised(node.title, query) ||
-        includesNormalised(node.url, query)
+        includesNormalized(node.title, query) ||
+        includesNormalized(node.url, query)
     );
+}
+
+export function isCollapsedInList(list: Set<string>, id: string | number) {
+    return list.has(String(id));
+}
+
+export function queueRender(
+    renderQueued: boolean,
+    render: () => Promise<void>,
+) {
+    if (renderQueued) return;
+    renderQueued = true;
+
+    queueMicrotask(() => {
+        renderQueued = false;
+        void render();
+    });
+}
+
+export function createEmptyState(message: string) {
+    const li = document.createElement("li");
+    li.className = "empty-state-message";
+    li.textContent = message;
+    return li;
+}
+
+export async function loadAllData() {
+    return Promise.all([
+        chrome.tabs.query({ currentWindow: true }),
+        chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
+        chrome.bookmarks.getTree(),
+    ]);
+}
+
+export async function groupCollapse(
+    groups: chrome.tabGroups.TabGroup[],
+    collapsedGroups: Set<string>,
+) {
+    const activeGroupIds = new Set(
+        groups
+            .map((group) => group.id)
+            .filter((groupId): groupId is number => groupId != null),
+    );
+    let removedStaleGroupId = false;
+    for (const groupId of collapsedGroups) {
+        if (!activeGroupIds.has(Number(groupId))) {
+            collapsedGroups.delete(groupId);
+            removedStaleGroupId = true;
+        }
+    }
+    if (removedStaleGroupId) {
+        await persistCollapse(collapsedGroups, "tab");
+    }
+}
+
+export async function setupTabSearch(
+    tabs: chrome.tabs.Tab[],
+    getSearchQuery: () => string,
+) {
+    const tabsByGroup = new Map<number, chrome.tabs.Tab[]>();
+    const ungroupedTabs: chrome.tabs.Tab[] = [];
+    for (const tab of tabs) {
+        if (tab.groupId == null) continue;
+        if (tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE) {
+            ungroupedTabs.push(tab);
+            continue;
+        }
+        const groupedTabs = tabsByGroup.get(tab.groupId);
+        if (groupedTabs) groupedTabs.push(tab);
+        else tabsByGroup.set(tab.groupId, [tab]);
+    }
+
+    const searchQuery = getSearchQuery();
+    const isSearching = searchQuery.length > 0;
+    return [isSearching
+        ? ungroupedTabs.filter((tab) => nodeQuery(tab, searchQuery))
+        : ungroupedTabs, tabsByGroup, isSearching, searchQuery] as const;
 }
