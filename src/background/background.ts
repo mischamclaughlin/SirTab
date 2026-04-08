@@ -17,11 +17,22 @@ async function getVisibleTabOrderForCurrentWindow(): Promise<number[]> {
     ]);
 
     const rawByWindow = storage[COLLAPSED_GROUPS_STORAGE_KEY];
-    const byWindow: Record<string, number[]> =
+    const byWindow: Record<string, unknown> =
         typeof rawByWindow === "object" && rawByWindow != null
-            ? (rawByWindow as Record<string, number[]>)
+            ? (rawByWindow as Record<string, unknown>)
             : {};
-    const collapsedGroups = new Set(byWindow[String(currentWindow.id)] ?? []);
+    const storedGroupIds = byWindow[String(currentWindow.id)];
+    const collapsedGroups = new Set(
+        Array.isArray(storedGroupIds)
+            ? storedGroupIds
+                  .filter(
+                      (groupId): groupId is string | number =>
+                          typeof groupId === "string" ||
+                          typeof groupId === "number",
+                  )
+                  .map(String)
+            : [],
+    );
 
     const tabsByGroup = new Map<number, chrome.tabs.Tab[]>();
     const ungroupedTabs: chrome.tabs.Tab[] = [];
@@ -44,7 +55,7 @@ async function getVisibleTabOrderForCurrentWindow(): Promise<number[]> {
 
     for (const group of groups) {
         const groupId = group.id;
-        if (groupId == null || collapsedGroups.has(groupId)) continue;
+        if (groupId == null || collapsedGroups.has(String(groupId))) continue;
         const groupedTabs = tabsByGroup.get(groupId) ?? [];
         for (const tab of groupedTabs) {
             if (tab.id != null) orderedTabIds.push(tab.id);
