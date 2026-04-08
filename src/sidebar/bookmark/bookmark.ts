@@ -3,36 +3,15 @@ import {
     persistCollapse,
     removeNodeFromCollapsed,
     isCollpased,
-    type ToggleNode,
-    type ToggleType,
+    nodeQuery,
 } from "../helpers.js";
-import {
-    COLLAPSED_BOOKMARK_FOLDERS_STORAGE_KEY,
-    DEFAULT_TAB_ICON_URL,
-} from "../config.js";
+import { DEFAULT_TAB_ICON_URL } from "../config.js";
 import { createDeleteButton } from "../helpers.js";
 
 type BookmarkFolderChoice = {
     id: string;
     label: string;
 };
-
-async function loadCollapsedBookmarkFolders(
-    collapsedBookmarkFolders: Set<string>,
-) {
-    const storage = await chrome.storage.local.get(
-        COLLAPSED_BOOKMARK_FOLDERS_STORAGE_KEY,
-    );
-    const raw = storage[COLLAPSED_BOOKMARK_FOLDERS_STORAGE_KEY];
-    const folderIds = Array.isArray(raw)
-        ? raw.filter((id): id is string => typeof id === "string")
-        : [];
-
-    collapsedBookmarkFolders.clear();
-    for (const folderId of folderIds) {
-        collapsedBookmarkFolders.add(folderId);
-    }
-}
 
 export function collectBookmarkFolderChoices(
     nodes: chrome.bookmarks.BookmarkTreeNode[],
@@ -102,11 +81,36 @@ export function isAllowedBookmarkUrl(rawUrl: string) {
     }
 }
 
+export function filterBookmarkNodes(
+    nodes: chrome.bookmarks.BookmarkTreeNode[],
+    query: string,
+): chrome.bookmarks.BookmarkTreeNode[] {
+    if (query.length === 0) return nodes;
+
+    const filteredNodes: chrome.bookmarks.BookmarkTreeNode[] = [];
+    for (const node of nodes) {
+        const filteredChildren = node.children
+            ? filterBookmarkNodes(node.children, query)
+            : undefined;
+        const matchesSelf = nodeQuery(node, query);
+        const hasMatchingChildren = (filteredChildren?.length ?? 0) > 0;
+        if (!matchesSelf && !hasMatchingChildren) continue;
+
+        filteredNodes.push({
+            ...node,
+            children: filteredChildren,
+        });
+    }
+
+    return filteredNodes;
+}
+
 export function cycleBookmarks(
     parentElement: HTMLElement,
     nodes: chrome.bookmarks.BookmarkTreeNode[],
     forceExpandFolders = false,
     collapsedBookmarkFolders?: Set<string>,
+    onToggle?: () => void,
 ) {
     const collapsedBookmarkFoldersSet = collapsedBookmarkFolders
         ? collapsedBookmarkFolders
@@ -130,6 +134,7 @@ export function cycleBookmarks(
                     node.children,
                     forceExpandFolders,
                     collapsedBookmarkFolders,
+                    onToggle,
                 );
             continue;
         }
@@ -184,7 +189,12 @@ export function cycleBookmarks(
             !forceExpandFolders &&
             isCollpased(node.id, collapsedBookmarkFoldersSet);
 
-        const btn = toggleView(isCollapsed, node, collapsedBookmarkFoldersSet);
+        const btn = toggleView(isCollapsed, node, collapsedBookmarkFoldersSet, {
+            type: "bookmark",
+            onToggle,
+            hasChildren,
+            canToggle: hasChildren && !forceExpandFolders,
+        });
 
         const row = document.createElement("div");
         row.className = "group-row";
@@ -222,6 +232,7 @@ export function cycleBookmarks(
                 node.children!,
                 forceExpandFolders,
                 collapsedBookmarkFoldersSet,
+                onToggle,
             );
         }
     }
