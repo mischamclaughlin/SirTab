@@ -131,23 +131,6 @@ export function isCollpased(id: string | number, list: Set<string>) {
     return list.has(String(id));
 }
 
-export function removeNodeFromCollapsed(
-    node: chrome.bookmarks.BookmarkTreeNode,
-    list: Set<string>,
-) {
-    if (node.url) return;
-
-    const nodeId = String(node.id);
-    list.delete(nodeId);
-
-    const childrenNodes = node.children;
-    if (!childrenNodes) return;
-
-    for (const cNode of childrenNodes) {
-        removeNodeFromCollapsed(cNode, list);
-    }
-}
-
 type ToggleViewOptions = {
     type?: ToggleType;
     onToggle?: () => void;
@@ -195,17 +178,13 @@ export function toggleView(
     return btn;
 }
 
-export async function toggleInList(
-    list: Set<string>,
-    id: string,
-    type: ToggleType,
-) {
+async function toggleInList(list: Set<string>, id: string, type: ToggleType) {
     list.has(id) ? list.delete(id) : list.add(id);
 
     await persistCollapse(list, type);
 }
 
-export async function getCurrentWindowId() {
+async function getCurrentWindowId() {
     const currentWindow = await chrome.windows.getCurrent();
     if (currentWindow.id == null) return null;
 
@@ -296,24 +275,24 @@ export function resetCreationState(
     return false;
 }
 
-function includesNormalized(value: string | undefined, query: string) {
+function includesNormalised(value: string | undefined, query: string) {
     if (query.length === 0) return true;
     if (!value) return false;
     return value.toLowerCase().includes(query);
 }
 
 export function nodeQuery(node: NodeType, query: string) {
-    if (isGroupNode(node)) return includesNormalized(node.title, query);
+    if (isGroupNode(node)) return includesNormalised(node.title, query);
     if (isTabNode(node)) {
         return (
-            includesNormalized(node.title, query) ||
-            includesNormalized(node.url, query)
+            includesNormalised(node.title, query) ||
+            includesNormalised(node.url, query)
         );
     }
 
     return (
-        includesNormalized(node.title, query) ||
-        includesNormalized(node.url, query)
+        includesNormalised(node.title, query) ||
+        includesNormalised(node.url, query)
     );
 }
 
@@ -349,27 +328,6 @@ export async function loadAllData() {
     ]);
 }
 
-export async function groupCollapse(
-    groups: chrome.tabGroups.TabGroup[],
-    collapsedGroups: Set<string>,
-) {
-    const activeGroupIds = new Set(
-        groups
-            .map((group) => group.id)
-            .filter((groupId): groupId is number => groupId != null),
-    );
-    let removedStaleGroupId = false;
-    for (const groupId of collapsedGroups) {
-        if (!activeGroupIds.has(Number(groupId))) {
-            collapsedGroups.delete(groupId);
-            removedStaleGroupId = true;
-        }
-    }
-    if (removedStaleGroupId) {
-        await persistCollapse(collapsedGroups, "tab");
-    }
-}
-
 export async function setupTabSearch(
     tabs: chrome.tabs.Tab[],
     getSearchQuery: () => string,
@@ -389,7 +347,12 @@ export async function setupTabSearch(
 
     const searchQuery = getSearchQuery();
     const isSearching = searchQuery.length > 0;
-    return [isSearching
-        ? ungroupedTabs.filter((tab) => nodeQuery(tab, searchQuery))
-        : ungroupedTabs, tabsByGroup, isSearching, searchQuery] as const;
+    return [
+        isSearching
+            ? ungroupedTabs.filter((tab) => nodeQuery(tab, searchQuery))
+            : ungroupedTabs,
+        tabsByGroup,
+        isSearching,
+        searchQuery,
+    ] as const;
 }

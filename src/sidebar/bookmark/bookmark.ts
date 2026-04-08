@@ -1,7 +1,6 @@
 import {
     toggleView,
     persistCollapse,
-    removeNodeFromCollapsed,
     isCollpased,
     nodeQuery,
 } from "../helpers.js";
@@ -235,5 +234,22 @@ export function cycleBookmarks(
                 onToggle,
             );
         }
+    }
+}
+
+export function removeNodeFromCollapsed(
+    node: chrome.bookmarks.BookmarkTreeNode,
+    list: Set<string>,
+) {
+    if (node.url) return;
+
+    const nodeId = String(node.id);
+    list.delete(nodeId);
+
+    const childrenNodes = node.children;
+    if (!childrenNodes) return;
+
+    for (const cNode of childrenNodes) {
+        removeNodeFromCollapsed(cNode, list);
     }
 }

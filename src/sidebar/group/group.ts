@@ -99,3 +99,24 @@ export async function buildGroup(
         next.appendChild(createEmptyState("No matching tabs."));
     }
 }
+
+export async function groupCollapse(
+    groups: chrome.tabGroups.TabGroup[],
+    collapsedGroups: Set<string>,
+) {
+    const activeGroupIds = new Set(
+        groups
+            .map((group) => group.id)
+            .filter((groupId): groupId is number => groupId != null),
+    );
+    let removedStaleGroupId = false;
+    for (const groupId of collapsedGroups) {
+        if (!activeGroupIds.has(Number(groupId))) {
+            collapsedGroups.delete(groupId);
+            removedStaleGroupId = true;
+        }
+    }
+    if (removedStaleGroupId) {
+        await persistCollapse(collapsedGroups, "tab");
+    }
+}

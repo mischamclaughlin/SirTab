@@ -6,7 +6,6 @@ import {
     createEmptyState,
     loadThemePreference,
     loadAllData,
-    groupCollapse,
     setupTabSearch,
 } from "./helpers.js";
 import { cycleBookmarks, filterBookmarkNodes } from "./bookmark/bookmark.js";
@@ -15,7 +14,7 @@ import { setupGroupAction } from "./action/actionGroup.js";
 import { setupBookmarkAction } from "./action/actionBookmark.js";
 import { setupTabAction } from "./action/actionTab.js";
 import { setupSettingAction } from "./action/actionSetting.js";
-import { buildGroup } from "./group/group.js";
+import { buildGroup, groupCollapse } from "./group/group.js";
 
 document.addEventListener("DOMContentLoaded", async () => {
     // Setup event listeners
@@ -34,29 +33,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     const actionBtnSection = document.createElement("div");
     if (!actionBtnSection) return;
 
-    actionBtnSection.className = "action-btn-section";
-    actions.appendChild(actionBtnSection);
-
-    //  -- Search
+    //  - Search
     const getSearchQuery = await setupSearchAction(
         actions,
         renderQueued,
         render,
     );
 
+    // - Action Btn Section
+    actionBtnSection.className = "action-btn-section";
+    actions.appendChild(actionBtnSection);
     // -- Group +
     await setupGroupAction(actions, actionBtnSection);
-
     // -- Bookmark +
     await setupBookmarkAction(actions, actionBtnSection);
-
     // -- Tab +
     await setupTabAction(actionBtnSection);
-
+    
     // -- Settings
     const settings = document.getElementById("settings");
     if (!settings) return;
-
     await setupSettingAction(settings);
 
     // Tabs & Groups Section
