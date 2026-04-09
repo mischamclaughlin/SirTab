@@ -51,10 +51,12 @@ export async function bootstrapSidebar() {
 
     async function render() {
         const token = ++renderToken;
-        if (token !== renderToken) return;
 
         const [tabs, groups, tree] = await loadAllData();
+        if (token !== renderToken) return;
+
         await groupCollapse(groups, collapsedGroups);
+        if (token !== renderToken) return;
 
         const searchQuery = getSearchQuery();
 
