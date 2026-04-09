@@ -486,7 +486,7 @@ textarea {
     color: var(--text);
 }
 
-.empty-state-message {
+.empty-search-state-message {
     border: 1px dashed var(--border-faded);
     border-radius: 0.25rem;
     color: var(--subsubtext);
