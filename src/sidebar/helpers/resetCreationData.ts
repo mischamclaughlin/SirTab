@@ -7,7 +7,7 @@ export function resetCreationState(
 ) {
     actions.querySelector(".info-dropdown")?.remove();
     if (type === "bookmark")
-        actions.querySelector(".add-current-tab-btn")?.remove();
+        actions.querySelector(".container--small-tab-btn")?.remove();
     btn.textContent = type === "bookmark" ? "bookmark +" : "group +";
 
     return false;

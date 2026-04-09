@@ -5,7 +5,7 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
     const settingsBtn = document.createElement("button");
     settingsBtn.type = "button";
     settingsBtn.textContent = "settings";
-    settingsBtn.className = "action-btn settings-btn";
+    settingsBtn.className = "container--small settings-btn";
 
     const settingInfoSection = document.createElement("div");
     settingInfoSection.className = "setting-info-section";
@@ -27,13 +27,13 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
     for (const theme of THEMES) {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = "theme-option-btn";
+        button.className = "container--small";
         button.textContent = themeLabels[theme];
         button.addEventListener("click", async () => {
             applyTheme(theme);
             await chrome.storage.local.set({ [THEME_STORAGE_KEY]: theme });
             for (const [id, btn] of themeButtons) {
-                btn.classList.toggle("active-theme", id === theme);
+                btn.classList.toggle("active", id === theme);
             }
         });
         themeButtons.set(theme, button);
@@ -46,7 +46,7 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
     const initialTheme =
         currentTheme && THEMES.includes(currentTheme) ? currentTheme : "dark";
     for (const [id, btn] of themeButtons) {
-        btn.classList.toggle("active-theme", id === initialTheme);
+        btn.classList.toggle("active", id === initialTheme);
     }
 
     settingInfoSection.appendChild(themeOptions);

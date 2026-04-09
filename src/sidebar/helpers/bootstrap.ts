@@ -30,7 +30,7 @@ function getSidebarElements(): SidebarElements | null {
 
     if (!actions || !tabList || !bookmarksList || !settings) return null;
 
-    actionBtnSection.className = "action-btn-section";
+    actionBtnSection.className = "container--small-section";
 
     return {
         actions,

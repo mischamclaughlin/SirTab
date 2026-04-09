@@ -3,7 +3,7 @@ export async function setupTabAction(
 ): Promise<void> {
     const btnNewTab = document.createElement("button");
     btnNewTab.textContent = "tab +";
-    btnNewTab.className = "action-btn";
+    btnNewTab.className = "container--small";
     actionBtnSection.appendChild(btnNewTab);
 
     btnNewTab.addEventListener("click", async () => {

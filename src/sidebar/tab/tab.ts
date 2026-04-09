@@ -30,9 +30,9 @@ export function cycleTabs(
         });
 
         const label = document.createElement("span");
-        label.className = "tab-label";
+        label.className = "container--small";
 
-        if (tab.active) label.className += " active-tab";
+        if (tab.active) label.className += " active";
         const title = tab.title?.trim() ?? "";
         const text = title || tab.url || "(Untitled tab)";
         label.textContent = text;

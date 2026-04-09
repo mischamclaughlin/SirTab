@@ -10,7 +10,7 @@ export async function setupBookmarkAction(
 ): Promise<void> {
     const btnNewBookmark = document.createElement("button");
     btnNewBookmark.textContent = "bookmark +";
-    btnNewBookmark.className = "action-btn";
+    btnNewBookmark.className = "container--small";
     actionBtnSection.appendChild(btnNewBookmark);
 
     let isAddCurrentTab = false;
@@ -28,15 +28,15 @@ export async function setupBookmarkAction(
 
         const addCurrentTab = document.createElement("button");
         addCurrentTab.type = "button";
-        addCurrentTab.className = "add-current-tab-btn";
+        addCurrentTab.className = "container--small-tab-btn";
         addCurrentTab.textContent = `add current tab: ${isAddCurrentTab}`;
         actionSection.append(addCurrentTab);
 
         const bookmarkInfoDropdown = document.createElement("div");
         bookmarkInfoDropdown.className = "info-dropdown";
         addCurrentTab.className = isAddCurrentTab
-            ? "add-current-tab-btn add-current-tab-btn--active"
-            : "add-current-tab-btn";
+            ? "container--small-tab-btn active"
+            : "container--small-tab-btn";
 
         creatingBookmark = true;
         btnNewBookmark.textContent = "cancel !";
@@ -46,15 +46,15 @@ export async function setupBookmarkAction(
         addCurrentTab.addEventListener("click", async () => {
             isAddCurrentTab = !isAddCurrentTab;
             addCurrentTab.className = isAddCurrentTab
-                ? "add-current-tab-btn add-current-tab-btn--active"
-                : "add-current-tab-btn";
+                ? "container--small-tab-btn active"
+                : "container--small-tab-btn";
             addCurrentTab.textContent = `add current tab: ${isAddCurrentTab}`;
         });
 
         const textInput = document.createElement("input");
         textInput.type = "text";
         textInput.placeholder = "folder / bookmark name";
-        textInput.className = "bookmark-name-input";
+        textInput.className = "container--small";
 
         const bookmarkTree: chrome.bookmarks.BookmarkTreeNode[] =
             await chrome.bookmarks.getTree();
@@ -69,7 +69,7 @@ export async function setupBookmarkAction(
         }
 
         const bookmarkSelect = document.createElement("select");
-        bookmarkSelect.className = "bookmark-select";
+        bookmarkSelect.className = "container--small";
 
         for (const folder of folderChoices) {
             const option = document.createElement("option");
@@ -81,7 +81,7 @@ export async function setupBookmarkAction(
         const confirmBtn = document.createElement("button");
         confirmBtn.type = "button";
         confirmBtn.textContent = "confirm";
-        confirmBtn.className = "bookmark-confirm-btn";
+        confirmBtn.className = "container--small";
 
         bookmarkInfoDropdown.append(textInput, bookmarkSelect, confirmBtn);
         textInput.focus();

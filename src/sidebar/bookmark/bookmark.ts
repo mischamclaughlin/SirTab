@@ -179,7 +179,7 @@ export function cycleBookmarks(
             icon.width = 16;
 
             const label = document.createElement("span");
-            label.className = "tab-label";
+            label.className = "container--small";
             label.textContent = nodeTitle || node.url || "(Untitled tab)";
 
             btn.append(icon, label);

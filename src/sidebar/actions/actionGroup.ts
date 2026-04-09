@@ -7,7 +7,7 @@ export async function setupGroupAction(
 ): Promise<void> {
     const btnGroup = document.createElement("button");
     btnGroup.textContent = "group +";
-    btnGroup.className = "action-btn";
+    btnGroup.className = "container--small";
     actionBtnSection.appendChild(btnGroup);
 
     let creatingGroup = false;
@@ -29,10 +29,10 @@ export async function setupGroupAction(
         const textInput = document.createElement("input");
         textInput.type = "text";
         textInput.placeholder = "group name";
-        textInput.className = "group-name-input";
+        textInput.className = "container--small";
 
         const colourSelect = document.createElement("select");
-        colourSelect.className = "group-colour-select";
+        colourSelect.className = "container--small";
 
         const colourChoices = Object.keys(groupColorMap) as GroupColorChoice[];
         for (const choice of colourChoices) {
@@ -45,7 +45,7 @@ export async function setupGroupAction(
         const confirmBtn = document.createElement("button");
         confirmBtn.type = "button";
         confirmBtn.textContent = "confirm";
-        confirmBtn.className = "group-confirm-btn";
+        confirmBtn.className = "container--small";
 
         groupInfoDropdown.append(textInput, colourSelect, confirmBtn);
 
