@@ -1,5 +1,5 @@
-.ungroup-tab,
-.group-tab {
+.group-tab,
+.ungroup-tab {
     border: none;
     background: transparent;
     cursor: pointer;
@@ -9,6 +9,13 @@
     gap: 1rem;
     color: var(--subsubtext);
     text-align: left;
+}
+
+.tab-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.25rem;
+    align-items: center;
 }
 
 .tab-icon {

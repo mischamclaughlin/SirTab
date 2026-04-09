@@ -1,0 +1,51 @@
+.group {
+    width: calc(100% - 0.5rem);
+    margin-left: 0.5rem;
+    display: grid;
+    gap: 0.5rem;
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+}
+
+.collapsed-group {
+    padding: 0;
+    gap: 0;
+    height: 0;
+    width: 0;
+}
+
+.group-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.group-toggle {
+    width: 100%;
+    min-height: 1.5rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    color: var(--subtext);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    background: transparent;
+}
+
+.group-toggle-icon {
+    width: 1ch;
+    text-align: center;
+    color: var(--text);
+    flex-shrink: 0;
+}
+
+.group-toggle-title {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--subtext);
+    font-variant-ligatures: none;
+}

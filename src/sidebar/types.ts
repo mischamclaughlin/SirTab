@@ -1,7 +1,8 @@
 export type SidebarElements = {
     actions: HTMLElement;
     actionBtnSection: HTMLElement;
-    tabList: HTMLElement;
+    tabsList: HTMLElement;
+    groupsList: HTMLElement;
     bookmarksList: HTMLElement;
     settings: HTMLElement;
 };

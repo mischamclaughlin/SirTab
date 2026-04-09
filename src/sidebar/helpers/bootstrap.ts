@@ -24,18 +24,22 @@ import { cycleBookmarks, filterBookmarkNodes } from "../bookmark/bookmark.js";
 function getSidebarElements(): SidebarElements | null {
     const actions = document.getElementById("actions");
     const actionBtnSection = document.createElement("div");
-    const tabList = document.getElementById("tabs-and-groups");
+    const tabsList = document.getElementById("tabs-list");
+    const groupsList = document.getElementById("groups-list");
     const bookmarksList = document.getElementById("bookmarks-list");
     const settings = document.getElementById("settings");
 
-    if (!actions || !tabList || !bookmarksList || !settings) return null;
+    if (!actions || !tabsList || !groupsList || !bookmarksList || !settings) {
+        return null;
+    }
 
     actionBtnSection.className = "container--small-section";
 
     return {
         actions,
         actionBtnSection,
-        tabList,
+        tabsList,
+        groupsList,
         bookmarksList,
         settings,
     };
@@ -64,21 +68,22 @@ export async function bootstrapSidebar() {
         const [visibleUngroupedTabs, tabsByGroup, isSearching] =
             buildTabSearchState(tabs, searchQuery);
 
-        const next = document.createElement("ul");
-        cycleTabs(next, visibleUngroupedTabs, false);
+        const nextTabs = document.createElement("ul");
+        cycleTabs(nextTabs, visibleUngroupedTabs, false);
+        elements.tabsList.replaceChildren(...Array.from(nextTabs.children));
 
+        const nextGroups = document.createElement("ul");
         buildGroup(
-            visibleUngroupedTabs,
+            visibleUngroupedTabs.length > 0,
             groups,
             tabsByGroup,
             collapsedGroups,
             isSearching,
             searchQuery,
-            next,
+            nextGroups,
             requestRender,
         );
-
-        elements.tabList.replaceChildren(...Array.from(next.children));
+        elements.groupsList.replaceChildren(...Array.from(nextGroups.children));
 
         const nextBookmarks = document.createElement("ul");
         const bookmarkNodes = isSearching

@@ -8,8 +8,8 @@ html {
 
 body {
     width: 100%;
-    min-height: calc(100vh - 0.5rem);
-    padding: 0 1rem;
+    min-height: calc(100vh - 0.15rem);
+    padding: 0.5rem 1rem;
     border-left: 1px solid var(--border);
     background: var(--bg);
     display: flex;
@@ -17,36 +17,28 @@ body {
     gap: 1rem;
 }
 
-#actions {
-    width: 100%;
-    border-bottom: 1px solid var(--border);
-    padding: 1rem 0;
-    display: grid;
-    align-items: start;
-    gap: 0.5rem;
-}
-
-#tabs-and-groups,
+#actions,
+#tabs-list,
+#groups-list,
 #bookmarks-list {
+    width: 100%;
     list-style: none;
     display: grid;
     grid-template-columns: repeat(1, 1fr);
+    gap: 0.5rem;
 }
 
-#tabs-and-groups {
-    gap: 0.5rem;
-    border-bottom: 1px solid var(--border);
+#actions,
+#tabs-list,
+#groups-list {
     padding-bottom: 1rem;
-}
-
-#bookmarks-list {
-    gap: 0.5rem;
+    border-bottom: 1px solid var(--border);
 }
 
 #settings {
     width: 100%;
     margin-top: auto;
-    padding-top: 0.5rem;
+    padding-top: 1rem;
     display: grid;
     gap: 0.5rem;
 }

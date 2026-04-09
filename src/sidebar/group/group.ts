@@ -13,7 +13,7 @@ import {
 import { createEmptySearchState } from "../helpers/domFactory.js";
 
 export async function buildGroup(
-    visibleUngroupedTabs: chrome.tabs.Tab[],
+    hasUngroupedTabs: boolean,
     groups: chrome.tabGroups.TabGroup[],
     tabsByGroup: Map<number, chrome.tabs.Tab[]>,
     collapsedGroups: Set<string>,
@@ -22,8 +22,7 @@ export async function buildGroup(
     next: HTMLElement,
     requestRender: RequestRender,
 ) {
-    let renderedTabResults = visibleUngroupedTabs.length > 0;
-    let hasRenderedGroupSection = false;
+    let renderedTabResults = hasUngroupedTabs;
 
     for (const group of groups) {
         const groupId = group.id;
@@ -43,13 +42,6 @@ export async function buildGroup(
         const shouldRenderGroup =
             !isSearching || groupTitleMatches || visibleTabsInGroup.length > 0;
         if (!shouldRenderGroup) continue;
-
-        if (!hasRenderedGroupSection) {
-            const li = document.createElement("li");
-            li.className = "group-section";
-            next.appendChild(li);
-            hasRenderedGroupSection = true;
-        }
 
         const groupColour = group.color;
         const groupTitle = group.title?.trim() || "(untitled)";

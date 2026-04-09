@@ -2,6 +2,7 @@
 @import "./styles/layout.css";
 @import "./styles/actions.css";
 @import "./styles/tabs.css";
+@import "./styles/groups.css";
 
 * {
     box-sizing: border-box;
@@ -23,6 +24,10 @@
         border-color 150ms ease-in-out,
         background 200ms ease-in-out;
 }
+.container--small:hover {
+    background: var(--surface);
+    border: 1px solid var(--border);
+}
 
 .active {
     background: var(--surface-light);
@@ -30,77 +35,11 @@
     color: var(--text);
 }
 
-.group {
-    width: calc(100% - 0.5rem);
-    margin-left: 0.5rem;
-    display: grid;
-    gap: 0.5rem;
-    border-radius: 0.25rem;
-    padding: 0.5rem;
-}
-
-.collapsed-group {
-    padding: 0;
-    gap: 0;
-    height: 0;
-    width: 0;
-}
-
-.group-section {
-    border-bottom: 1px solid var(--border);
-}
-
-.group-toggle {
-    width: 100%;
-    min-height: 1.5rem;
-    padding: 0.25rem 0.5rem;
-    border: 1px solid var(--border);
-    border-radius: 0.25rem;
-    color: var(--subtext);
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    cursor: pointer;
-    background: transparent;
-}
-
-.group-toggle-icon {
-    width: 1ch;
-    text-align: center;
-    color: var(--text);
-    flex-shrink: 0;
-}
-
-.group-toggle-title {
-    font-size: 1rem;
-    font-weight: 600;
-    line-height: 1.2;
-    color: var(--subtext);
-    font-family:
-        "JetBrains Mono", "Fira Code", "Cascadia Mono", "SF Mono", Consolas,
-        monospace;
-    font-variant-ligatures: none;
-}
-
-.container--small:hover,
-.container--small:hover {
-    background: var(--surface);
-    border: 1px solid var(--border);
-}
-
 .empty-search-state-message {
     border: 1px dashed var(--border-faded);
     border-radius: 0.25rem;
     color: var(--subsubtext);
     padding: 0.35rem 0.5rem;
-}
-
-.tab-row,
-.group-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0.25rem;
-    align-items: center;
 }
 
 .row-delete-btn {
