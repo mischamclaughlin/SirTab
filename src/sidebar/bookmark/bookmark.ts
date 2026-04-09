@@ -7,6 +7,37 @@ import {
     createToggleButton,
 } from "../helpers/domFactory.js";
 
+function getBookmarkNodeTitle(node: chrome.bookmarks.BookmarkTreeNode) {
+    return node.title?.trim() ?? "";
+}
+
+function isRootPlaceholder(node: chrome.bookmarks.BookmarkTreeNode) {
+    return !node.url && node.id === "0" && getBookmarkNodeTitle(node).length === 0;
+}
+
+function isBookmarksBarFolder(node: chrome.bookmarks.BookmarkTreeNode) {
+    if (node.url) return false;
+
+    return (
+        node.folderType === "bookmarks-bar" ||
+        node.id === "1" ||
+        getBookmarkNodeTitle(node).toLowerCase() === "bookmarks bar"
+    );
+}
+
+function isHiddenSystemFolder(node: chrome.bookmarks.BookmarkTreeNode) {
+    if (node.url) return false;
+
+    if (node.folderType != null) {
+        return node.folderType !== "bookmarks-bar";
+    }
+
+    if (node.unmodifiable === "managed") return true;
+
+    const nodeTitle = getBookmarkNodeTitle(node).toLowerCase();
+    return nodeTitle === "other bookmarks" || nodeTitle === "mobile bookmarks";
+}
+
 export function collectBookmarkFolderChoices(
     nodes: chrome.bookmarks.BookmarkTreeNode[],
     depth = 0,
@@ -15,13 +46,13 @@ export function collectBookmarkFolderChoices(
     for (const node of nodes) {
         const isFolder = !node.url;
         if (!isFolder) continue;
-        if (node.title === "Other bookmarks") continue;
+        if (isHiddenSystemFolder(node)) continue;
 
-        const nodeTitle = node.title?.trim() ?? "";
-        const isRootPlaceholder = node.id === "0" && nodeTitle.length === 0;
-        const nextDepth = isRootPlaceholder ? depth : depth + 1;
+        const nodeTitle = getBookmarkNodeTitle(node);
+        const isRootNode = isRootPlaceholder(node);
+        const nextDepth = isRootNode ? depth : depth + 1;
 
-        if (!isRootPlaceholder) {
+        if (!isRootNode) {
             const depthPrefix =
                 depth > 0 ? `${"\u00A0\u00A0".repeat(depth)}] ` : "";
             choices.push({
@@ -46,13 +77,9 @@ function orderBookmarkNodesForDisplay(
     const folderNodes: chrome.bookmarks.BookmarkTreeNode[] = [];
 
     for (const node of nodes) {
-        const nodeTitle = node.title?.trim() ?? "";
-        const isRootPlaceholder = !node.url && nodeTitle.length === 0;
-        const isBookmarksBar =
-            node.folderType === "bookmarks-bar" ||
-            node.id === "1" ||
-            nodeTitle.toLowerCase() === "bookmarks bar";
-        if (isRootPlaceholder || isBookmarksBar) {
+        if (isHiddenSystemFolder(node)) continue;
+
+        if (isRootPlaceholder(node) || isBookmarksBarFolder(node)) {
             passthroughNodes.push(node);
             continue;
         }
@@ -112,16 +139,9 @@ export function cycleBookmarks(
     const orderedNodes = orderBookmarkNodesForDisplay(nodes);
 
     for (const node of orderedNodes) {
-        const nodeTitle = node.title?.trim() ?? "";
-        if (nodeTitle === "Other bookmarks" || nodeTitle === "Other Bookmarks")
-            continue;
+        if (isHiddenSystemFolder(node)) continue;
 
-        const isRootPlaceholder = !node.url && nodeTitle.length === 0;
-        const isBookmarksBar =
-            node.folderType === "bookmarks-bar" ||
-            node.id === "1" ||
-            nodeTitle.toLowerCase() === "bookmarks bar";
-        if (isRootPlaceholder || isBookmarksBar) {
+        if (isRootPlaceholder(node) || isBookmarksBarFolder(node)) {
             if (node.children)
                 cycleBookmarks(
                     parentElement,
@@ -133,6 +153,7 @@ export function cycleBookmarks(
             continue;
         }
 
+        const nodeTitle = getBookmarkNodeTitle(node);
         const li = document.createElement("li");
         li.className = "tab-item";
 
