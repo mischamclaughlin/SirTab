@@ -1,14 +1,9 @@
-import { queueRender } from "./renderScheduler.js";
+import type { RequestRender } from "../types.js";
 
-type RenderFn = () => Promise<void>;
-
-export function setupEventListeners(
-    getRenderQueued: () => boolean,
-    render: RenderFn,
-): () => void {
-    const handleTabChange = () => queueRender(getRenderQueued(), render);
-    const handleTabGroupChange = () => queueRender(getRenderQueued(), render);
-    const handleBookmarkChange = () => queueRender(getRenderQueued(), render);
+export function setupEventListeners(requestRender: RequestRender): () => void {
+    const handleTabChange = () => requestRender();
+    const handleTabGroupChange = () => requestRender();
+    const handleBookmarkChange = () => requestRender();
 
     chrome.tabs.onCreated.addListener(handleTabChange);
     chrome.tabs.onRemoved.addListener(handleTabChange);
