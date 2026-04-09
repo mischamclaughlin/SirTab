@@ -1,0 +1,218 @@
+:root {
+    --bg-colour-RGB: 24, 26, 31;
+    --border-colour-RGB: 70, 75, 86;
+    --border-faded-colour-RGB: 54, 58, 67;
+    --border-light-colour-RGB: 94, 100, 114;
+
+    --surface-colour-RGB: 40, 43, 52;
+    --surface-light-colour-RGB: 52, 56, 67;
+
+    --dark-colour-RGB: 20, 23, 30;
+    --lavender-colour-RGB: 168, 176, 214;
+    --peach-colour-RGB: 222, 151, 108;
+    --red-colour-RGB: 221, 120, 120;
+    --yellow-colour-RGB: 219, 195, 122;
+    --green-colour-RGB: 132, 191, 138;
+    --pink-colour-RGB: 201, 148, 179;
+    --sky-colour-RGB: 122, 183, 196;
+    --blue-colour-RGB: 125, 157, 224;
+
+    --text-colour-RGB: 222, 226, 235;
+    --subtext-colour-RGB: 184, 190, 203;
+    --subsubtext-colour-RGB: 146, 153, 170;
+
+    --dark: rgba(var(--dark-colour-RGB), 0.25);
+    --blue: rgba(var(--blue-colour-RGB), 0.25);
+    --red: rgba(var(--red-colour-RGB), 0.25);
+    --yellow: rgba(var(--yellow-colour-RGB), 0.25);
+    --green: rgba(var(--green-colour-RGB), 0.25);
+    --pink: rgba(var(--pink-colour-RGB), 0.25);
+    --lavender: rgba(var(--lavender-colour-RGB), 0.25);
+    --sky: rgba(var(--sky-colour-RGB), 0.25);
+    --peach: rgba(var(--peach-colour-RGB), 0.25);
+
+    --bg: rgb(var(--bg-colour-RGB));
+    --border: rgb(var(--border-colour-RGB));
+    --border-faded: rgb(var(--border-faded-colour-RGB));
+    --border-light: rgb(var(--border-light-colour-RGB));
+    --surface: rgb(var(--surface-colour-RGB));
+    --surface-light: rgb(var(--surface-light-colour-RGB));
+    --subtext: rgb(var(--subtext-colour-RGB));
+    --subsubtext: rgb(var(--subsubtext-colour-RGB));
+    --text: rgb(var(--text-colour-RGB));
+
+    --group-grey: var(--bg);
+    --group-blue: rgba(125, 157, 224, 0.25);
+    --group-red: rgba(221, 120, 120, 0.25);
+    --group-yellow: rgba(219, 195, 122, 0.25);
+    --group-green: rgba(132, 191, 138, 0.25);
+    --group-pink: rgba(201, 148, 179, 0.25);
+    --group-lavender: rgba(168, 176, 214, 0.25);
+    --group-sky: rgba(122, 183, 196, 0.25);
+    --group-peach: rgba(222, 151, 108, 0.25);
+}
+
+:root[data-theme="light"] {
+    --bg-colour-RGB: 246, 247, 250;
+    --border-colour-RGB: 195, 200, 212;
+    --border-faded-colour-RGB: 213, 217, 226;
+    --border-light-colour-RGB: 176, 182, 196;
+    --surface-colour-RGB: 236, 239, 245;
+    --surface-light-colour-RGB: 224, 229, 238;
+
+    --dark-colour-RGB: 118, 124, 144;
+    --lavender-colour-RGB: 131, 143, 189;
+    --peach-colour-RGB: 206, 141, 108;
+    --red-colour-RGB: 191, 104, 104;
+    --yellow-colour-RGB: 189, 163, 95;
+    --green-colour-RGB: 104, 153, 109;
+    --pink-colour-RGB: 173, 125, 153;
+    --sky-colour-RGB: 99, 154, 167;
+    --blue-colour-RGB: 101, 130, 196;
+
+    --text-colour-RGB: 56, 61, 74;
+    --subtext-colour-RGB: 78, 84, 101;
+    --subsubtext-colour-RGB: 106, 112, 129;
+
+    --group-grey: var(--bg);
+    --group-blue: rgba(101, 130, 196, 0.25);
+    --group-red: rgba(191, 104, 104, 0.25);
+    --group-yellow: rgba(189, 163, 95, 0.25);
+    --group-green: rgba(104, 153, 109, 0.25);
+    --group-pink: rgba(173, 125, 153, 0.25);
+    --group-lavender: rgba(131, 143, 189, 0.25);
+    --group-sky: rgba(99, 154, 167, 0.25);
+    --group-peach: rgba(206, 141, 108, 0.25);
+}
+
+:root[data-theme="mocha"] {
+    --bg-colour-RGB: 30, 30, 46;
+    --border-colour-RGB: 69, 71, 90;
+    --border-faded-colour-RGB: 49, 50, 68;
+    --border-light-colour-RGB: 88, 91, 112;
+    --surface-colour-RGB: 69, 71, 90;
+    --surface-light-colour-RGB: 49, 50, 68;
+
+    --dark-colour-RGB: 17, 17, 27;
+    --lavender-colour-RGB: 180, 190, 254;
+    --peach-colour-RGB: 250, 179, 135;
+    --red-colour-RGB: 243, 139, 168;
+    --yellow-colour-RGB: 249, 226, 175;
+    --green-colour-RGB: 166, 227, 161;
+    --pink-colour-RGB: 245, 194, 231;
+    --sky-colour-RGB: 137, 220, 235;
+    --blue-colour-RGB: 137, 180, 250;
+
+    --text-colour-RGB: 205, 214, 244;
+    --subtext-colour-RGB: 186, 194, 222;
+    --subsubtext-colour-RGB: 166, 173, 200;
+
+    --group-grey: var(--bg);
+    --group-blue: rgba(137, 180, 250, 0.25);
+    --group-red: rgba(243, 139, 168, 0.25);
+    --group-yellow: rgba(249, 226, 175, 0.25);
+    --group-green: rgba(166, 227, 161, 0.25);
+    --group-pink: rgba(245, 194, 231, 0.25);
+    --group-lavender: rgba(180, 190, 254, 0.25);
+    --group-sky: rgba(137, 220, 235, 0.25);
+    --group-peach: rgba(250, 179, 135, 0.25);
+}
+
+:root[data-theme="latte"] {
+    --bg-colour-RGB: 239, 241, 245;
+    --border-colour-RGB: 188, 192, 204;
+    --border-faded-colour-RGB: 204, 208, 218;
+    --border-light-colour-RGB: 172, 176, 190;
+    --surface-colour-RGB: 230, 233, 239;
+    --surface-light-colour-RGB: 220, 224, 232;
+
+    --dark-colour-RGB: 108, 111, 133;
+    --lavender-colour-RGB: 114, 135, 253;
+    --peach-colour-RGB: 254, 100, 11;
+    --red-colour-RGB: 210, 15, 57;
+    --yellow-colour-RGB: 223, 142, 29;
+    --green-colour-RGB: 64, 160, 43;
+    --pink-colour-RGB: 234, 118, 203;
+    --sky-colour-RGB: 4, 165, 229;
+    --blue-colour-RGB: 30, 102, 245;
+
+    --text-colour-RGB: 76, 79, 105;
+    --subtext-colour-RGB: 92, 95, 119;
+    --subsubtext-colour-RGB: 108, 111, 133;
+
+    --group-grey: var(--bg);
+    --group-blue: rgba(30, 102, 245, 0.25);
+    --group-red: rgba(210, 15, 57, 0.25);
+    --group-yellow: rgba(223, 142, 29, 0.25);
+    --group-green: rgba(64, 160, 43, 0.25);
+    --group-pink: rgba(234, 118, 203, 0.25);
+    --group-lavender: rgba(114, 135, 253, 0.25);
+    --group-sky: rgba(4, 165, 229, 0.25);
+    --group-peach: rgba(254, 100, 11, 0.25);
+}
+
+:root[data-theme="retro-dark"] {
+    --bg-colour-RGB: 8, 20, 14;
+    --border-colour-RGB: 33, 110, 69;
+    --border-faded-colour-RGB: 21, 77, 47;
+    --border-light-colour-RGB: 49, 150, 95;
+    --surface-colour-RGB: 12, 35, 23;
+    --surface-light-colour-RGB: 18, 52, 33;
+
+    --dark-colour-RGB: 4, 12, 7;
+    --lavender-colour-RGB: 106, 212, 170;
+    --peach-colour-RGB: 116, 206, 154;
+    --red-colour-RGB: 97, 194, 142;
+    --yellow-colour-RGB: 162, 223, 132;
+    --green-colour-RGB: 96, 241, 163;
+    --pink-colour-RGB: 116, 211, 162;
+    --sky-colour-RGB: 98, 199, 176;
+    --blue-colour-RGB: 92, 184, 170;
+
+    --text-colour-RGB: 179, 255, 206;
+    --subtext-colour-RGB: 131, 230, 174;
+    --subsubtext-colour-RGB: 92, 181, 131;
+
+    --group-grey: var(--bg);
+    --group-blue: rgba(137, 180, 250, 0.25);
+    --group-red: rgba(243, 139, 168, 0.25);
+    --group-yellow: rgba(249, 226, 175, 0.25);
+    --group-green: rgba(166, 227, 161, 0.25);
+    --group-pink: rgba(245, 194, 231, 0.25);
+    --group-lavender: rgba(180, 190, 254, 0.25);
+    --group-sky: rgba(137, 220, 235, 0.25);
+    --group-peach: rgba(250, 179, 135, 0.25);
+}
+
+:root[data-theme="retro-light"] {
+    --bg-colour-RGB: 242, 250, 244;
+    --border-colour-RGB: 146, 184, 157;
+    --border-faded-colour-RGB: 177, 210, 186;
+    --border-light-colour-RGB: 118, 164, 133;
+    --surface-colour-RGB: 229, 245, 233;
+    --surface-light-colour-RGB: 214, 238, 221;
+
+    --dark-colour-RGB: 79, 118, 95;
+    --lavender-colour-RGB: 103, 156, 129;
+    --peach-colour-RGB: 122, 168, 135;
+    --red-colour-RGB: 128, 172, 140;
+    --yellow-colour-RGB: 168, 191, 124;
+    --green-colour-RGB: 92, 181, 132;
+    --pink-colour-RGB: 133, 171, 148;
+    --sky-colour-RGB: 115, 167, 156;
+    --blue-colour-RGB: 101, 154, 166;
+
+    --text-colour-RGB: 40, 78, 57;
+    --subtext-colour-RGB: 61, 100, 76;
+    --subsubtext-colour-RGB: 85, 121, 98;
+
+    --group-grey: var(--bg);
+    --group-blue: rgba(30, 102, 245, 0.25);
+    --group-red: rgba(210, 15, 57, 0.25);
+    --group-yellow: rgba(223, 142, 29, 0.25);
+    --group-green: rgba(64, 160, 43, 0.25);
+    --group-pink: rgba(234, 118, 203, 0.25);
+    --group-lavender: rgba(114, 135, 253, 0.25);
+    --group-sky: rgba(4, 165, 229, 0.25);
+    --group-peach: rgba(254, 100, 11, 0.25);
+}

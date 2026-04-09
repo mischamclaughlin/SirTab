@@ -1,0 +1,31 @@
+.ungroup-tab,
+.group-tab {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+    align-items: center;
+    gap: 1rem;
+    color: var(--subsubtext);
+    text-align: left;
+}
+
+.tab-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: 0.2rem;
+    object-fit: cover;
+    display: block;
+}
+
+.container--small {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family:
+        "JetBrains Mono", "Fira Code", "Cascadia Mono", "SF Mono", Consolas,
+        monospace;
+    font-variant-ligatures: none;
+}
