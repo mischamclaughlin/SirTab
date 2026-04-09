@@ -2,7 +2,7 @@ import { setupSearchAction } from "./actions/actionSearch.js";
 import { cycleTabs, buildTabSearchState } from "./tab/tab.js";
 
 import { setupEventListeners } from "./helpers/sidebarEvents.js";
-import { loadAllData } from "./helpers/loadSidebarData.js";
+import { loadAllData } from "./helpers/loadData.js";
 import { loadThemePreference } from "./helpers/theme.js";
 import { loadCollapse } from "./helpers/collapseState.js";
 import { createEmptySearchState } from "./helpers/domFactory.js";
