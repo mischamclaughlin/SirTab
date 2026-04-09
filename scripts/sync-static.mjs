@@ -11,6 +11,7 @@ export async function syncStatic({ clean = false } = {}) {
         cp("manifest.json", "dist/manifest.json"),
         cp("src/sidebar/sidebar.html", "dist/sidebar/sidebar.html"),
         cp("src/sidebar/sidebar.css", "dist/sidebar/sidebar.css"),
+        cp("src/sidebar/styles", "dist/sidebar/styles", { recursive: true }),
         cp("src/sidebar/assets", "dist/sidebar/assets", { recursive: true }),
     ]);
 }
