@@ -1,4 +1,4 @@
-import type { ToggleNode, NodeType } from "../types.js";
+import type { RequestRender } from "../types.js";
 import { chromeToUiColor } from "../config.js";
 import { cycleTabs } from "../tab/tab.js";
 import {
@@ -20,7 +20,7 @@ export async function buildGroup(
     isSearching: boolean,
     searchQuery: string,
     next: HTMLElement,
-    render: () => Promise<void>,
+    requestRender: RequestRender,
 ) {
     let renderedTabResults = visibleUngroupedTabs.length > 0;
     let hasRenderedGroupSection = false;
@@ -61,7 +61,7 @@ export async function buildGroup(
             !isSearching && isCollapsedCheck(String(groupId), collapsedGroups);
         const btn = createToggleButton(isCollapsed, group, collapsedGroups, {
             type: "tab",
-            onToggle: () => void render(),
+            onToggle: requestRender,
             hasChildren: visibleTabsInGroup.length > 0,
             colour: groupColour ? chromeToUiColor[groupColour] : "var(--blue)",
             canToggle: !isSearching,

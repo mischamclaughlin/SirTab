@@ -1,10 +1,9 @@
-import { queueRender } from "../helpers/renderScheduler.js";
+import type { RequestRender } from "../types.js";
 
-export async function setupSearchAction(
+export function setupSearchAction(
     actionSection: HTMLElement,
-    renderQueued: boolean,
-    render: () => Promise<void>,
-): Promise<() => string> {
+    requestRender: RequestRender,
+): () => string {
     const searchInput = document.createElement("input");
     searchInput.type = "text";
     searchInput.placeholder = "search tabs and bookmarks";
@@ -15,14 +14,14 @@ export async function setupSearchAction(
     let searchQuery = "";
     searchInput.addEventListener("input", () => {
         searchQuery = searchInput.value.trim().toLowerCase();
-        queueRender(renderQueued, render);
+        requestRender();
     });
 
     searchInput.addEventListener("keydown", (event) => {
         if (event.key !== "Escape" || searchInput.value.length === 0) return;
         searchInput.value = "";
         searchQuery = "";
-        queueRender(renderQueued, render);
+        requestRender();
     });
 
     chrome.sidePanel.onOpened.addListener(() => {

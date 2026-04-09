@@ -1,12 +1,15 @@
-export function queueRender(
-    renderQueued: boolean,
-    render: () => Promise<void>,
-) {
-    if (renderQueued) return;
-    renderQueued = true;
+import { RenderFn, RequestRender } from "../types.js";
 
-    queueMicrotask(() => {
-        renderQueued = false;
-        void render();
-    });
+export function createRenderScheduler(render: RenderFn): RequestRender {
+    let renderQueued = false;
+
+    return () => {
+        if (renderQueued) return;
+        renderQueued = true;
+
+        queueMicrotask(() => {
+            renderQueued = false;
+            void render();
+        });
+    };
 }
