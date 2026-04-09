@@ -4,8 +4,10 @@
         "typescript": "^6.0.2"
     },
     "scripts": {
-        "build": "tsc",
-        "watch": "tsc --watch"
+        "build": "node scripts/copy-static.mjs --clean && tsc",
+        "watch": "node scripts/watch.mjs",
+        "watch:static": "node scripts/watch-static.mjs",
+        "watch:ts": "tsc --watch --preserveWatchOutput"
     },
     "type": "module"
 }

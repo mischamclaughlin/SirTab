@@ -1,5 +1,5 @@
 export const DEFAULT_TAB_ICON_URL = chrome.runtime.getURL(
-    "src/sidebar/assets/default-tab-icon.svg",
+    "sidebar/assets/default-tab-icon.svg",
 );
 
 export const THEME_STORAGE_KEY = "sidebarTheme";
