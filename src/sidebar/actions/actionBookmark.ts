@@ -1,4 +1,7 @@
-import { collectBookmarkFolderChoices } from "../bookmark/bookmark.js";
+import {
+    collectBookmarkFolderChoices,
+    isAllowedBookmarkUrl,
+} from "../bookmark/bookmark.js";
 import { resetCreationState } from "../helpers/resetCreationData.js";
 
 export async function setupBookmarkAction(
@@ -100,6 +103,13 @@ export async function setupBookmarkAction(
                     lastFocusedWindow: true,
                 });
                 if (!currentTab) return;
+                if (!currentTab.url || !isAllowedBookmarkUrl(currentTab.url)) {
+                    console.warn(
+                        "Blocked bookmark creation for unsupported tab URL:",
+                        currentTab.url,
+                    );
+                    return;
+                }
 
                 await chrome.bookmarks.create({
                     title: bookmarkName,
