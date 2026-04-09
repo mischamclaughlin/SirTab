@@ -19,7 +19,8 @@ export type ToggleViewOptions = {
     canToggle?: boolean;
 };
 
-export type RenderFn = () => Promise<void>;
+export type RenderStaleCheck = () => boolean;
+export type RenderFn = (isStale: RenderStaleCheck) => Promise<void>;
 export type RequestRender = () => void;
 
 export type BookmarkFolderChoice = {

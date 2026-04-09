@@ -1,4 +1,8 @@
-import type { SidebarElements, RequestRender } from "../types.js";
+import type {
+    SidebarElements,
+    RequestRender,
+    RenderStaleCheck,
+} from "../types.js";
 
 import { setupSearchAction } from "../actions/actionSearch.js";
 import { cycleTabs, buildTabSearchState } from "../tab/tab.js";
@@ -42,21 +46,18 @@ export async function bootstrapSidebar() {
     if (!sidebarElements) return;
     const elements: SidebarElements = sidebarElements;
 
-    let renderToken = 0;
     const collapsedGroups = new Set<string>();
     const collapsedBookmarkFolders = new Set<string>();
 
     let getSearchQuery = () => "";
     let requestRender: RequestRender = () => {};
 
-    async function render() {
-        const token = ++renderToken;
-
+    async function render(isStale: RenderStaleCheck) {
         const [tabs, groups, tree] = await loadAllData();
-        if (token !== renderToken) return;
+        if (isStale()) return;
 
         await groupCollapse(groups, collapsedGroups);
-        if (token !== renderToken) return;
+        if (isStale()) return;
 
         const searchQuery = getSearchQuery();
 
