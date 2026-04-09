@@ -1,16 +1,11 @@
-import {
-    toggleView,
-    persistCollapse,
-    isCollpased,
-    nodeQuery,
-} from "../helpers.js";
+import { BookmarkFolderChoice } from "../types.js";
+import { persistCollapse, isCollapsedCheck } from "../helpers/collapseState.js";
+import { matchesNodeQuery } from "../helpers/nodeSearch.js";
 import { DEFAULT_TAB_ICON_URL } from "../config.js";
-import { createDeleteButton } from "../helpers.js";
-
-type BookmarkFolderChoice = {
-    id: string;
-    label: string;
-};
+import {
+    createDeleteButton,
+    createToggleButton,
+} from "../helpers/domFactory.js";
 
 export function collectBookmarkFolderChoices(
     nodes: chrome.bookmarks.BookmarkTreeNode[],
@@ -91,7 +86,7 @@ export function filterBookmarkNodes(
         const filteredChildren = node.children
             ? filterBookmarkNodes(node.children, query)
             : undefined;
-        const matchesSelf = nodeQuery(node, query);
+        const matchesSelf = matchesNodeQuery(node, query);
         const hasMatchingChildren = (filteredChildren?.length ?? 0) > 0;
         if (!matchesSelf && !hasMatchingChildren) continue;
 
@@ -186,14 +181,19 @@ export function cycleBookmarks(
         const hasChildren = (node.children?.length ?? 0) > 0;
         const isCollapsed =
             !forceExpandFolders &&
-            isCollpased(node.id, collapsedBookmarkFoldersSet);
+            isCollapsedCheck(node.id, collapsedBookmarkFoldersSet);
 
-        const btn = toggleView(isCollapsed, node, collapsedBookmarkFoldersSet, {
-            type: "bookmark",
-            onToggle,
-            hasChildren,
-            canToggle: hasChildren && !forceExpandFolders,
-        });
+        const btn = createToggleButton(
+            isCollapsed,
+            node,
+            collapsedBookmarkFoldersSet,
+            {
+                type: "bookmark",
+                onToggle,
+                hasChildren,
+                canToggle: hasChildren && !forceExpandFolders,
+            },
+        );
 
         const row = document.createElement("div");
         row.className = "group-row";

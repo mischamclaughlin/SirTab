@@ -1,13 +1,16 @@
+import type { ToggleNode, NodeType } from "../types.js";
 import { chromeToUiColor } from "../config.js";
+import { cycleTabs } from "../tab/tab.js";
 import {
-    nodeQuery,
-    isCollapsedInList,
-    toggleView,
     createDeleteButton,
+    createToggleButton,
+} from "../helpers/domFactory.js";
+import { matchesNodeQuery } from "../helpers/nodeSearch.js";
+import {
+    isCollapsedCheck,
     persistCollapse,
-    cycleTabs,
-    createEmptyState,
-} from "../helpers.js";
+} from "../helpers/collapseState.js";
+import { createEmptySearchState } from "../helpers/domFactory.js";
 
 export async function buildGroup(
     visibleUngroupedTabs: chrome.tabs.Tab[],
@@ -28,12 +31,14 @@ export async function buildGroup(
 
         const tabsInGroup = tabsByGroup.get(groupId) ?? [];
         const groupTitleMatches = isSearching
-            ? nodeQuery(group, searchQuery)
+            ? matchesNodeQuery(group, searchQuery)
             : false;
         const visibleTabsInGroup = isSearching
             ? groupTitleMatches
                 ? tabsInGroup
-                : tabsInGroup.filter((tab) => nodeQuery(tab, searchQuery))
+                : tabsInGroup.filter((tab) =>
+                      matchesNodeQuery(tab, searchQuery),
+                  )
             : tabsInGroup;
         const shouldRenderGroup =
             !isSearching || groupTitleMatches || visibleTabsInGroup.length > 0;
@@ -53,8 +58,8 @@ export async function buildGroup(
         li.className = "group";
 
         const isCollapsed =
-            !isSearching && isCollapsedInList(collapsedGroups, String(groupId));
-        const btn = toggleView(isCollapsed, group, collapsedGroups, {
+            !isSearching && isCollapsedCheck(String(groupId), collapsedGroups);
+        const btn = createToggleButton(isCollapsed, group, collapsedGroups, {
             type: "tab",
             onToggle: () => void render(),
             hasChildren: visibleTabsInGroup.length > 0,
@@ -96,7 +101,7 @@ export async function buildGroup(
     }
 
     if (isSearching && !renderedTabResults) {
-        next.appendChild(createEmptyState("No matching tabs."));
+        next.appendChild(createEmptySearchState("No matching tabs."));
     }
 }
 
