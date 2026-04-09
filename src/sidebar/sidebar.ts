@@ -1,20 +1,19 @@
-import { setupSearchAction } from "./action/actionSearch.js";
-import {
-    cycleTabs,
-    loadCollapse,
-    queueRender,
-    createEmptyState,
-    loadThemePreference,
-    loadAllData,
-    setupTabSearch,
-} from "./helpers.js";
-import { cycleBookmarks, filterBookmarkNodes } from "./bookmark/bookmark.js";
-import { setupEventListeners } from "./event_listeners.js";
-import { setupGroupAction } from "./action/actionGroup.js";
-import { setupBookmarkAction } from "./action/actionBookmark.js";
-import { setupTabAction } from "./action/actionTab.js";
-import { setupSettingAction } from "./action/actionSetting.js";
+import { setupSearchAction } from "./actions/actionSearch.js";
+import { cycleTabs, buildTabSearchState } from "./tab/tab.js";
+
+import { setupEventListeners } from "./helpers/sidebarEvents.js";
+import { loadAllData } from "./helpers/loadSidebarData.js";
+import { loadThemePreference } from "./helpers/theme.js";
+import { loadCollapse } from "./helpers/collapseState.js";
+import { createEmptySearchState } from "./helpers/domFactory.js";
+import { queueRender } from "./helpers/renderScheduler.js";
+
+import { setupGroupAction } from "./actions/actionGroup.js";
+import { setupBookmarkAction } from "./actions/actionBookmark.js";
+import { setupTabAction } from "./actions/actionTab.js";
+import { setupSettingAction } from "./actions/actionSetting.js";
 import { buildGroup, groupCollapse } from "./group/group.js";
+import { cycleBookmarks, filterBookmarkNodes } from "./bookmark/bookmark.js";
 
 document.addEventListener("DOMContentLoaded", async () => {
     // Setup event listeners
@@ -49,7 +48,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await setupBookmarkAction(actions, actionBtnSection);
     // -- Tab +
     await setupTabAction(actionBtnSection);
-    
+
     // -- Settings
     const settings = document.getElementById("settings");
     if (!settings) return;
@@ -76,11 +75,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (token !== renderToken) return;
 
         const [tabs, groups, tree] = await loadAllData();
-
         await groupCollapse(groups, collapsedGroups);
 
-        const [visibleUngroupedTabs, tabsByGroup, isSearching, searchQuery] =
-            await setupTabSearch(tabs, getSearchQuery);
+        const searchQuery = getSearchQuery();
+
+        const [visibleUngroupedTabs, tabsByGroup, isSearching] =
+            buildTabSearchState(tabs, searchQuery);
 
         const next = document.createElement("ul");
         cycleTabs(next, visibleUngroupedTabs, false);
@@ -112,7 +112,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             );
             if (isSearching && nextBookmarks.childElementCount === 0) {
                 nextBookmarks.appendChild(
-                    createEmptyState("No matching bookmarks."),
+                    createEmptySearchState("No matching bookmarks."),
                 );
             }
             bookmarksList.replaceChildren(
