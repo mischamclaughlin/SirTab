@@ -1,11 +1,16 @@
+export type SidebarElements = {
+    actions: HTMLElement;
+    actionBtnSection: HTMLElement;
+    tabList: HTMLElement;
+    bookmarksList: HTMLElement;
+    settings: HTMLElement;
+};
+
 export type ToggleNode =
     | chrome.bookmarks.BookmarkTreeNode
     | chrome.tabGroups.TabGroup;
-
-export type ToggleType = "tab" | "bookmark";
-
 export type NodeType = chrome.tabs.Tab | ToggleNode;
-
+export type ToggleType = "tab" | "bookmark";
 export type ToggleViewOptions = {
     type?: ToggleType;
     onToggle?: () => void;
@@ -13,6 +18,9 @@ export type ToggleViewOptions = {
     colour?: string;
     canToggle?: boolean;
 };
+
+export type RenderFn = () => Promise<void>;
+export type RequestRender = () => void;
 
 export type BookmarkFolderChoice = {
     id: string;
