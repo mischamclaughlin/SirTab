@@ -1,3 +1,8 @@
+import {
+    orderGroupsByTabPosition,
+    sortTabsByIndex,
+} from "../shared/groupOrder.js";
+
 chrome.sidePanel
     .setPanelBehavior({ openPanelOnActionClick: true })
     .catch((error) =>
@@ -33,11 +38,13 @@ async function getVisibleTabOrderForCurrentWindow(): Promise<number[]> {
                   .map(String)
             : [],
     );
+    const orderedTabs = sortTabsByIndex(tabs);
+    const orderedGroups = orderGroupsByTabPosition(groups, orderedTabs);
 
     const tabsByGroup = new Map<number, chrome.tabs.Tab[]>();
     const ungroupedTabs: chrome.tabs.Tab[] = [];
 
-    for (const tab of tabs) {
+    for (const tab of orderedTabs) {
         if (tab.id == null || tab.groupId == null) continue;
         if (tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE) {
             ungroupedTabs.push(tab);
@@ -53,7 +60,7 @@ async function getVisibleTabOrderForCurrentWindow(): Promise<number[]> {
         if (tab.id != null) orderedTabIds.push(tab.id);
     }
 
-    for (const group of groups) {
+    for (const group of orderedGroups) {
         const groupId = group.id;
         if (groupId == null || collapsedGroups.has(String(groupId))) continue;
         const groupedTabs = tabsByGroup.get(groupId) ?? [];

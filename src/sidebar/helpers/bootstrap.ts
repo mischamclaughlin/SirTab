@@ -15,6 +15,7 @@ import { createEmptySearchState } from "./domFactory.js";
 import { createRenderScheduler } from "./renderScheduler.js";
 import { createActionPanelController } from "./actionPanel.js";
 import { setupSidebarDropZones } from "./dragAndDrop.js";
+import { orderGroupsByTabPosition } from "../../shared/groupOrder.js";
 
 import { setupGroupAction } from "../actions/actionGroup.js";
 import { setupBookmarkAction } from "../actions/actionBookmark.js";
@@ -65,7 +66,9 @@ export async function bootstrapSidebar() {
         const [tabs, groups, tree] = await loadAllData();
         if (isStale()) return;
 
-        await groupCollapse(groups, collapsedGroups);
+        const orderedGroups = orderGroupsByTabPosition(groups, tabs);
+
+        await groupCollapse(orderedGroups, collapsedGroups);
         if (isStale()) return;
 
         const searchQuery = getSearchQuery();
@@ -85,7 +88,7 @@ export async function bootstrapSidebar() {
         const nextGroups = document.createElement("ul");
         buildGroup(
             visibleUngroupedTabs.length > 0,
-            groups,
+            orderedGroups,
             tabsByGroup,
             collapsedGroups,
             isSearching,
