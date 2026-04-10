@@ -13,6 +13,7 @@ import { loadThemePreference } from "./theme.js";
 import { loadCollapse } from "./collapseState.js";
 import { createEmptySearchState } from "./domFactory.js";
 import { createRenderScheduler } from "./renderScheduler.js";
+import { createActionPanelController } from "./actionPanel.js";
 
 import { setupGroupAction } from "../actions/actionGroup.js";
 import { setupBookmarkAction } from "../actions/actionBookmark.js";
@@ -24,6 +25,7 @@ import { cycleBookmarks, filterBookmarkNodes } from "../bookmark/bookmark.js";
 function getSidebarElements(): SidebarElements | null {
     const actions = document.getElementById("actions");
     const actionBtnSection = document.createElement("div");
+    const actionPanelSection = document.createElement("div");
     const tabsList = document.getElementById("tabs-list");
     const groupsList = document.getElementById("groups-list");
     const bookmarksList = document.getElementById("bookmarks-list");
@@ -33,11 +35,13 @@ function getSidebarElements(): SidebarElements | null {
         return null;
     }
 
-    actionBtnSection.className = "container--small-section";
+    actionBtnSection.className = "action-controls";
+    actionPanelSection.className = "action-panel";
 
     return {
         actions,
         actionBtnSection,
+        actionPanelSection,
         tabsList,
         groupsList,
         bookmarksList,
@@ -113,8 +117,17 @@ export async function bootstrapSidebar() {
     await loadThemePreference();
 
     elements.actions.appendChild(elements.actionBtnSection);
-    await setupGroupAction(elements.actions, elements.actionBtnSection);
-    await setupBookmarkAction(elements.actions, elements.actionBtnSection);
+    elements.actions.appendChild(elements.actionPanelSection);
+
+    const actionPanelController = createActionPanelController(
+        elements.actionPanelSection,
+    );
+
+    await setupGroupAction(elements.actionBtnSection, actionPanelController);
+    await setupBookmarkAction(
+        elements.actionBtnSection,
+        actionPanelController,
+    );
     await setupTabAction(elements.actionBtnSection);
     await setupSettingAction(elements.settings);
 

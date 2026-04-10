@@ -33,7 +33,7 @@
 
     --bg: rgb(var(--bg-colour-RGB));
     --border: rgb(var(--border-colour-RGB));
-    --border-faded: rgb(var(--border-faded-colour-RGB));
+    --border-faded: rgba(var(--border-faded-colour-RGB), 0.5);
     --border-light: rgb(var(--border-light-colour-RGB));
     --surface: rgb(var(--surface-colour-RGB));
     --surface-light: rgb(var(--surface-light-colour-RGB));

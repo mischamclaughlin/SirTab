@@ -8,14 +8,20 @@
 
 * {
     box-sizing: border-box;
-    padding: 0;
     margin: 0;
-    font-family: inherit !important;
-    font: inherit;
+    padding: 0;
 }
 
-.container--small {
-    border: 1px solid var(--border-faded);
+button,
+input,
+select {
+    font: inherit;
+    font-family: inherit;
+}
+
+.control {
+    min-width: 0;
+    border: 1px solid var(--border-light);
     border-radius: 0.25rem;
     background: transparent;
     color: var(--subtext);
@@ -26,15 +32,24 @@
         border-color 150ms ease-in-out,
         background 200ms ease-in-out;
 }
-.container--small:hover {
-    background: var(--surface);
-    border: 1px solid var(--border);
+
+:where(button, select).control {
+    cursor: pointer;
 }
 
-.active {
-    background: var(--surface-light);
-    border: 1px solid var(--border-light);
-    color: var(--text);
+:where(button, select).control:hover {
+    background: var(--surface);
+    border-color: var(--border);
+}
+
+:where(button, input, select):focus-visible {
+    outline: none;
+    border-color: var(--border-light);
+    box-shadow: 0 0 0 2px rgba(var(--blue-colour-RGB), 0.2);
+}
+
+[hidden] {
+    display: none !important;
 }
 
 .row-delete-btn {

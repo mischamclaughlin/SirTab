@@ -24,3 +24,9 @@
 .theme-option {
     text-align: left;
 }
+
+.theme-option.is-selected {
+    background: var(--surface-light);
+    border-color: var(--border-light);
+    color: var(--text);
+}

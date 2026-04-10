@@ -5,11 +5,14 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
     const settingsBtn = document.createElement("button");
     settingsBtn.type = "button";
     settingsBtn.textContent = "settings";
-    settingsBtn.className = "container--small settings-btn";
+    settingsBtn.className = "control settings-btn";
+    settingsBtn.setAttribute("aria-expanded", "false");
 
     const settingInfoSection = document.createElement("div");
     settingInfoSection.className = "setting-info-section";
     settingInfoSection.hidden = true;
+    settingInfoSection.id = "settings-panel";
+    settingsBtn.setAttribute("aria-controls", settingInfoSection.id);
 
     const themeOptions = document.createElement("div");
     themeOptions.className = "theme-options";
@@ -27,13 +30,15 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
     for (const theme of THEMES) {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = "container--small theme-option";
+        button.className = "control theme-option";
         button.textContent = themeLabels[theme];
         button.addEventListener("click", async () => {
             applyTheme(theme);
             await chrome.storage.local.set({ [THEME_STORAGE_KEY]: theme });
             for (const [id, btn] of themeButtons) {
-                btn.classList.toggle("active", id === theme);
+                const isSelected = id === theme;
+                btn.classList.toggle("is-selected", isSelected);
+                btn.setAttribute("aria-pressed", String(isSelected));
             }
         });
         themeButtons.set(theme, button);
@@ -46,7 +51,9 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
     const initialTheme =
         currentTheme && THEMES.includes(currentTheme) ? currentTheme : "dark";
     for (const [id, btn] of themeButtons) {
-        btn.classList.toggle("active", id === initialTheme);
+        const isSelected = id === initialTheme;
+        btn.classList.toggle("is-selected", isSelected);
+        btn.setAttribute("aria-pressed", String(isSelected));
     }
 
     settingInfoSection.appendChild(themeOptions);
@@ -56,6 +63,7 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
     settingsBtn.addEventListener("click", () => {
         isSettingOpen = !isSettingOpen;
         settingInfoSection.hidden = !isSettingOpen;
+        settingsBtn.setAttribute("aria-expanded", String(isSettingOpen));
     });
 
     settings?.append(settingsBtn, settingInfoSection);

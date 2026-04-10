@@ -8,7 +8,7 @@ html {
 
 body {
     width: 100%;
-    min-height: calc(100vh - 0.15rem);
+    min-height: calc(100vh - 0.05rem);
     padding: 0.5rem 1rem;
     border-left: 1px solid var(--border);
     background: var(--bg);
@@ -39,6 +39,7 @@ body {
     width: 100%;
     margin-top: auto;
     padding-top: 1rem;
+    border-top: 1px solid var(--border);
     display: grid;
     gap: 0.5rem;
 }

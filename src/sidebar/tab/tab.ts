@@ -1,5 +1,4 @@
-import type { NodeType } from "../types.js";
-import { DEFAULT_TAB_ICON_URL, chromeToUiColor } from "../config.js";
+import { DEFAULT_TAB_ICON_URL } from "../config.js";
 import { createDeleteButton } from "../helpers/domFactory.js";
 import { matchesNodeQuery } from "../helpers/nodeSearch.js";
 
@@ -7,7 +6,6 @@ export function cycleTabs(
     tabElement: HTMLElement,
     tabList: chrome.tabs.Tab[],
     grouped = false,
-    groupColour?: string,
 ) {
     for (const tab of tabList) {
         if (tab.id == null) continue;
@@ -16,7 +14,7 @@ export function cycleTabs(
         li.className = "tab-item";
 
         const btn = document.createElement("button");
-        btn.className = grouped ? "group-tab" : "ungroup-tab";
+        btn.className = grouped ? "tab-button tab-button--grouped" : "tab-button";
         btn.type = "button";
 
         const icon = document.createElement("img");
@@ -30,9 +28,9 @@ export function cycleTabs(
         });
 
         const label = document.createElement("span");
-        label.className = "container--small";
+        label.className = "tab-label";
 
-        if (tab.active) label.className += " active";
+        if (tab.active) label.classList.add("is-current");
         const title = tab.title?.trim() ?? "";
         const text = title || tab.url || "(Untitled tab)";
         label.textContent = text;
@@ -53,9 +51,6 @@ export function cycleTabs(
         row.append(btn, deleteBtn);
         li.appendChild(row);
         tabElement.appendChild(li);
-        tabElement.style.background = groupColour
-            ? chromeToUiColor[groupColour]
-            : "var(--blue)";
     }
 }
 

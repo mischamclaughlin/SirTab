@@ -14,7 +14,7 @@ let syncQueued = false;
 let syncInProgress = false;
 let debounceTimer;
 
-async function runSync(reason) {
+async function runSync(reason, { clean = false } = {}) {
     if (syncInProgress) {
         syncQueued = true;
         return;
@@ -22,7 +22,7 @@ async function runSync(reason) {
 
     syncInProgress = true;
     try {
-        await syncStatic();
+        await syncStatic({ clean });
         console.log(`[static] synced (${reason})`);
     } catch (error) {
         console.error("[static] sync failed");
@@ -43,12 +43,15 @@ function scheduleSync(reason) {
     }, 50);
 }
 
-await runSync("initial");
+await runSync("initial", { clean: true });
 
 const assetFiles = (await readdir("src/sidebar/assets")).map(
     (file) => `src/sidebar/assets/${file}`,
 );
-const filesToWatch = [...watchTargets, ...assetFiles];
+const styleFiles = (await readdir("src/sidebar/styles")).map(
+    (file) => `src/sidebar/styles/${file}`,
+);
+const filesToWatch = [...watchTargets, ...styleFiles, ...assetFiles];
 
 for (const target of filesToWatch) {
     watchFile(target, { interval: STATIC_WATCH_INTERVAL_MS }, () => {

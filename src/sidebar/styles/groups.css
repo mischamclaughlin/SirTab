@@ -1,27 +1,17 @@
-.group {
-    width: calc(100% - 0.5rem);
-    margin-left: 0.5rem;
+.group-item {
+    list-style: none;
     display: grid;
     gap: 0.5rem;
-    border-radius: 0.25rem;
-    padding: 0.5rem;
 }
 
-.collapsed-group {
-    padding: 0;
-    gap: 0;
-    height: 0;
-    width: 0;
-}
-
-.group-row {
+.tree-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.25rem;
     align-items: center;
 }
 
-.group-toggle {
+.tree-toggle {
     width: 100%;
     min-height: 1.5rem;
     padding: 0.25rem 0.5rem;
@@ -35,17 +25,99 @@
     background: transparent;
 }
 
-.group-toggle-icon {
+.tree-toggle[data-colour="grey"] {
+    background: var(--group-grey);
+}
+
+.tree-toggle[data-colour="blue"] {
+    background: var(--group-blue);
+}
+
+.tree-toggle[data-colour="red"] {
+    background: var(--group-red);
+}
+
+.tree-toggle[data-colour="yellow"] {
+    background: var(--group-yellow);
+}
+
+.tree-toggle[data-colour="green"] {
+    background: var(--group-green);
+}
+
+.tree-toggle[data-colour="pink"] {
+    background: var(--group-pink);
+}
+
+.tree-toggle[data-colour="purple"] {
+    background: var(--group-lavender);
+}
+
+.tree-toggle[data-colour="cyan"] {
+    background: var(--group-sky);
+}
+
+.tree-toggle[data-colour="orange"] {
+    background: var(--group-peach);
+}
+
+.tree-toggle-icon {
     width: 1ch;
     text-align: center;
     color: var(--text);
     flex-shrink: 0;
 }
 
-.group-toggle-title {
+.tree-toggle-title {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
     font-size: 1rem;
     font-weight: 600;
     line-height: 1.2;
     color: var(--subtext);
     font-variant-ligatures: none;
+}
+
+.group-tabs {
+    list-style: none;
+    margin-left: 0.75rem;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    display: grid;
+    gap: 0.5rem;
+    background: transparent;
+}
+
+.group-tabs[data-group-color="blue"] {
+    background: var(--group-blue);
+}
+
+.group-tabs[data-group-color="red"] {
+    background: var(--group-red);
+}
+
+.group-tabs[data-group-color="yellow"] {
+    background: var(--group-yellow);
+}
+
+.group-tabs[data-group-color="green"] {
+    background: var(--group-green);
+}
+
+.group-tabs[data-group-color="pink"] {
+    background: var(--group-pink);
+}
+
+.group-tabs[data-group-color="purple"] {
+    background: var(--group-lavender);
+}
+
+.group-tabs[data-group-color="cyan"] {
+    background: var(--group-sky);
+}
+
+.group-tabs[data-group-color="orange"] {
+    background: var(--group-peach);
 }

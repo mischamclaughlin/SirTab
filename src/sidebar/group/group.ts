@@ -1,5 +1,4 @@
 import type { RequestRender } from "../types.js";
-import { chromeToUiColor } from "../config.js";
 import { cycleTabs } from "../tab/tab.js";
 import {
     createDeleteButton,
@@ -46,21 +45,23 @@ export async function buildGroup(
         const groupColour = group.color;
         const groupTitle = group.title?.trim() || "(untitled)";
 
-        const li = document.createElement("li");
-        li.className = "group";
+        const groupItem = document.createElement("li");
+        groupItem.className = "group-item";
 
         const isCollapsed =
             !isSearching && isCollapsedCheck(String(groupId), collapsedGroups);
+        const nestedListId = `group-tabs-${groupId}`;
         const btn = createToggleButton(isCollapsed, group, collapsedGroups, {
             type: "tab",
             onToggle: requestRender,
             hasChildren: visibleTabsInGroup.length > 0,
-            colour: groupColour ? chromeToUiColor[groupColour] : "var(--blue)",
+            colour: groupColour ?? "grey",
             canToggle: !isSearching,
+            controlsId: visibleTabsInGroup.length > 0 ? nestedListId : undefined,
         });
 
         const groupRow = document.createElement("div");
-        groupRow.className = "group-row";
+        groupRow.className = "tree-row";
         const deleteGroupBtn = createDeleteButton("Close group", async () => {
             const tabIds = (tabsByGroup.get(groupId) ?? [])
                 .map((tab) => tab.id)
@@ -80,15 +81,22 @@ export async function buildGroup(
             }
         });
         groupRow.append(btn, deleteGroupBtn);
+        groupItem.appendChild(groupRow);
 
-        if (!isCollapsed) {
-            cycleTabs(li, visibleTabsInGroup, true, groupColour);
+        if (visibleTabsInGroup.length > 0) {
+            const nestedList = document.createElement("ul");
+            nestedList.className = "group-tabs";
+            nestedList.id = nestedListId;
+            nestedList.hidden = isCollapsed;
+            nestedList.dataset.groupColor = groupColour ?? "grey";
+            groupItem.appendChild(nestedList);
+
+            if (!isCollapsed) {
+                cycleTabs(nestedList, visibleTabsInGroup, true);
+            }
         }
 
-        next.appendChild(groupRow);
-        if (!isCollapsed) {
-            next.appendChild(li);
-        }
+        next.appendChild(groupItem);
         renderedTabResults = true;
     }
 

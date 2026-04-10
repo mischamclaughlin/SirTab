@@ -54,7 +54,7 @@ export function collectBookmarkFolderChoices(
 
         if (!isRootNode) {
             const depthPrefix =
-                depth > 0 ? `${"\u00A0\u00A0".repeat(depth)}] ` : "";
+                depth > 0 ? `${"\u00A0\u00A0".repeat(depth)}- ` : "";
             choices.push({
                 id: node.id,
                 label: `${depthPrefix}${nodeTitle || "(untitled folder)"}`,
@@ -159,7 +159,7 @@ export function cycleBookmarks(
 
         if (node.url) {
             const btn = document.createElement("button");
-            btn.className = "ungroup-tab";
+            btn.className = "tab-button";
             btn.type = "button";
             btn.addEventListener("click", async () => {
                 if (!isAllowedBookmarkUrl(node.url!)) {
@@ -179,7 +179,7 @@ export function cycleBookmarks(
             icon.width = 16;
 
             const label = document.createElement("span");
-            label.className = "container--small";
+            label.className = "tab-label";
             label.textContent = nodeTitle || node.url || "(Untitled tab)";
 
             btn.append(icon, label);
@@ -203,6 +203,7 @@ export function cycleBookmarks(
         const isCollapsed =
             !forceExpandFolders &&
             isCollapsedCheck(node.id, collapsedBookmarkFoldersSet);
+        const nestedListId = `bookmark-folder-${node.id}`;
 
         const btn = createToggleButton(
             isCollapsed,
@@ -213,11 +214,12 @@ export function cycleBookmarks(
                 onToggle,
                 hasChildren,
                 canToggle: hasChildren && !forceExpandFolders,
+                controlsId: hasChildren ? nestedListId : undefined,
             },
         );
 
         const row = document.createElement("div");
-        row.className = "group-row";
+        row.className = "tree-row";
         const deleteFolderBtn = createDeleteButton(
             "Delete folder",
             async () => {
@@ -241,20 +243,26 @@ export function cycleBookmarks(
         );
         row.append(btn, deleteFolderBtn);
         li.appendChild(row);
-        parentElement.appendChild(li);
 
-        if (hasChildren && !isCollapsed) {
+        if (hasChildren) {
             const nestedList = document.createElement("ul");
             nestedList.className = "bookmark-nested-list";
+            nestedList.id = nestedListId;
+            nestedList.hidden = isCollapsed;
             li.appendChild(nestedList);
-            cycleBookmarks(
-                nestedList,
-                node.children!,
-                forceExpandFolders,
-                collapsedBookmarkFoldersSet,
-                onToggle,
-            );
+
+            if (!isCollapsed) {
+                cycleBookmarks(
+                    nestedList,
+                    node.children!,
+                    forceExpandFolders,
+                    collapsedBookmarkFoldersSet,
+                    onToggle,
+                );
+            }
         }
+
+        parentElement.appendChild(li);
     }
 }
 

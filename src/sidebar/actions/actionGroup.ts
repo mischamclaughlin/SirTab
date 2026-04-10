@@ -1,38 +1,42 @@
+import type { ActionPanelController } from "../types.js";
 import { groupColorMap, GroupColorChoice } from "../config.js";
-import { resetCreationState } from "../helpers/resetCreationData.js";
 
 export async function setupGroupAction(
-    actionSection: HTMLElement,
     actionBtnSection: HTMLElement,
+    actionPanel: ActionPanelController,
 ): Promise<void> {
     const btnGroup = document.createElement("button");
     btnGroup.textContent = "group +";
-    btnGroup.className = "container--small";
+    btnGroup.className = "control";
     actionBtnSection.appendChild(btnGroup);
 
-    let creatingGroup = false;
+    const closeGroupForm = () => {
+        btnGroup.textContent = "group +";
+    };
 
     btnGroup.addEventListener("click", async () => {
-        if (creatingGroup) {
-            creatingGroup = resetCreationState(actionSection, btnGroup, "tab");
+        if (actionPanel.isOpen("group")) {
+            actionPanel.close("group");
             return;
         }
 
-        const groupInfoDropdown = document.createElement("div");
-        groupInfoDropdown.className = "info-dropdown";
-
-        creatingGroup = true;
         btnGroup.textContent = "cancel !";
 
-        actionSection?.appendChild(groupInfoDropdown);
+        const groupForm = document.createElement("div");
+        groupForm.className = "action-form";
+
+        const groupInfoDropdown = document.createElement("div");
+        groupInfoDropdown.className = "info-dropdown";
+        groupForm.appendChild(groupInfoDropdown);
+        actionPanel.open("group", groupForm, closeGroupForm);
 
         const textInput = document.createElement("input");
         textInput.type = "text";
         textInput.placeholder = "group name";
-        textInput.className = "container--small";
+        textInput.className = "control";
 
         const colourSelect = document.createElement("select");
-        colourSelect.className = "container--small";
+        colourSelect.className = "control";
 
         const colourChoices = Object.keys(groupColorMap) as GroupColorChoice[];
         for (const choice of colourChoices) {
@@ -45,9 +49,10 @@ export async function setupGroupAction(
         const confirmBtn = document.createElement("button");
         confirmBtn.type = "button";
         confirmBtn.textContent = "confirm";
-        confirmBtn.className = "container--small";
+        confirmBtn.className = "control";
 
         groupInfoDropdown.append(textInput, colourSelect, confirmBtn);
+        textInput.focus();
 
         textInput.addEventListener("keydown", (e) => {
             if (e.key === "Enter") confirmBtn.click();
@@ -60,11 +65,7 @@ export async function setupGroupAction(
             });
 
             if (homeTab?.id == null) {
-                creatingGroup = resetCreationState(
-                    actionSection,
-                    btnGroup,
-                    "tab",
-                );
+                actionPanel.close("group");
                 return;
             }
 
@@ -78,7 +79,7 @@ export async function setupGroupAction(
                 collapsed: false,
             });
 
-            creatingGroup = resetCreationState(actionSection, btnGroup, "tab");
+            actionPanel.close("group");
         });
     });
 }

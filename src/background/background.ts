@@ -79,7 +79,12 @@ async function cycleVisibleTabs(direction: 1 | -1) {
     if (orderedTabIds.length === 0) return;
 
     const currentIndex = orderedTabIds.indexOf(activeTab.id);
-    const startIndex = currentIndex >= 0 ? currentIndex : 0;
+    const startIndex =
+        currentIndex >= 0
+            ? currentIndex
+            : direction === 1
+              ? -1
+              : 0;
     const nextIndex =
         (startIndex + direction + orderedTabIds.length) % orderedTabIds.length;
     const nextTabId = orderedTabIds[nextIndex];

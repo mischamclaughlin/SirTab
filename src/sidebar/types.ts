@@ -1,10 +1,21 @@
 export type SidebarElements = {
     actions: HTMLElement;
     actionBtnSection: HTMLElement;
+    actionPanelSection: HTMLElement;
     tabsList: HTMLElement;
     groupsList: HTMLElement;
     bookmarksList: HTMLElement;
     settings: HTMLElement;
+};
+
+export type ActionPanelController = {
+    open: (
+        ownerId: string,
+        content: HTMLElement,
+        onClose: () => void,
+    ) => void;
+    close: (ownerId?: string) => boolean;
+    isOpen: (ownerId: string) => boolean;
 };
 
 export type ToggleNode =
@@ -18,6 +29,7 @@ export type ToggleViewOptions = {
     hasChildren?: boolean;
     colour?: string;
     canToggle?: boolean;
+    controlsId?: string;
 };
 
 export type RenderStaleCheck = () => boolean;

@@ -1,75 +1,74 @@
+import type { ActionPanelController } from "../types.js";
 import {
     collectBookmarkFolderChoices,
     isAllowedBookmarkUrl,
 } from "../bookmark/bookmark.js";
-import { resetCreationState } from "../helpers/resetCreationData.js";
 
 export async function setupBookmarkAction(
-    actionSection: HTMLElement,
     actionBtnSection: HTMLElement,
+    actionPanel: ActionPanelController,
 ): Promise<void> {
     const btnNewBookmark = document.createElement("button");
     btnNewBookmark.textContent = "bookmark +";
-    btnNewBookmark.className = "container--small";
+    btnNewBookmark.className = "control";
     actionBtnSection.appendChild(btnNewBookmark);
 
     let isAddCurrentTab = false;
-    let creatingBookmark = false;
+
+    const closeBookmarkForm = () => {
+        isAddCurrentTab = false;
+        btnNewBookmark.textContent = "bookmark +";
+    };
 
     btnNewBookmark.addEventListener("click", async () => {
-        if (creatingBookmark) {
-            creatingBookmark = resetCreationState(
-                actionSection,
-                btnNewBookmark,
-                "bookmark",
-            );
+        if (actionPanel.isOpen("bookmark")) {
+            actionPanel.close("bookmark");
             return;
         }
 
+        btnNewBookmark.textContent = "cancel !";
+
+        const bookmarkForm = document.createElement("div");
+        bookmarkForm.className = "action-form";
+
         const addCurrentTab = document.createElement("button");
         addCurrentTab.type = "button";
-        addCurrentTab.className = "container--small-tab-btn";
-        addCurrentTab.textContent = `add current tab: ${isAddCurrentTab}`;
-        actionSection.append(addCurrentTab);
+        addCurrentTab.className = "action-toggle";
+
+        const updateCurrentTabToggle = () => {
+            addCurrentTab.classList.toggle("is-selected", isAddCurrentTab);
+            addCurrentTab.textContent = `add current tab: ${isAddCurrentTab}`;
+            addCurrentTab.setAttribute("aria-pressed", String(isAddCurrentTab));
+        };
 
         const bookmarkInfoDropdown = document.createElement("div");
         bookmarkInfoDropdown.className = "info-dropdown";
-        addCurrentTab.className = isAddCurrentTab
-            ? "container--small-tab-btn active"
-            : "container--small-tab-btn";
-
-        creatingBookmark = true;
-        btnNewBookmark.textContent = "cancel !";
-
-        actionSection.append(bookmarkInfoDropdown);
+        bookmarkForm.append(addCurrentTab, bookmarkInfoDropdown);
+        actionPanel.open("bookmark", bookmarkForm, closeBookmarkForm);
+        updateCurrentTabToggle();
 
         addCurrentTab.addEventListener("click", async () => {
             isAddCurrentTab = !isAddCurrentTab;
-            addCurrentTab.className = isAddCurrentTab
-                ? "container--small-tab-btn active"
-                : "container--small-tab-btn";
-            addCurrentTab.textContent = `add current tab: ${isAddCurrentTab}`;
+            updateCurrentTabToggle();
         });
 
         const textInput = document.createElement("input");
         textInput.type = "text";
         textInput.placeholder = "folder / bookmark name";
-        textInput.className = "container--small";
+        textInput.className = "control";
 
         const bookmarkTree: chrome.bookmarks.BookmarkTreeNode[] =
             await chrome.bookmarks.getTree();
+        if (!actionPanel.isOpen("bookmark")) return;
+
         const folderChoices = collectBookmarkFolderChoices(bookmarkTree);
         if (folderChoices.length === 0) {
-            creatingBookmark = resetCreationState(
-                actionSection,
-                btnNewBookmark,
-                "bookmark",
-            );
+            actionPanel.close("bookmark");
             return;
         }
 
         const bookmarkSelect = document.createElement("select");
-        bookmarkSelect.className = "container--small";
+        bookmarkSelect.className = "control";
 
         for (const folder of folderChoices) {
             const option = document.createElement("option");
@@ -81,7 +80,7 @@ export async function setupBookmarkAction(
         const confirmBtn = document.createElement("button");
         confirmBtn.type = "button";
         confirmBtn.textContent = "confirm";
-        confirmBtn.className = "container--small";
+        confirmBtn.className = "control";
 
         bookmarkInfoDropdown.append(textInput, bookmarkSelect, confirmBtn);
         textInput.focus();
@@ -124,11 +123,8 @@ export async function setupBookmarkAction(
                     parentId: selectedFolderId,
                 });
             }
-            creatingBookmark = resetCreationState(
-                actionSection,
-                btnNewBookmark,
-                "bookmark",
-            );
+
+            actionPanel.close("bookmark");
         });
     });
 }

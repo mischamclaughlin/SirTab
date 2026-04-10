@@ -9,6 +9,7 @@ export function setupSearchAction(
     searchInput.placeholder = "search tabs and bookmarks";
     searchInput.className = "search-input";
     searchInput.autofocus = true;
+    searchInput.setAttribute("aria-label", "Search tabs and bookmarks");
     actionSection.appendChild(searchInput);
 
     let searchQuery = "";
