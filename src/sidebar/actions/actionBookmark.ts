@@ -3,6 +3,7 @@ import {
     collectBookmarkFolderChoices,
     isAllowedBookmarkUrl,
 } from "../bookmark/bookmark.js";
+import { runButtonAction } from "../helpers/domFactory.js";
 
 export async function setupBookmarkAction(
     actionBtnSection: HTMLElement,
@@ -47,7 +48,7 @@ export async function setupBookmarkAction(
         actionPanel.open("bookmark", bookmarkForm, closeBookmarkForm);
         updateCurrentTabToggle();
 
-        addCurrentTab.addEventListener("click", async () => {
+        addCurrentTab.addEventListener("click", () => {
             isAddCurrentTab = !isAddCurrentTab;
             updateCurrentTabToggle();
         });
@@ -93,42 +94,44 @@ export async function setupBookmarkAction(
             if (e.key === "Enter") confirmBtn.click();
         });
 
-        confirmBtn.addEventListener("click", async () => {
-            const selectedFolderId = bookmarkSelect.value;
-            if (!selectedFolderId) return;
+        confirmBtn.addEventListener("click", () => {
+            void runButtonAction(confirmBtn, async () => {
+                const selectedFolderId = bookmarkSelect.value;
+                if (!selectedFolderId) return;
 
-            const typedName = textInput.value.trim();
+                const typedName = textInput.value.trim();
 
-            if (isAddCurrentTab) {
-                const bookmarkName = typedName || "new bookmark";
-                const [currentTab] = await chrome.tabs.query({
-                    active: true,
-                    lastFocusedWindow: true,
-                });
-                if (!currentTab) return;
-                if (!currentTab.url || !isAllowedBookmarkUrl(currentTab.url)) {
-                    console.warn(
-                        "Blocked bookmark creation for unsupported tab URL:",
-                        currentTab.url,
-                    );
-                    return;
+                if (isAddCurrentTab) {
+                    const bookmarkName = typedName || "new bookmark";
+                    const [currentTab] = await chrome.tabs.query({
+                        active: true,
+                        lastFocusedWindow: true,
+                    });
+                    if (!currentTab) return;
+                    if (!currentTab.url || !isAllowedBookmarkUrl(currentTab.url)) {
+                        console.warn(
+                            "Blocked bookmark creation for unsupported tab URL:",
+                            currentTab.url,
+                        );
+                        return;
+                    }
+
+                    await chrome.bookmarks.create({
+                        title: bookmarkName,
+                        url: currentTab.url,
+                        parentId: selectedFolderId,
+                    });
+                } else {
+                    const folderName = typedName || "new folder";
+
+                    await chrome.bookmarks.create({
+                        title: folderName,
+                        parentId: selectedFolderId,
+                    });
                 }
 
-                await chrome.bookmarks.create({
-                    title: bookmarkName,
-                    url: currentTab.url,
-                    parentId: selectedFolderId,
-                });
-            } else if (!isAddCurrentTab) {
-                const folderName = typedName || "new folder";
-
-                await chrome.bookmarks.create({
-                    title: folderName,
-                    parentId: selectedFolderId,
-                });
-            }
-
-            actionPanel.close("bookmark");
+                actionPanel.close("bookmark");
+            }, "Create bookmark entry failed:");
         });
     });
 }

@@ -8,7 +8,7 @@ import { setupSearchAction } from "../actions/actionSearch.js";
 import { cycleTabs, buildTabSearchState } from "../tab/tab.js";
 
 import { setupEventListeners } from "./events.js";
-import { loadAllData } from "./loadData.js";
+import { loadBookmarkTree, loadTabAndGroupData } from "./loadData.js";
 import { loadThemePreference } from "./theme.js";
 import { loadCollapse } from "./collapseState.js";
 import { createEmptySearchState } from "./domFactory.js";
@@ -55,19 +55,25 @@ export async function bootstrapSidebar() {
     const sidebarElements = getSidebarElements();
     if (!sidebarElements) return;
     const elements: SidebarElements = sidebarElements;
+    const currentWindow = await chrome.windows.getCurrent();
+    if (currentWindow.id == null) return;
+    const currentWindowId = currentWindow.id;
 
     const collapsedGroups = new Set<string>();
     const collapsedBookmarkFolders = new Set<string>();
 
     let getSearchQuery = () => "";
-    let requestRender: RequestRender = () => {};
+    let requestTabGroupRender: RequestRender = () => {};
+    let requestTabGroupRefresh: RequestRender = () => {};
+    let requestBookmarkRender: RequestRender = () => {};
+    let requestBookmarkRefresh: RequestRender = () => {};
 
-    async function render(isStale: RenderStaleCheck) {
-        const [tabs, groups, tree] = await loadAllData();
-        if (isStale()) return;
+    let tabs: chrome.tabs.Tab[] = [];
+    let groups: chrome.tabGroups.TabGroup[] = [];
+    let bookmarkTree: chrome.bookmarks.BookmarkTreeNode[] = [];
 
+    async function renderTabGroups(isStale: RenderStaleCheck) {
         const orderedGroups = orderGroupsByTabPosition(groups, tabs);
-
         await groupCollapse(orderedGroups, collapsedGroups);
         if (isStale()) return;
 
@@ -81,7 +87,7 @@ export async function bootstrapSidebar() {
         cycleTabs(nextTabs, visibleUngroupedTabs, {
             grouped: false,
             enableDragDrop,
-            requestRender,
+            requestRender: requestTabGroupRefresh,
         });
         elements.tabsList.replaceChildren(...Array.from(nextTabs.children));
 
@@ -94,21 +100,25 @@ export async function bootstrapSidebar() {
             isSearching,
             searchQuery,
             nextGroups,
-            requestRender,
+            requestTabGroupRefresh,
             enableDragDrop,
         );
         elements.groupsList.replaceChildren(...Array.from(nextGroups.children));
+    }
 
+    async function renderBookmarks(_isStale: RenderStaleCheck) {
+        const searchQuery = getSearchQuery();
+        const isSearching = searchQuery.length > 0;
         const nextBookmarks = document.createElement("ul");
         const bookmarkNodes = isSearching
-            ? filterBookmarkNodes(tree, searchQuery)
-            : tree;
+            ? filterBookmarkNodes(bookmarkTree, searchQuery)
+            : bookmarkTree;
         cycleBookmarks(
             nextBookmarks,
             bookmarkNodes,
             isSearching,
             collapsedBookmarkFolders,
-            requestRender,
+            requestBookmarkRender,
         );
         if (isSearching && nextBookmarks.childElementCount === 0) {
             nextBookmarks.appendChild(
@@ -120,17 +130,31 @@ export async function bootstrapSidebar() {
         );
     }
 
-    requestRender = createRenderScheduler(render);
+    requestTabGroupRender = createRenderScheduler(renderTabGroups);
+    requestBookmarkRender = createRenderScheduler(renderBookmarks);
+    requestTabGroupRefresh = createRenderScheduler(async (isStale) => {
+        [tabs, groups] = await loadTabAndGroupData(currentWindowId);
+        if (isStale()) return;
+        await renderTabGroups(isStale);
+    });
+    requestBookmarkRefresh = createRenderScheduler(async (isStale) => {
+        bookmarkTree = await loadBookmarkTree();
+        if (isStale()) return;
+        await renderBookmarks(isStale);
+    });
+
+    const requestRender: RequestRender = () => {
+        requestTabGroupRender();
+        requestBookmarkRender();
+    };
+
     getSearchQuery = setupSearchAction(elements.actions, requestRender);
     setupSidebarDropZones(
         elements.tabsList,
         elements.groupsList,
         () => getSearchQuery().length === 0,
-        requestRender,
+        requestTabGroupRefresh,
     );
-
-    setupEventListeners(requestRender);
-    await loadThemePreference();
 
     elements.actions.appendChild(elements.actionBtnSection);
     elements.actions.appendChild(elements.actionPanelSection);
@@ -145,10 +169,31 @@ export async function bootstrapSidebar() {
         actionPanelController,
     );
     await setupTabAction(elements.actionBtnSection);
+    await loadThemePreference();
     await setupSettingAction(elements.settings);
 
-    await loadCollapse(collapsedBookmarkFolders, "bookmark");
-    await loadCollapse(collapsedGroups, "tab");
+    const loadInitialData = async () => {
+        const [[loadedTabs, loadedGroups], loadedBookmarkTree] =
+            await Promise.all([
+                loadTabAndGroupData(currentWindowId),
+                loadBookmarkTree(),
+            ]);
+
+        tabs = loadedTabs;
+        groups = loadedGroups;
+        bookmarkTree = loadedBookmarkTree;
+    };
+
+    await Promise.all([
+        loadInitialData(),
+        loadCollapse(collapsedBookmarkFolders, "bookmark"),
+        loadCollapse(collapsedGroups, "tab"),
+    ]);
+
+    setupEventListeners(currentWindowId, {
+        requestTabGroupRefresh,
+        requestBookmarkRefresh,
+    });
 
     requestRender();
 }

@@ -1,5 +1,6 @@
 import type { ActionPanelController } from "../types.js";
 import { groupColorMap, GroupColorChoice } from "../config.js";
+import { runButtonAction } from "../helpers/domFactory.js";
 
 export async function setupGroupAction(
     actionBtnSection: HTMLElement,
@@ -62,28 +63,47 @@ export async function setupGroupAction(
             if (e.key === "Enter") confirmBtn.click();
         });
 
-        confirmBtn.addEventListener("click", async () => {
-            const homeTab = await chrome.tabs.create({
-                url: "chrome://newtab",
-                active: false,
-            });
+        confirmBtn.addEventListener("click", () => {
+            void runButtonAction(confirmBtn, async () => {
+                let createdTabId: number | null = null;
 
-            if (homeTab?.id == null) {
+                try {
+                    const homeTab = await chrome.tabs.create({
+                        url: "chrome://newtab",
+                        active: false,
+                    });
+
+                    if (homeTab?.id == null) return;
+                    createdTabId = homeTab.id;
+
+                    const groupName = textInput.value.trim() || "";
+                    const selectedColour = colourSelect.value as GroupColorChoice;
+
+                    const groupId = await chrome.tabs.group({
+                        tabIds: [createdTabId],
+                    });
+                    await chrome.tabGroups.update(groupId, {
+                        title: groupName,
+                        color: groupColorMap[selectedColour] ?? "grey",
+                        collapsed: false,
+                    });
+                } catch (error) {
+                    if (createdTabId != null) {
+                        try {
+                            await chrome.tabs.remove(createdTabId);
+                        } catch (cleanupError) {
+                            console.error(
+                                "Failed to clean up group creation tab:",
+                                cleanupError,
+                            );
+                        }
+                    }
+
+                    throw error;
+                }
+
                 actionPanel.close("group");
-                return;
-            }
-
-            const groupName = textInput.value.trim() || "";
-            const selectedColour = colourSelect.value as GroupColorChoice;
-
-            const groupId = await chrome.tabs.group({ tabIds: [homeTab.id] });
-            await chrome.tabGroups.update(groupId, {
-                title: groupName,
-                color: groupColorMap[selectedColour] ?? "grey",
-                collapsed: false,
-            });
-
-            actionPanel.close("group");
+            }, "Create group failed:");
         });
     });
 }

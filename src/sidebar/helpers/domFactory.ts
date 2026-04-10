@@ -1,6 +1,28 @@
 import type { ToggleNode, ToggleViewOptions } from "../types.js";
 import { toggleInList } from "./collapseState.js";
 
+export async function runButtonAction(
+    button: HTMLButtonElement,
+    action: () => Promise<void> | void,
+    errorMessage: string,
+) {
+    if (button.disabled) return false;
+
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+
+    try {
+        await action();
+        return true;
+    } catch (error) {
+        console.error(errorMessage, error);
+        return false;
+    } finally {
+        button.disabled = false;
+        button.removeAttribute("aria-busy");
+    }
+}
+
 export function createDeleteButton(
     title: string,
     onClick: () => Promise<void> | void,
@@ -14,7 +36,7 @@ export function createDeleteButton(
     deleteBtn.addEventListener("click", async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        await onClick();
+        await runButtonAction(deleteBtn, onClick, `${title} failed:`);
     });
 
     return deleteBtn;

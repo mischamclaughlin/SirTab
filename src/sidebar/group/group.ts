@@ -12,7 +12,7 @@ import {
 } from "../helpers/collapseState.js";
 import { createEmptySearchState } from "../helpers/domFactory.js";
 
-export async function buildGroup(
+export function buildGroup(
     hasUngroupedTabs: boolean,
     groups: chrome.tabGroups.TabGroup[],
     tabsByGroup: Map<number, chrome.tabs.Tab[]>,

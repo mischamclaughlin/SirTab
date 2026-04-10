@@ -27,12 +27,13 @@ export function setupSearchAction(
         requestRender();
     });
 
-    chrome.sidePanel.onOpened.addListener(() => {
+    const handleSidePanelOpened = () => {
         window.focus();
         searchInput.focus();
-    });
+    };
+    chrome.sidePanel.onOpened.addListener(handleSidePanelOpened);
 
-    document.addEventListener("keydown", (event) => {
+    const handleDocumentKeydown = (event: KeyboardEvent) => {
         const isFocusShortcut =
             (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b";
         if (!isFocusShortcut) return;
@@ -40,7 +41,14 @@ export function setupSearchAction(
         event.preventDefault();
         window.focus();
         searchInput.focus();
-    });
+    };
+    document.addEventListener("keydown", handleDocumentKeydown);
+
+    const cleanup = () => {
+        chrome.sidePanel.onOpened.removeListener(handleSidePanelOpened);
+        document.removeEventListener("keydown", handleDocumentKeydown);
+    };
+    window.addEventListener("pagehide", cleanup, { once: true });
 
     return () => searchQuery;
 }

@@ -1,11 +1,14 @@
 import { sortTabsByIndex } from "../../shared/groupOrder.js";
 
-export async function loadAllData() {
-    const [tabs, groups, tree] = await Promise.all([
-        chrome.tabs.query({ currentWindow: true }),
-        chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
-        chrome.bookmarks.getTree(),
+export async function loadTabAndGroupData(windowId: number) {
+    const [tabs, groups] = await Promise.all([
+        chrome.tabs.query({ windowId }),
+        chrome.tabGroups.query({ windowId }),
     ]);
 
-    return [sortTabsByIndex(tabs), groups, tree] as const;
+    return [sortTabsByIndex(tabs), groups] as const;
+}
+
+export async function loadBookmarkTree() {
+    return await chrome.bookmarks.getTree();
 }

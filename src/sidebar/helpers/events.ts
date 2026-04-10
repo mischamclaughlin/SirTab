@@ -1,17 +1,107 @@
 import type { RequestRender } from "../types.js";
 
-export function setupEventListeners(requestRender: RequestRender): () => void {
-    const handleTabChange = () => requestRender();
-    const handleTabGroupChange = () => requestRender();
-    const handleBookmarkChange = () => requestRender();
+type SidebarEventHandlers = {
+    requestTabGroupRefresh: RequestRender;
+    requestBookmarkRefresh: RequestRender;
+};
 
-    chrome.tabs.onCreated.addListener(handleTabChange);
-    chrome.tabs.onRemoved.addListener(handleTabChange);
-    chrome.tabs.onUpdated.addListener(handleTabChange);
-    chrome.tabs.onMoved.addListener(handleTabChange);
-    chrome.tabs.onAttached.addListener(handleTabChange);
-    chrome.tabs.onDetached.addListener(handleTabChange);
-    chrome.tabs.onActivated.addListener(handleTabChange);
+const TAB_UPDATE_KEYS_TO_RENDER: (keyof chrome.tabs.OnUpdatedInfo)[] = [
+    "favIconUrl",
+    "groupId",
+    "title",
+    "url",
+];
+
+function hasRelevantTabUpdate(changeInfo: chrome.tabs.OnUpdatedInfo) {
+    return TAB_UPDATE_KEYS_TO_RENDER.some((key) => key in changeInfo);
+}
+
+export function setupEventListeners(
+    currentWindowId: number,
+    {
+        requestTabGroupRefresh,
+        requestBookmarkRefresh,
+    }: SidebarEventHandlers,
+): () => void {
+    const handleTabCreated = (tab: chrome.tabs.Tab) => {
+        if (tab.windowId !== currentWindowId) return;
+        requestTabGroupRefresh();
+    };
+
+    const handleTabRemoved = (
+        _tabId: number,
+        removeInfo: chrome.tabs.OnRemovedInfo,
+    ) => {
+        if (removeInfo.windowId !== currentWindowId) return;
+        requestTabGroupRefresh();
+    };
+
+    const handleTabUpdated = (
+        _tabId: number,
+        changeInfo: chrome.tabs.OnUpdatedInfo,
+        tab: chrome.tabs.Tab,
+    ) => {
+        if (tab.windowId !== currentWindowId || !hasRelevantTabUpdate(changeInfo)) {
+            return;
+        }
+
+        requestTabGroupRefresh();
+    };
+
+    const handleTabMoved = (
+        _tabId: number,
+        moveInfo: chrome.tabs.OnMovedInfo,
+    ) => {
+        if (moveInfo.windowId !== currentWindowId) return;
+        requestTabGroupRefresh();
+    };
+
+    const handleTabAttached = (
+        _tabId: number,
+        attachInfo: chrome.tabs.OnAttachedInfo,
+    ) => {
+        if (attachInfo.newWindowId !== currentWindowId) return;
+        requestTabGroupRefresh();
+    };
+
+    const handleTabDetached = (
+        _tabId: number,
+        detachInfo: chrome.tabs.OnDetachedInfo,
+    ) => {
+        if (detachInfo.oldWindowId !== currentWindowId) return;
+        requestTabGroupRefresh();
+    };
+
+    const handleTabActivated = (activeInfo: chrome.tabs.OnActivatedInfo) => {
+        if (activeInfo.windowId !== currentWindowId) return;
+        requestTabGroupRefresh();
+    };
+
+    const handleTabReplaced = async (addedTabId: number) => {
+        try {
+            const addedTab = await chrome.tabs.get(addedTabId);
+            if (addedTab.windowId !== currentWindowId) return;
+            requestTabGroupRefresh();
+        } catch (error) {
+            console.error("Failed to handle tab replacement:", error);
+        }
+    };
+
+    const handleTabGroupChange = (group: chrome.tabGroups.TabGroup) => {
+        if (group.windowId !== currentWindowId) return;
+        requestTabGroupRefresh();
+    };
+
+    const handleBookmarkChange = () => requestBookmarkRefresh();
+
+    chrome.tabs.onCreated.addListener(handleTabCreated);
+    chrome.tabs.onRemoved.addListener(handleTabRemoved);
+    chrome.tabs.onUpdated.addListener(handleTabUpdated);
+    chrome.tabs.onMoved.addListener(handleTabMoved);
+    chrome.tabs.onAttached.addListener(handleTabAttached);
+    chrome.tabs.onDetached.addListener(handleTabDetached);
+    chrome.tabs.onActivated.addListener(handleTabActivated);
+    chrome.tabs.onReplaced.addListener(handleTabReplaced);
     chrome.tabGroups.onCreated.addListener(handleTabGroupChange);
     chrome.tabGroups.onRemoved.addListener(handleTabGroupChange);
     chrome.tabGroups.onUpdated.addListener(handleTabGroupChange);
@@ -24,13 +114,14 @@ export function setupEventListeners(requestRender: RequestRender): () => void {
     chrome.bookmarks.onImportEnded.addListener(handleBookmarkChange);
 
     const cleanup = () => {
-        chrome.tabs.onCreated.removeListener(handleTabChange);
-        chrome.tabs.onRemoved.removeListener(handleTabChange);
-        chrome.tabs.onUpdated.removeListener(handleTabChange);
-        chrome.tabs.onMoved.removeListener(handleTabChange);
-        chrome.tabs.onAttached.removeListener(handleTabChange);
-        chrome.tabs.onDetached.removeListener(handleTabChange);
-        chrome.tabs.onActivated.removeListener(handleTabChange);
+        chrome.tabs.onCreated.removeListener(handleTabCreated);
+        chrome.tabs.onRemoved.removeListener(handleTabRemoved);
+        chrome.tabs.onUpdated.removeListener(handleTabUpdated);
+        chrome.tabs.onMoved.removeListener(handleTabMoved);
+        chrome.tabs.onAttached.removeListener(handleTabAttached);
+        chrome.tabs.onDetached.removeListener(handleTabDetached);
+        chrome.tabs.onActivated.removeListener(handleTabActivated);
+        chrome.tabs.onReplaced.removeListener(handleTabReplaced);
         chrome.tabGroups.onCreated.removeListener(handleTabGroupChange);
         chrome.tabGroups.onRemoved.removeListener(handleTabGroupChange);
         chrome.tabGroups.onUpdated.removeListener(handleTabGroupChange);
