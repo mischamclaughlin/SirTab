@@ -54,6 +54,8 @@ export async function setupBookmarkAction(
 
         const textInput = document.createElement("input");
         textInput.type = "text";
+        textInput.id = "bookmark-name-input";
+        textInput.name = "bookmark-name";
         textInput.placeholder = "folder / bookmark name";
         textInput.className = "control";
 
@@ -68,6 +70,8 @@ export async function setupBookmarkAction(
         }
 
         const bookmarkSelect = document.createElement("select");
+        bookmarkSelect.id = "bookmark-folder-select";
+        bookmarkSelect.name = "bookmark-folder";
         bookmarkSelect.className = "control";
 
         for (const folder of folderChoices) {

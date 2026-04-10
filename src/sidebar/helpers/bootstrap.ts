@@ -14,6 +14,7 @@ import { loadCollapse } from "./collapseState.js";
 import { createEmptySearchState } from "./domFactory.js";
 import { createRenderScheduler } from "./renderScheduler.js";
 import { createActionPanelController } from "./actionPanel.js";
+import { setupSidebarDropZones } from "./dragAndDrop.js";
 
 import { setupGroupAction } from "../actions/actionGroup.js";
 import { setupBookmarkAction } from "../actions/actionBookmark.js";
@@ -68,12 +69,17 @@ export async function bootstrapSidebar() {
         if (isStale()) return;
 
         const searchQuery = getSearchQuery();
+        const enableDragDrop = searchQuery.length === 0;
 
         const [visibleUngroupedTabs, tabsByGroup, isSearching] =
             buildTabSearchState(tabs, searchQuery);
 
         const nextTabs = document.createElement("ul");
-        cycleTabs(nextTabs, visibleUngroupedTabs, false);
+        cycleTabs(nextTabs, visibleUngroupedTabs, {
+            grouped: false,
+            enableDragDrop,
+            requestRender,
+        });
         elements.tabsList.replaceChildren(...Array.from(nextTabs.children));
 
         const nextGroups = document.createElement("ul");
@@ -86,6 +92,7 @@ export async function bootstrapSidebar() {
             searchQuery,
             nextGroups,
             requestRender,
+            enableDragDrop,
         );
         elements.groupsList.replaceChildren(...Array.from(nextGroups.children));
 
@@ -112,6 +119,12 @@ export async function bootstrapSidebar() {
 
     requestRender = createRenderScheduler(render);
     getSearchQuery = setupSearchAction(elements.actions, requestRender);
+    setupSidebarDropZones(
+        elements.tabsList,
+        elements.groupsList,
+        () => getSearchQuery().length === 0,
+        requestRender,
+    );
 
     setupEventListeners(requestRender);
     await loadThemePreference();

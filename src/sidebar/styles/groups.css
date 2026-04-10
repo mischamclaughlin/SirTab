@@ -11,6 +11,22 @@
     align-items: center;
 }
 
+.tree-row.is-dragging {
+    opacity: 0.45;
+}
+
+.tree-row.drop-before {
+    border-top: 1px solid rgba(var(--blue-colour-RGB), 0.85);
+}
+
+.tree-row.drop-after {
+    border-bottom: 1px solid rgba(var(--blue-colour-RGB), 0.85);
+}
+
+.tree-row.drop-inside .tree-toggle {
+    border: 2px solid rgba(var(--blue-colour-RGB), 0.35);
+}
+
 .tree-toggle {
     width: 100%;
     min-height: 1.5rem;

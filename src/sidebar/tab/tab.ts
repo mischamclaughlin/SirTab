@@ -1,11 +1,23 @@
+import type { RequestRender } from "../types.js";
 import { DEFAULT_TAB_ICON_URL } from "../config.js";
 import { createDeleteButton } from "../helpers/domFactory.js";
+import { makeTabDraggable } from "../helpers/dragAndDrop.js";
 import { matchesNodeQuery } from "../helpers/nodeSearch.js";
+
+type TabRenderOptions = {
+    grouped?: boolean;
+    enableDragDrop?: boolean;
+    requestRender?: RequestRender;
+};
 
 export function cycleTabs(
     tabElement: HTMLElement,
     tabList: chrome.tabs.Tab[],
-    grouped = false,
+    {
+        grouped = false,
+        enableDragDrop = false,
+        requestRender,
+    }: TabRenderOptions = {},
 ) {
     for (const tab of tabList) {
         if (tab.id == null) continue;
@@ -49,6 +61,9 @@ export function cycleTabs(
         });
 
         row.append(btn, deleteBtn);
+        if (enableDragDrop && requestRender) {
+            makeTabDraggable(btn, row, tab.id, () => enableDragDrop, requestRender);
+        }
         li.appendChild(row);
         tabElement.appendChild(li);
     }

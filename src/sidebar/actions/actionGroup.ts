@@ -32,10 +32,14 @@ export async function setupGroupAction(
 
         const textInput = document.createElement("input");
         textInput.type = "text";
+        textInput.id = "group-name-input";
+        textInput.name = "group-name";
         textInput.placeholder = "group name";
         textInput.className = "control";
 
         const colourSelect = document.createElement("select");
+        colourSelect.id = "group-colour-select";
+        colourSelect.name = "group-colour";
         colourSelect.className = "control";
 
         const colourChoices = Object.keys(groupColorMap) as GroupColorChoice[];

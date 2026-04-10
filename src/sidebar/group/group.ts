@@ -4,6 +4,7 @@ import {
     createDeleteButton,
     createToggleButton,
 } from "../helpers/domFactory.js";
+import { makeGroupDraggable } from "../helpers/dragAndDrop.js";
 import { matchesNodeQuery } from "../helpers/nodeSearch.js";
 import {
     isCollapsedCheck,
@@ -20,6 +21,7 @@ export async function buildGroup(
     searchQuery: string,
     next: HTMLElement,
     requestRender: RequestRender,
+    enableDragDrop: boolean,
 ) {
     let renderedTabResults = hasUngroupedTabs;
 
@@ -81,6 +83,15 @@ export async function buildGroup(
             }
         });
         groupRow.append(btn, deleteGroupBtn);
+        if (enableDragDrop) {
+            makeGroupDraggable(
+                btn,
+                groupRow,
+                groupId,
+                () => enableDragDrop,
+                requestRender,
+            );
+        }
         groupItem.appendChild(groupRow);
 
         if (visibleTabsInGroup.length > 0) {
@@ -92,7 +103,11 @@ export async function buildGroup(
             groupItem.appendChild(nestedList);
 
             if (!isCollapsed) {
-                cycleTabs(nestedList, visibleTabsInGroup, true);
+                cycleTabs(nestedList, visibleTabsInGroup, {
+                    grouped: true,
+                    enableDragDrop,
+                    requestRender,
+                });
             }
         }
 

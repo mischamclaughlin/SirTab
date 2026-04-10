@@ -45,7 +45,7 @@ export function setupEventListeners(requestRender: RequestRender): () => void {
         chrome.bookmarks.onImportEnded.removeListener(handleBookmarkChange);
     };
 
-    window.addEventListener("unload", cleanup);
+    window.addEventListener("pagehide", cleanup, { once: true });
 
     return cleanup;
 }

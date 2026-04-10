@@ -14,9 +14,12 @@
 
 button,
 input,
-select {
+select,
+textarea,
+option,
+optgroup {
     font: inherit;
-    font-family: inherit;
+    font-family: var(--sidebar-font-family);
 }
 
 .control {
@@ -45,7 +48,15 @@ select {
 :where(button, input, select):focus-visible {
     outline: none;
     border-color: var(--border-light);
-    box-shadow: 0 0 0 2px rgba(var(--blue-colour-RGB), 0.2);
+    box-shadow: 0 0 0 2px rgba(var(--blue-colour-RGB), 0.25);
+}
+
+[draggable="true"] {
+    cursor: grab;
+}
+
+[draggable="true"]:active {
+    cursor: grabbing;
 }
 
 [hidden] {

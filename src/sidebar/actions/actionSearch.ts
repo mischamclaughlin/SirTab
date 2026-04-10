@@ -6,6 +6,8 @@ export function setupSearchAction(
 ): () => string {
     const searchInput = document.createElement("input");
     searchInput.type = "text";
+    searchInput.id = "sidebar-search";
+    searchInput.name = "sidebar-search";
     searchInput.placeholder = "search tabs and bookmarks";
     searchInput.className = "search-input";
     searchInput.autofocus = true;
