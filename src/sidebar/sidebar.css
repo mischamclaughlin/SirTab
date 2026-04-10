@@ -3,6 +3,8 @@
 @import "./styles/actions.css";
 @import "./styles/tabs.css";
 @import "./styles/groups.css";
+@import "./styles/bookmarks.css";
+@import "./styles/settings.css";
 
 * {
     box-sizing: border-box;
@@ -35,13 +37,6 @@
     color: var(--text);
 }
 
-.empty-search-state-message {
-    border: 1px dashed var(--border-faded);
-    border-radius: 0.25rem;
-    color: var(--subsubtext);
-    padding: 0.35rem 0.5rem;
-}
-
 .row-delete-btn {
     border: 1px solid var(--border-faded);
     border-radius: 0.25rem;
@@ -59,48 +54,4 @@
     border-color: var(--red);
     color: var(--text);
     background: var(--red);
-}
-
-.setting-info-section {
-    width: 100%;
-    grid-column: 1 / -1;
-    border: 1px solid var(--border);
-    border-radius: 0.25rem;
-    padding: 0.5rem;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.5rem;
-    color: var(--subtext);
-}
-
-.setting-info-section[hidden] {
-    display: none;
-}
-
-.theme-options {
-    width: 100%;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.5rem;
-}
-
-.bookmark-folder {
-    width: 100%;
-    min-height: 1.5rem;
-    padding: 0.25rem 0.5rem;
-    border: 1px solid var(--border);
-    border-radius: 0.25rem;
-    color: var(--subtext);
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    cursor: pointer;
-}
-
-.bookmark-nested-list {
-    list-style-type: none;
-    margin-top: 0.5rem;
-    margin-left: 1rem;
-    display: grid;
-    gap: 0.5rem;
 }

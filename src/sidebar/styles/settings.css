@@ -1,0 +1,26 @@
+.setting-info-section {
+    width: 100%;
+    grid-column: 1 / -1;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    color: var(--subtext);
+}
+
+.setting-info-section[hidden] {
+    display: none;
+}
+
+.theme-options {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+}
+
+.theme-option {
+    text-align: left;
+}

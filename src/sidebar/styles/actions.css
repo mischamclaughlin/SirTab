@@ -39,3 +39,10 @@
     grid-template-columns: 1fr auto auto;
     gap: 0.25rem;
 }
+
+.empty-search-state-message {
+    border: 1px dashed var(--border-faded);
+    border-radius: 0.25rem;
+    color: var(--subsubtext);
+    padding: 0.35rem 0.5rem;
+}

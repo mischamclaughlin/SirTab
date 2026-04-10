@@ -27,7 +27,7 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
     for (const theme of THEMES) {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = "container--small";
+        button.className = "container--small theme-option";
         button.textContent = themeLabels[theme];
         button.addEventListener("click", async () => {
             applyTheme(theme);
