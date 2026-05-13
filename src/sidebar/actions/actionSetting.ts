@@ -66,5 +66,5 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
         settingsBtn.setAttribute("aria-expanded", String(isSettingOpen));
     });
 
-    settings?.append(settingsBtn, settingInfoSection);
+    settings?.append(settingInfoSection, settingsBtn);
 }
