@@ -102,7 +102,7 @@ function readPayload(event: DragEvent): DragPayload | null {
 
     return parsePayload(
         dataTransfer.getData(DRAG_DATA_MIME) ||
-            dataTransfer.getData("text/plain"),
+        dataTransfer.getData("text/plain"),
     );
 }
 

@@ -24,7 +24,13 @@
         "service_worker": "background/background.js",
         "type": "module"
     },
-    "permissions": ["tabs", "tabGroups", "storage", "sidePanel", "bookmarks"],
+    "permissions": [
+        "tabs",
+        "tabGroups",
+        "storage",
+        "sidePanel",
+        "bookmarks"
+    ],
     "commands": {
         "_execute_action": {
             "suggested_key": {
@@ -45,6 +51,12 @@
                 "mac": "Alt+Comma"
             },
             "description": "Switch to the previous visible tab in sidebar order"
+        },
+        "move_active_tab_next": {
+            "description": "Move tab down"
+        },
+        "move_active_tab_previous": {
+            "description": "Move tab up"
         }
     }
 }

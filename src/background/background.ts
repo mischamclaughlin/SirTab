@@ -30,12 +30,12 @@ async function getVisibleTabOrderForCurrentWindow(): Promise<number[]> {
     const collapsedGroups = new Set(
         Array.isArray(storedGroupIds)
             ? storedGroupIds
-                  .filter(
-                      (groupId): groupId is string | number =>
-                          typeof groupId === "string" ||
-                          typeof groupId === "number",
-                  )
-                  .map(String)
+                .filter(
+                    (groupId): groupId is string | number =>
+                        typeof groupId === "string" ||
+                        typeof groupId === "number",
+                )
+                .map(String)
             : [],
     );
     const orderedTabs = sortTabsByIndex(tabs);
@@ -90,8 +90,8 @@ async function cycleVisibleTabs(direction: 1 | -1) {
         currentIndex >= 0
             ? currentIndex
             : direction === 1
-              ? -1
-              : 0;
+                ? -1
+                : 0;
     const nextIndex =
         (startIndex + direction + orderedTabIds.length) % orderedTabIds.length;
     const nextTabId = orderedTabIds[nextIndex];
@@ -107,3 +107,45 @@ chrome.commands.onCommand.addListener((command) => {
         void cycleVisibleTabs(-1);
     }
 });
+
+async function moveVisibleTab(direction: 1 | -1) {
+    const currentWindow = await chrome.windows.getCurrent();
+    if (currentWindow.id == null) return;
+
+    const [activeTab] = await chrome.tabs.query({
+        windowId: currentWindow.id,
+        active: true,
+    });
+
+    if (activeTab?.id == null) return;
+
+    const orderedTabIds = await getVisibleTabOrderForCurrentWindow();
+    if (orderedTabIds.length <= 1) return;
+
+    const currentIndex = orderedTabIds.indexOf(activeTab.id);
+    if (currentIndex === -1) return;
+
+    const nextIndex =
+        (currentIndex + direction + orderedTabIds.length) % orderedTabIds.length;
+
+    const nextTabId = orderedTabIds[nextIndex];
+    if (nextTabId == null) return;
+
+    const nextTab = await chrome.tabs.get(nextTabId);
+
+    if (nextTab.index == null) return;
+
+    await chrome.tabs.move(activeTab.id, {
+        windowId: currentWindow.id,
+        index: nextTab.index,
+    });
+}
+
+chrome.commands.onCommand.addListener((command) => {
+    if (command === "move_active_tab_next") {
+        void moveVisibleTab(1);
+    } else if (command == "move_active_tab_previous") {
+        void moveVisibleTab(-1);
+    }
+});
+
