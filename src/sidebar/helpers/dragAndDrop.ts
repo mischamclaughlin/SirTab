@@ -1,12 +1,21 @@
 import type { RequestRender } from "../types.js";
+import {
+    buildTabsByLogicalGroup,
+    getTabGroupId,
+    loadLogicalTabGroupData,
+    moveStoredGroupRelative,
+    moveStoredGroupToEnd,
+    moveStoredTabRelative,
+    moveStoredTabToEnd,
+    setTabGroup,
+} from "../../shared/groupOrder.js";
+import type { DropPosition } from "../../shared/groupOrder.js";
 
 type DragPayload =
     | { kind: "tab"; id: number }
     | { kind: "group"; id: number };
 
-type DropPosition = "before" | "after";
 type DragEnabledCheck = () => boolean;
-type IndexedTab = chrome.tabs.Tab & { id: number; index: number };
 
 const DRAG_DATA_MIME = "application/x-sirtab-drag";
 const NO_GROUP_ID = chrome.tabGroups.TAB_GROUP_ID_NONE;
@@ -16,14 +25,6 @@ let activeDropIndicator:
     | null = null;
 let activeDragElement: HTMLElement | null = null;
 let activeDragPayload: DragPayload | null = null;
-
-function isIndexedTab(tab: chrome.tabs.Tab): tab is IndexedTab {
-    return tab.id != null && tab.index != null;
-}
-
-function getTabGroupId(tab: chrome.tabs.Tab) {
-    return tab.groupId ?? NO_GROUP_ID;
-}
 
 function clearDropIndicator() {
     if (!activeDropIndicator) return;
@@ -122,184 +123,86 @@ function getDropPosition(event: DragEvent, element: HTMLElement): DropPosition {
     return event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
 }
 
-function adjustIndexForSingleMove(sourceIndex: number, rawIndex: number) {
-    return sourceIndex < rawIndex ? rawIndex - 1 : rawIndex;
-}
-
-function adjustIndexForBlockMove(
-    sourceStartIndex: number,
-    blockLength: number,
-    rawIndex: number,
-) {
-    return sourceStartIndex < rawIndex ? rawIndex - blockLength : rawIndex;
-}
-
-async function getCurrentWindowTabs() {
-    const tabs = await chrome.tabs.query({ currentWindow: true });
-    return tabs.filter(isIndexedTab).sort((a, b) => a.index - b.index);
-}
-
-function getTabsForGroup(tabs: IndexedTab[], groupId: number) {
-    return tabs.filter((tab) => getTabGroupId(tab) === groupId);
-}
-
-async function maybeUngroupTab(
-    tab: IndexedTab,
-    exemptGroupId: number = NO_GROUP_ID,
-) {
-    const groupId = getTabGroupId(tab);
-    if (groupId === NO_GROUP_ID || groupId === exemptGroupId) return tab;
-
-    await chrome.tabs.ungroup(tab.id);
-    const refreshedTab = await chrome.tabs.get(tab.id);
-    if (!isIndexedTab(refreshedTab)) return tab;
-
-    return refreshedTab;
-}
-
-async function normaliseTabGroup(tabId: number, targetGroupId: number) {
-    const movedTab = await chrome.tabs.get(tabId);
-    const currentGroupId = getTabGroupId(movedTab);
-
-    if (targetGroupId === NO_GROUP_ID) {
-        if (currentGroupId !== NO_GROUP_ID) {
-            await chrome.tabs.ungroup(tabId);
-        }
-        return;
-    }
-
-    if (currentGroupId !== targetGroupId) {
-        await chrome.tabs.group({ groupId: targetGroupId, tabIds: [tabId] });
-    }
-}
-
 async function moveTabRelativeToTab(
+    windowId: number,
     sourceTabId: number,
     targetTabId: number,
     position: DropPosition,
 ) {
     if (sourceTabId === targetTabId) return;
 
-    const [sourceTabRaw, targetTabRaw] = await Promise.all([
-        chrome.tabs.get(sourceTabId),
-        chrome.tabs.get(targetTabId),
-    ]);
-    if (!isIndexedTab(sourceTabRaw) || !isIndexedTab(targetTabRaw)) return;
-
-    const targetGroupId = getTabGroupId(targetTabRaw);
-    const sourceTab = await maybeUngroupTab(sourceTabRaw, targetGroupId);
-    const rawIndex =
-        position === "before" ? targetTabRaw.index : targetTabRaw.index + 1;
-    const targetIndex = adjustIndexForSingleMove(sourceTab.index, rawIndex);
-
-    await chrome.tabs.move(sourceTabId, { index: targetIndex });
-    await normaliseTabGroup(sourceTabId, targetGroupId);
-}
-
-async function moveTabToGroup(sourceTabId: number, targetGroupId: number) {
-    const tabs = await getCurrentWindowTabs();
-    const sourceTabRaw = tabs.find((tab) => tab.id === sourceTabId);
-    const targetGroupTabs = getTabsForGroup(tabs, targetGroupId);
-    if (!sourceTabRaw || targetGroupTabs.length === 0) return;
-
-    const sourceTab = await maybeUngroupTab(sourceTabRaw, targetGroupId);
-    const rawIndex = targetGroupTabs[targetGroupTabs.length - 1].index + 1;
-    const targetIndex = adjustIndexForSingleMove(sourceTab.index, rawIndex);
-
-    await chrome.tabs.move(sourceTabId, { index: targetIndex });
-    await normaliseTabGroup(sourceTabId, targetGroupId);
-}
-
-async function moveTabToUngroupedEnd(sourceTabId: number) {
-    const sourceTabRaw = await chrome.tabs.get(sourceTabId);
-    if (!isIndexedTab(sourceTabRaw)) return;
-
-    await maybeUngroupTab(sourceTabRaw);
-
-    const tabs = await getCurrentWindowTabs();
-    const sourceTab = tabs.find((tab) => tab.id === sourceTabId);
-    if (!sourceTab) return;
-
-    const ungroupedTabs = tabs.filter((tab) => getTabGroupId(tab) === NO_GROUP_ID);
-    const rawIndex =
-        ungroupedTabs.length === 0
-            ? 0
-            : ungroupedTabs[ungroupedTabs.length - 1].index + 1;
-    const targetIndex = adjustIndexForSingleMove(sourceTab.index, rawIndex);
-
-    await chrome.tabs.move(sourceTabId, { index: targetIndex });
-    await normaliseTabGroup(sourceTabId, NO_GROUP_ID);
-}
-
-async function moveGroupRelativeToTab(
-    sourceGroupId: number,
-    targetTabId: number,
-    position: DropPosition,
-) {
-    const tabs = await getCurrentWindowTabs();
-    const sourceGroupTabs = getTabsForGroup(tabs, sourceGroupId);
+    const { tabs } = await loadLogicalTabGroupData(windowId);
     const targetTab = tabs.find((tab) => tab.id === targetTabId);
-    if (sourceGroupTabs.length === 0 || !targetTab) return;
-    if (getTabGroupId(targetTab) === sourceGroupId) return;
+    if (targetTab?.id == null) return;
 
-    const sourceTabIds = sourceGroupTabs.map((tab) => tab.id);
-    const rawIndex =
-        position === "before" ? targetTab.index : targetTab.index + 1;
-    const targetIndex = adjustIndexForBlockMove(
-        sourceGroupTabs[0].index,
-        sourceTabIds.length,
-        rawIndex,
+    await setTabGroup(sourceTabId, getTabGroupId(targetTab));
+    await moveStoredTabRelative(windowId, sourceTabId, targetTabId, position);
+}
+
+async function moveTabToGroup(
+    windowId: number,
+    sourceTabId: number,
+    targetGroupId: number,
+) {
+    const { tabs, groups } = await loadLogicalTabGroupData(windowId);
+    if (!groups.some((group) => group.id === targetGroupId)) return;
+
+    const { tabsByGroup } = buildTabsByLogicalGroup(tabs);
+    const targetGroupTabs = (tabsByGroup.get(targetGroupId) ?? []).filter(
+        (tab) => tab.id !== sourceTabId,
     );
 
-    await chrome.tabs.move(sourceTabIds, { index: targetIndex });
+    await setTabGroup(sourceTabId, targetGroupId);
+    const lastTargetTab = targetGroupTabs[targetGroupTabs.length - 1];
+    if (lastTargetTab?.id == null) {
+        await moveStoredTabToEnd(windowId, sourceTabId);
+        return;
+    }
+
+    await moveStoredTabRelative(
+        windowId,
+        sourceTabId,
+        lastTargetTab.id,
+        "after",
+    );
+}
+
+async function moveTabToUngroupedEnd(windowId: number, sourceTabId: number) {
+    const { tabs } = await loadLogicalTabGroupData(windowId);
+    const { ungroupedTabs } = buildTabsByLogicalGroup(tabs);
+    const targetTabs = ungroupedTabs.filter((tab) => tab.id !== sourceTabId);
+
+    await setTabGroup(sourceTabId, NO_GROUP_ID);
+    const lastTargetTab = targetTabs[targetTabs.length - 1];
+    if (lastTargetTab?.id == null) {
+        await moveStoredTabToEnd(windowId, sourceTabId);
+        return;
+    }
+
+    await moveStoredTabRelative(
+        windowId,
+        sourceTabId,
+        lastTargetTab.id,
+        "after",
+    );
 }
 
 async function moveGroupRelativeToGroup(
+    windowId: number,
     sourceGroupId: number,
     targetGroupId: number,
     position: DropPosition,
 ) {
-    if (sourceGroupId === targetGroupId) return;
-
-    const tabs = await getCurrentWindowTabs();
-    const sourceGroupTabs = getTabsForGroup(tabs, sourceGroupId);
-    const targetGroupTabs = getTabsForGroup(tabs, targetGroupId);
-    if (sourceGroupTabs.length === 0 || targetGroupTabs.length === 0) return;
-
-    const sourceTabIds = sourceGroupTabs.map((tab) => tab.id);
-    const rawIndex =
-        position === "before"
-            ? targetGroupTabs[0].index
-            : targetGroupTabs[targetGroupTabs.length - 1].index + 1;
-    const targetIndex = adjustIndexForBlockMove(
-        sourceGroupTabs[0].index,
-        sourceTabIds.length,
-        rawIndex,
+    await moveStoredGroupRelative(
+        windowId,
+        sourceGroupId,
+        targetGroupId,
+        position,
     );
-
-    await chrome.tabs.move(sourceTabIds, { index: targetIndex });
 }
 
-async function moveGroupToGroupListEnd(sourceGroupId: number) {
-    const tabs = await getCurrentWindowTabs();
-    const sourceGroupTabs = getTabsForGroup(tabs, sourceGroupId);
-    if (sourceGroupTabs.length === 0) return;
-
-    const groupedTabs = tabs.filter((tab) => getTabGroupId(tab) !== NO_GROUP_ID);
-    const rawIndex =
-        groupedTabs.length === 0
-            ? tabs.length
-            : groupedTabs[groupedTabs.length - 1].index + 1;
-    const targetIndex = adjustIndexForBlockMove(
-        sourceGroupTabs[0].index,
-        sourceGroupTabs.length,
-        rawIndex,
-    );
-
-    await chrome.tabs.move(
-        sourceGroupTabs.map((tab) => tab.id),
-        { index: targetIndex },
-    );
+async function moveGroupToGroupListEnd(windowId: number, sourceGroupId: number) {
+    await moveStoredGroupToEnd(windowId, sourceGroupId);
 }
 
 async function runDropAction(
@@ -328,6 +231,7 @@ function getEnabledPayload(
 export function setupSidebarDropZones(
     tabsList: HTMLElement,
     groupsList: HTMLElement,
+    windowId: number,
     isDragEnabled: DragEnabledCheck,
     requestRender: RequestRender,
 ) {
@@ -352,7 +256,7 @@ export function setupSidebarDropZones(
 
         event.preventDefault();
         void runDropAction(
-            async () => moveTabToUngroupedEnd(payload.id),
+            async () => moveTabToUngroupedEnd(windowId, payload.id),
             requestRender,
         );
     });
@@ -378,7 +282,7 @@ export function setupSidebarDropZones(
 
         event.preventDefault();
         void runDropAction(
-            async () => moveGroupToGroupListEnd(payload.id),
+            async () => moveGroupToGroupListEnd(windowId, payload.id),
             requestRender,
         );
     });
@@ -387,6 +291,7 @@ export function setupSidebarDropZones(
 export function makeTabDraggable(
     handle: HTMLElement,
     row: HTMLElement,
+    windowId: number,
     tabId: number,
     isDragEnabled: DragEnabledCheck,
     requestRender: RequestRender,
@@ -411,7 +316,7 @@ export function makeTabDraggable(
     row.addEventListener("dragover", (event) => {
         const payload = getEnabledPayload(event, isDragEnabled);
         if (!payload) return;
-        if (payload.kind === "tab" && payload.id === tabId) return;
+        if (payload.kind !== "tab" || payload.id === tabId) return;
 
         event.preventDefault();
         if (event.dataTransfer) {
@@ -425,18 +330,13 @@ export function makeTabDraggable(
     row.addEventListener("drop", (event) => {
         const payload = getEnabledPayload(event, isDragEnabled);
         if (!payload) return;
-        if (payload.kind === "tab" && payload.id === tabId) return;
+        if (payload.kind !== "tab" || payload.id === tabId) return;
 
         event.preventDefault();
         const position = getDropPosition(event, row);
 
         void runDropAction(async () => {
-            if (payload.kind === "tab") {
-                await moveTabRelativeToTab(payload.id, tabId, position);
-                return;
-            }
-
-            await moveGroupRelativeToTab(payload.id, tabId, position);
+            await moveTabRelativeToTab(windowId, payload.id, tabId, position);
         }, requestRender);
     });
 }
@@ -444,6 +344,7 @@ export function makeTabDraggable(
 export function makeGroupDraggable(
     handle: HTMLElement,
     row: HTMLElement,
+    windowId: number,
     groupId: number,
     isDragEnabled: DragEnabledCheck,
     requestRender: RequestRender,
@@ -493,12 +394,17 @@ export function makeGroupDraggable(
 
         void runDropAction(async () => {
             if (payload.kind === "tab") {
-                await moveTabToGroup(payload.id, groupId);
+                await moveTabToGroup(windowId, payload.id, groupId);
                 return;
             }
 
             const position = getDropPosition(event, row);
-            await moveGroupRelativeToGroup(payload.id, groupId, position);
+            await moveGroupRelativeToGroup(
+                windowId,
+                payload.id,
+                groupId,
+                position,
+            );
         }, requestRender);
     });
 }

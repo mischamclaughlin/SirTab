@@ -3,9 +3,11 @@ import { DEFAULT_TAB_ICON_URL } from "../config.js";
 import { createDeleteButton } from "../helpers/domFactory.js";
 import { makeTabDraggable } from "../helpers/dragAndDrop.js";
 import { matchesNodeQuery } from "../helpers/nodeSearch.js";
+import { buildTabsByLogicalGroup } from "../../shared/groupOrder.js";
 
 type TabRenderOptions = {
     grouped?: boolean;
+    windowId?: number;
     enableDragDrop?: boolean;
     requestRender?: RequestRender;
 };
@@ -15,6 +17,7 @@ export function cycleTabs(
     tabList: chrome.tabs.Tab[],
     {
         grouped = false,
+        windowId,
         enableDragDrop = false,
         requestRender,
     }: TabRenderOptions = {},
@@ -61,8 +64,15 @@ export function cycleTabs(
         });
 
         row.append(btn, deleteBtn);
-        if (enableDragDrop && requestRender) {
-            makeTabDraggable(btn, row, tab.id, () => enableDragDrop, requestRender);
+        if (enableDragDrop && requestRender && windowId != null) {
+            makeTabDraggable(
+                btn,
+                row,
+                windowId,
+                tab.id,
+                () => enableDragDrop,
+                requestRender,
+            );
         }
         li.appendChild(row);
         tabElement.appendChild(li);
@@ -73,19 +83,7 @@ export function buildTabSearchState(
     tabs: chrome.tabs.Tab[],
     searchQuery: string,
 ) {
-    const tabsByGroup = new Map<number, chrome.tabs.Tab[]>();
-    const ungroupedTabs: chrome.tabs.Tab[] = [];
-    for (const tab of tabs) {
-        if (tab.groupId == null) continue;
-        if (tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE) {
-            ungroupedTabs.push(tab);
-            continue;
-        }
-        const groupedTabs = tabsByGroup.get(tab.groupId);
-        groupedTabs
-            ? groupedTabs.push(tab)
-            : tabsByGroup.set(tab.groupId, [tab]);
-    }
+    const { ungroupedTabs, tabsByGroup } = buildTabsByLogicalGroup(tabs);
 
     const visibleUngroupedTabs = searchQuery
         ? ungroupedTabs.filter((tab) => matchesNodeQuery(tab, searchQuery))

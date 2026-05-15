@@ -15,7 +15,6 @@ import { createEmptySearchState } from "./domFactory.js";
 import { createRenderScheduler } from "./renderScheduler.js";
 import { createActionPanelController } from "./actionPanel.js";
 import { setupSidebarDropZones } from "./dragAndDrop.js";
-import { orderGroupsByTabPosition } from "../../shared/groupOrder.js";
 
 import { setupGroupAction } from "../actions/actionGroup.js";
 import { setupBookmarkAction } from "../actions/actionBookmark.js";
@@ -73,8 +72,7 @@ export async function bootstrapSidebar() {
     let bookmarkTree: chrome.bookmarks.BookmarkTreeNode[] = [];
 
     async function renderTabGroups(isStale: RenderStaleCheck) {
-        const orderedGroups = orderGroupsByTabPosition(groups, tabs);
-        await groupCollapse(orderedGroups, collapsedGroups);
+        await groupCollapse(groups, collapsedGroups);
         if (isStale()) return;
 
         const searchQuery = getSearchQuery();
@@ -86,6 +84,7 @@ export async function bootstrapSidebar() {
         const nextTabs = document.createElement("ul");
         cycleTabs(nextTabs, visibleUngroupedTabs, {
             grouped: false,
+            windowId: currentWindowId,
             enableDragDrop,
             requestRender: requestTabGroupRefresh,
         });
@@ -94,12 +93,13 @@ export async function bootstrapSidebar() {
         const nextGroups = document.createElement("ul");
         buildGroup(
             visibleUngroupedTabs.length > 0,
-            orderedGroups,
+            groups,
             tabsByGroup,
             collapsedGroups,
             isSearching,
             searchQuery,
             nextGroups,
+            currentWindowId,
             requestTabGroupRefresh,
             enableDragDrop,
         );
@@ -152,6 +152,7 @@ export async function bootstrapSidebar() {
     setupSidebarDropZones(
         elements.tabsList,
         elements.groupsList,
+        currentWindowId,
         () => getSearchQuery().length === 0,
         requestTabGroupRefresh,
     );

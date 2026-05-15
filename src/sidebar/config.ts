@@ -1,3 +1,5 @@
+export { COLLAPSED_GROUPS_STORAGE_KEY } from "../shared/storageKeys.js";
+
 export const DEFAULT_TAB_ICON_URL = chrome.runtime.getURL(
     "sidebar/assets/default-tab-icon.svg",
 );
@@ -40,5 +42,3 @@ export const chromeToUiColor: Record<string, string> = {
 
 export const COLLAPSED_BOOKMARK_FOLDERS_STORAGE_KEY =
     "collapsedBookmarkFolders";
-
-export const COLLAPSED_GROUPS_STORAGE_KEY = "collapsedGroupsByWindow";

@@ -20,6 +20,7 @@ export function buildGroup(
     isSearching: boolean,
     searchQuery: string,
     next: HTMLElement,
+    windowId: number,
     requestRender: RequestRender,
     enableDragDrop: boolean,
 ) {
@@ -87,6 +88,7 @@ export function buildGroup(
             makeGroupDraggable(
                 btn,
                 groupRow,
+                windowId,
                 groupId,
                 () => enableDragDrop,
                 requestRender,
@@ -105,6 +107,7 @@ export function buildGroup(
             if (!isCollapsed) {
                 cycleTabs(nestedList, visibleTabsInGroup, {
                     grouped: true,
+                    windowId,
                     enableDragDrop,
                     requestRender,
                 });

@@ -1,4 +1,8 @@
 import type { RequestRender } from "../types.js";
+import {
+    GROUP_ORDER_STORAGE_KEY,
+    TAB_ORDER_STORAGE_KEY,
+} from "../../shared/storageKeys.js";
 
 type SidebarEventHandlers = {
     requestTabGroupRefresh: RequestRender;
@@ -93,6 +97,18 @@ export function setupEventListeners(
     };
 
     const handleBookmarkChange = () => requestBookmarkRefresh();
+    const handleStorageChange = (
+        changes: Record<string, chrome.storage.StorageChange>,
+        areaName: string,
+    ) => {
+        if (areaName !== "local") return;
+        if (
+            TAB_ORDER_STORAGE_KEY in changes ||
+            GROUP_ORDER_STORAGE_KEY in changes
+        ) {
+            requestTabGroupRefresh();
+        }
+    };
 
     chrome.tabs.onCreated.addListener(handleTabCreated);
     chrome.tabs.onRemoved.addListener(handleTabRemoved);
@@ -112,6 +128,7 @@ export function setupEventListeners(
     chrome.bookmarks.onMoved.addListener(handleBookmarkChange);
     chrome.bookmarks.onChildrenReordered.addListener(handleBookmarkChange);
     chrome.bookmarks.onImportEnded.addListener(handleBookmarkChange);
+    chrome.storage.onChanged.addListener(handleStorageChange);
 
     const cleanup = () => {
         chrome.tabs.onCreated.removeListener(handleTabCreated);
@@ -134,6 +151,7 @@ export function setupEventListeners(
             handleBookmarkChange,
         );
         chrome.bookmarks.onImportEnded.removeListener(handleBookmarkChange);
+        chrome.storage.onChanged.removeListener(handleStorageChange);
     };
 
     window.addEventListener("pagehide", cleanup, { once: true });
