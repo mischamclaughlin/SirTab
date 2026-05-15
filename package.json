@@ -5,6 +5,8 @@
     },
     "scripts": {
         "build": "node scripts/copy-static.mjs --clean && tsc",
+        "test": "npm run test:order",
+        "test:order": "npm run build && node tests/order.test.mjs",
         "watch": "node scripts/watch.mjs",
         "watch:static": "node scripts/watch-static.mjs",
         "watch:ts": "tsc --watch --preserveWatchOutput"

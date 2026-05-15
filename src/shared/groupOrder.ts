@@ -20,6 +20,14 @@ export type LogicalTabGroupData = {
     groupOrder: number[];
 };
 
+export type VisibleMovePositionOptions = {
+    sourceGroupId: number;
+    targetGroupId: number;
+    direction: 1 | -1;
+    currentIndex: number;
+    nextIndex: number;
+};
+
 export function sortTabsByIndex<T extends Pick<chrome.tabs.Tab, "index">>(
     tabs: T[],
 ) {
@@ -314,6 +322,27 @@ export function moveIdToEnd(order: number[], sourceId: number) {
     if (!order.includes(sourceId)) return order;
 
     return [...order.filter((id) => id !== sourceId), sourceId];
+}
+
+export function getVisibleMovePosition({
+    sourceGroupId,
+    targetGroupId,
+    direction,
+    currentIndex,
+    nextIndex,
+}: VisibleMovePositionOptions): DropPosition {
+    if (sourceGroupId !== targetGroupId) {
+        return direction === 1 ? "before" : "after";
+    }
+
+    const wrappedForward = direction === 1 && nextIndex < currentIndex;
+    const wrappedBackward = direction === -1 && nextIndex > currentIndex;
+
+    if (direction === 1) {
+        return wrappedForward ? "before" : "after";
+    }
+
+    return wrappedBackward ? "after" : "before";
 }
 
 export async function moveStoredTabRelative(

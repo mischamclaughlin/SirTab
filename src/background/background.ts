@@ -1,6 +1,7 @@
 import {
     buildVisibleLogicalTabIds,
     getTabGroupId,
+    getVisibleMovePosition,
     loadCollapsedGroupIds,
     loadLogicalTabGroupData,
     moveStoredTabRelative,
@@ -96,21 +97,13 @@ async function moveVisibleTab(direction: 1 | -1) {
 
     const sourceGroupId = getTabGroupId(activeTab);
     const targetGroupId = getTabGroupId(targetTab);
-    const crossesSection = sourceGroupId !== targetGroupId;
-    const wrappedForward = direction === 1 && nextIndex < currentIndex;
-    const wrappedBackward = direction === -1 && nextIndex > currentIndex;
-    const position =
-        crossesSection
-            ? direction === 1
-                ? "before"
-                : "after"
-            : direction === 1
-                ? wrappedForward
-                    ? "before"
-                    : "after"
-                : wrappedBackward
-                    ? "after"
-                    : "before";
+    const position = getVisibleMovePosition({
+        sourceGroupId,
+        targetGroupId,
+        direction,
+        currentIndex,
+        nextIndex,
+    });
 
     await setTabGroup(activeTab.id, targetGroupId);
     await moveStoredTabRelative(
