@@ -36,27 +36,28 @@
             "suggested_key": {
                 "default": "Ctrl+B",
                 "mac": "Command+B"
-            }
+            },
+            "description": "Open Sir Tab"
         },
         "cycle_next_visible_tab": {
             "suggested_key": {
                 "default": "Ctrl+Shift+J",
                 "mac": "Alt+Period"
             },
-            "description": "Switch to the next visible tab in sidebar order"
+            "description": "Switch to the next visible tab"
         },
         "cycle_previous_visible_tab": {
             "suggested_key": {
                 "default": "Ctrl+Shift+K",
                 "mac": "Alt+Comma"
             },
-            "description": "Switch to the previous visible tab in sidebar order"
+            "description": "Switch to the previous visible tab"
         },
         "move_active_tab_next": {
-            "description": "Move tab down"
+            "description": "Move tab to next (recommended to set shortcut as the same as 'switch to the next visible tab' + shift for better UX)"
         },
         "move_active_tab_previous": {
-            "description": "Move tab up"
+            "description": "Move tab to previous (recommended to set shortcut as the same as 'switch to the previous visible tab' + shift for better UX)"
         }
     }
 }

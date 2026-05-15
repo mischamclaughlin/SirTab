@@ -10,6 +10,13 @@
     color: var(--subtext);
 }
 
+.setting-heading {
+    color: var(--text);
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
 .setting-info-section[hidden] {
     display: none;
 }
@@ -29,4 +36,54 @@
     background: var(--surface-light);
     border-color: var(--border-light);
     color: var(--text);
+}
+
+.shortcut-settings {
+    display: grid;
+    gap: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-faded);
+}
+
+.shortcut-list {
+    display: grid;
+    gap: 0.35rem;
+    list-style: none;
+}
+
+.shortcut-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.shortcut-name,
+.shortcut-value {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.shortcut-value {
+    border: 1px solid var(--border-faded);
+    border-radius: 0.25rem;
+    background: var(--surface);
+    color: var(--text);
+    padding: 0.15rem 0.35rem;
+    font-size: 0.8rem;
+    line-height: 1.2;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.shortcut-value.is-missing {
+    background: transparent;
+    color: var(--subtext);
+}
+
+.shortcut-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
 }

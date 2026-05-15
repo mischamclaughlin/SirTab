@@ -1,5 +1,59 @@
 import { THEME_STORAGE_KEY, THEMES, SidebarTheme } from "../config.js";
+import { runButtonAction } from "../helpers/domFactory.js";
 import { applyTheme } from "../helpers/theme.js";
+
+type ShortcutCommandId =
+    | "_execute_action"
+    | "cycle_next_visible_tab"
+    | "cycle_previous_visible_tab"
+    | "move_active_tab_next"
+    | "move_active_tab_previous";
+
+const SHORTCUT_COMMANDS: {
+    id: ShortcutCommandId;
+    label: string;
+}[] = [
+    { id: "_execute_action", label: "open Sir Tab" },
+    { id: "cycle_next_visible_tab", label: "next tab" },
+    { id: "cycle_previous_visible_tab", label: "previous tab" },
+    { id: "move_active_tab_next", label: "move tab down" },
+    { id: "move_active_tab_previous", label: "move tab up" },
+];
+
+async function refreshShortcutList(list: HTMLElement) {
+    const commands = await chrome.commands.getAll();
+    const commandByName = new Map(
+        commands
+            .filter((command) => command.name != null)
+            .map((command) => [command.name!, command]),
+    );
+
+    list.replaceChildren();
+
+    for (const shortcutCommand of SHORTCUT_COMMANDS) {
+        const command = commandByName.get(shortcutCommand.id);
+        const shortcut = command?.shortcut?.trim() ?? "";
+
+        const row = document.createElement("li");
+        row.className = "shortcut-row";
+
+        const label = document.createElement("span");
+        label.className = "shortcut-name";
+        label.textContent = shortcutCommand.label;
+
+        const value = document.createElement("span");
+        value.className = "shortcut-value";
+        if (shortcut.length === 0) {
+            value.classList.add("is-missing");
+            value.textContent = "not set";
+        } else {
+            value.textContent = shortcut;
+        }
+
+        row.append(label, value);
+        list.append(row);
+    }
+}
 
 export async function setupSettingAction(settings: HTMLElement): Promise<void> {
     const settingsBtn = document.createElement("button");
@@ -16,6 +70,9 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
 
     const themeOptions = document.createElement("div");
     themeOptions.className = "theme-options";
+    const themeHeading = document.createElement("h2");
+    themeHeading.className = "setting-heading";
+    themeHeading.textContent = "theme";
 
     const themeLabels: Record<SidebarTheme, string> = {
         dark: "dark",
@@ -56,7 +113,53 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
         btn.setAttribute("aria-pressed", String(isSelected));
     }
 
-    settingInfoSection.appendChild(themeOptions);
+    const shortcutSection = document.createElement("div");
+    shortcutSection.className = "shortcut-settings";
+
+    const shortcutHeading = document.createElement("h2");
+    shortcutHeading.className = "setting-heading";
+    shortcutHeading.textContent = "keyboard shortcuts";
+
+    const shortcutList = document.createElement("ul");
+    shortcutList.className = "shortcut-list";
+
+    const shortcutActions = document.createElement("div");
+    shortcutActions.className = "shortcut-actions";
+
+    const openShortcutsBtn = document.createElement("button");
+    openShortcutsBtn.type = "button";
+    openShortcutsBtn.className = "control";
+    openShortcutsBtn.textContent = "set shortcuts";
+
+    const refreshShortcutsBtn = document.createElement("button");
+    refreshShortcutsBtn.type = "button";
+    refreshShortcutsBtn.className = "control";
+    refreshShortcutsBtn.textContent = "refresh";
+
+    openShortcutsBtn.addEventListener("click", () => {
+        void runButtonAction(
+            openShortcutsBtn,
+            async () => {
+                await chrome.tabs.create({
+                    url: "chrome://extensions/shortcuts",
+                });
+            },
+            "Open shortcut settings failed:",
+        );
+    });
+
+    refreshShortcutsBtn.addEventListener("click", () => {
+        void runButtonAction(
+            refreshShortcutsBtn,
+            async () => refreshShortcutList(shortcutList),
+            "Refresh shortcuts failed:",
+        );
+    });
+
+    shortcutActions.append(openShortcutsBtn, refreshShortcutsBtn);
+    shortcutSection.append(shortcutHeading, shortcutList, shortcutActions);
+
+    settingInfoSection.append(shortcutSection, themeHeading, themeOptions);
 
     let isSettingOpen = false;
 
@@ -64,6 +167,9 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
         isSettingOpen = !isSettingOpen;
         settingInfoSection.hidden = !isSettingOpen;
         settingsBtn.setAttribute("aria-expanded", String(isSettingOpen));
+        if (isSettingOpen) {
+            void refreshShortcutList(shortcutList);
+        }
     });
 
     settings?.append(settingInfoSection, settingsBtn);
