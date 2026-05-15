@@ -58,6 +58,9 @@
         },
         "move_active_tab_previous": {
             "description": "Move tab to previous (recommended to set shortcut as the same as 'switch to the previous visible tab' + shift for better UX)"
+        },
+        "open_quick_search": {
+            "description": "Open quick search window"
         }
     }
 }

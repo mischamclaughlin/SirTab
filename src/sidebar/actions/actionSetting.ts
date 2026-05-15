@@ -12,7 +12,8 @@ type ShortcutCommandId =
     | "cycle_next_visible_tab"
     | "cycle_previous_visible_tab"
     | "move_active_tab_next"
-    | "move_active_tab_previous";
+    | "move_active_tab_previous"
+    | "open_quick_search";
 
 const SHORTCUT_COMMANDS: {
     id: ShortcutCommandId;
@@ -23,6 +24,7 @@ const SHORTCUT_COMMANDS: {
     { id: "cycle_previous_visible_tab", label: "previous tab" },
     { id: "move_active_tab_next", label: "move tab down" },
     { id: "move_active_tab_previous", label: "move tab up" },
+    { id: "open_quick_search", label: "quick search" },
 ];
 
 async function loadShortcutCommands() {

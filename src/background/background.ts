@@ -64,8 +64,51 @@ chrome.commands.onCommand.addListener((command) => {
         void cycleVisibleTabs(1);
     } else if (command === "cycle_previous_visible_tab") {
         void cycleVisibleTabs(-1);
+    } else if (command === "open_quick_search") {
+        void openQuickSearchWindow();
     }
 });
+
+function getCenteredWindowBounds(
+    baseWindow: chrome.windows.Window,
+    width: number,
+    height: number,
+) {
+    if (
+        baseWindow.left == null ||
+        baseWindow.top == null ||
+        baseWindow.width == null ||
+        baseWindow.height == null
+    ) {
+        return {};
+    }
+
+    return {
+        left: Math.max(
+            0,
+            Math.round(baseWindow.left + (baseWindow.width - width) / 2),
+        ),
+        top: Math.max(
+            0,
+            Math.round(baseWindow.top + (baseWindow.height - height) / 2),
+        ),
+    };
+}
+
+async function openQuickSearchWindow() {
+    const width = 720;
+    const height = 520;
+    const lastFocusedWindow = await chrome.windows.getLastFocused();
+
+    await chrome.windows.create({
+        ...getCenteredWindowBounds(lastFocusedWindow, width, height),
+        type: "normal",
+        state: "normal",
+        width,
+        height,
+        focused: true,
+    });
+}
 
 async function moveVisibleTab(direction: 1 | -1) {
     const visibleState = await getVisibleTabStateForCurrentWindow();
