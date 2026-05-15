@@ -10,6 +10,48 @@
     color: var(--subtext);
 }
 
+.shortcut-prompt {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: center;
+    gap: 0.5rem;
+    border: 2px solid var(--red);
+    border-radius: 0.25rem;
+    background: rgba(var(--red-colour-RGB), 0.14);
+    padding: 0.55rem 0.6rem;
+    color: var(--text);
+}
+
+.shortcut-prompt[hidden] {
+    display: none;
+}
+
+.shortcut-prompt-text {
+    min-width: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+.shortcut-prompt-count {
+    color: var(--text);
+}
+
+.shortcut-prompt .control {
+    color: var(--text);
+}
+
+.shortcut-prompt-actions {
+    display: grid;
+    grid-template-columns: minmax(2.5rem, max-content) 2rem;
+    gap: 0.35rem;
+}
+
+.shortcut-prompt-dismiss {
+    padding-inline: 0;
+}
+
 .setting-heading {
     color: var(--text);
     font-size: 0.85rem;
@@ -78,8 +120,10 @@
 }
 
 .shortcut-value.is-missing {
-    background: transparent;
-    color: var(--subtext);
+    border-color: var(--red);
+    background: rgba(var(--red-colour-RGB), 0.14);
+    color: var(--red);
+    font-weight: 600;
 }
 
 .shortcut-actions {

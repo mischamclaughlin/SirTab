@@ -5,6 +5,8 @@ export const DEFAULT_TAB_ICON_URL = chrome.runtime.getURL(
 );
 
 export const THEME_STORAGE_KEY = "sidebarTheme";
+export const SHORTCUT_PROMPT_DISMISSED_STORAGE_KEY =
+    "shortcutPromptDismissed";
 export const THEMES = [
     "dark",
     "light",

@@ -1,4 +1,9 @@
-import { THEME_STORAGE_KEY, THEMES, SidebarTheme } from "../config.js";
+import {
+    SHORTCUT_PROMPT_DISMISSED_STORAGE_KEY,
+    THEME_STORAGE_KEY,
+    THEMES,
+    SidebarTheme,
+} from "../config.js";
 import { runButtonAction } from "../helpers/domFactory.js";
 import { applyTheme } from "../helpers/theme.js";
 
@@ -20,13 +25,53 @@ const SHORTCUT_COMMANDS: {
     { id: "move_active_tab_previous", label: "move tab up" },
 ];
 
-async function refreshShortcutList(list: HTMLElement) {
+async function loadShortcutCommands() {
     const commands = await chrome.commands.getAll();
-    const commandByName = new Map(
+    return new Map(
         commands
             .filter((command) => command.name != null)
             .map((command) => [command.name!, command]),
     );
+}
+
+function getMissingShortcutCount(
+    commandByName: Map<string, chrome.commands.Command>,
+) {
+    return SHORTCUT_COMMANDS.filter((shortcutCommand) => {
+        const shortcut =
+            commandByName.get(shortcutCommand.id)?.shortcut?.trim() ?? "";
+        return shortcut.length === 0;
+    }).length;
+}
+
+async function openShortcutSettings() {
+    await chrome.tabs.create({
+        url: "chrome://extensions/shortcuts",
+    });
+}
+
+async function isShortcutPromptDismissed() {
+    const storage = await chrome.storage.local.get(
+        SHORTCUT_PROMPT_DISMISSED_STORAGE_KEY,
+    );
+    return storage[SHORTCUT_PROMPT_DISMISSED_STORAGE_KEY] === true;
+}
+
+async function refreshShortcutPrompt(prompt: HTMLElement, count: HTMLElement) {
+    const [commandByName, dismissed] = await Promise.all([
+        loadShortcutCommands(),
+        isShortcutPromptDismissed(),
+    ]);
+    const missingCount = getMissingShortcutCount(commandByName);
+
+    prompt.hidden = dismissed || missingCount === 0;
+    count.textContent = `${missingCount} missing shortcuts`;
+
+    return missingCount;
+}
+
+async function refreshShortcutList(list: HTMLElement) {
+    const commandByName = await loadShortcutCommands();
 
     list.replaceChildren();
 
@@ -67,6 +112,36 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
     settingInfoSection.hidden = true;
     settingInfoSection.id = "settings-panel";
     settingsBtn.setAttribute("aria-controls", settingInfoSection.id);
+
+    const shortcutPrompt = document.createElement("div");
+    shortcutPrompt.className = "shortcut-prompt";
+    shortcutPrompt.hidden = true;
+
+    const shortcutPromptText = document.createElement("span");
+    shortcutPromptText.className = "shortcut-prompt-text";
+
+    const shortcutPromptCount = document.createElement("span");
+    shortcutPromptCount.className = "shortcut-prompt-count";
+    shortcutPromptCount.textContent = "0 missing shortcuts";
+
+    shortcutPromptText.append(shortcutPromptCount);
+
+    const shortcutPromptActions = document.createElement("div");
+    shortcutPromptActions.className = "shortcut-prompt-actions";
+
+    const shortcutPromptSetBtn = document.createElement("button");
+    shortcutPromptSetBtn.type = "button";
+    shortcutPromptSetBtn.className = "control";
+    shortcutPromptSetBtn.textContent = "set";
+
+    const shortcutPromptDismissBtn = document.createElement("button");
+    shortcutPromptDismissBtn.type = "button";
+    shortcutPromptDismissBtn.className = "control shortcut-prompt-dismiss";
+    shortcutPromptDismissBtn.textContent = "x";
+    shortcutPromptDismissBtn.setAttribute("aria-label", "Dismiss shortcut prompt");
+
+    shortcutPromptActions.append(shortcutPromptSetBtn, shortcutPromptDismissBtn);
+    shortcutPrompt.append(shortcutPromptText, shortcutPromptActions);
 
     const themeOptions = document.createElement("div");
     themeOptions.className = "theme-options";
@@ -139,11 +214,7 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
     openShortcutsBtn.addEventListener("click", () => {
         void runButtonAction(
             openShortcutsBtn,
-            async () => {
-                await chrome.tabs.create({
-                    url: "chrome://extensions/shortcuts",
-                });
-            },
+            openShortcutSettings,
             "Open shortcut settings failed:",
         );
     });
@@ -151,8 +222,35 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
     refreshShortcutsBtn.addEventListener("click", () => {
         void runButtonAction(
             refreshShortcutsBtn,
-            async () => refreshShortcutList(shortcutList),
+            async () => {
+                await refreshShortcutList(shortcutList);
+                await refreshShortcutPrompt(
+                    shortcutPrompt,
+                    shortcutPromptCount,
+                );
+            },
             "Refresh shortcuts failed:",
+        );
+    });
+
+    shortcutPromptSetBtn.addEventListener("click", () => {
+        void runButtonAction(
+            shortcutPromptSetBtn,
+            openShortcutSettings,
+            "Open shortcut settings failed:",
+        );
+    });
+
+    shortcutPromptDismissBtn.addEventListener("click", () => {
+        void runButtonAction(
+            shortcutPromptDismissBtn,
+            async () => {
+                await chrome.storage.local.set({
+                    [SHORTCUT_PROMPT_DISMISSED_STORAGE_KEY]: true,
+                });
+                shortcutPrompt.hidden = true;
+            },
+            "Dismiss shortcut prompt failed:",
         );
     });
 
@@ -172,5 +270,7 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
         }
     });
 
-    settings?.append(settingInfoSection, settingsBtn);
+    await refreshShortcutPrompt(shortcutPrompt, shortcutPromptCount);
+
+    settings?.append(shortcutPrompt, settingInfoSection, settingsBtn);
 }
