@@ -90,7 +90,7 @@ export function setupSelectAction(
             "select",
             isSelecting
                 ? `Finish selecting ${count} tab${count === 1 ? "" : "s"}`
-                : "Select tabs. Shift-click a tab to select a range.",
+                : "Select tabs and edit. Shift-click a tab to select a range.",
         );
         btnSelect.classList.toggle(
             "is-selected",
