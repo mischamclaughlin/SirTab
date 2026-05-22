@@ -24,13 +24,7 @@
         "service_worker": "background/background.js",
         "type": "module"
     },
-    "permissions": [
-        "tabs",
-        "tabGroups",
-        "storage",
-        "sidePanel",
-        "bookmarks"
-    ],
+    "permissions": ["tabs", "tabGroups", "storage", "sidePanel", "bookmarks"],
     "commands": {
         "_execute_action": {
             "suggested_key": {
