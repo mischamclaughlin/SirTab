@@ -36,6 +36,19 @@ optgroup {
         background 200ms ease-in-out;
 }
 
+button.control {
+    display: grid;
+    place-items: center;
+    min-height: 2rem;
+}
+
+.control-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    display: block;
+    fill: currentColor;
+}
+
 :where(button, select).control {
     cursor: pointer;
 }
@@ -43,6 +56,12 @@ optgroup {
 :where(button, select).control:hover {
     background: var(--surface);
     border-color: var(--border);
+}
+
+.control.is-selected {
+    background: var(--surface-light);
+    border-color: var(--border);
+    color: var(--text);
 }
 
 :where(button, input, select):focus-visible {

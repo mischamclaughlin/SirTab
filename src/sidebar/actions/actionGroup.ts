@@ -1,18 +1,20 @@
 import type { ActionPanelController } from "../types.js";
 import { groupColorMap, GroupColorChoice } from "../config.js";
 import { runButtonAction } from "../helpers/domFactory.js";
+import { setButtonIcon } from "../helpers/icons.js";
 
 export async function setupGroupAction(
     actionBtnSection: HTMLElement,
     actionPanel: ActionPanelController,
 ): Promise<void> {
     const btnGroup = document.createElement("button");
-    btnGroup.textContent = "group +";
     btnGroup.className = "control";
+    setButtonIcon(btnGroup, "group", "Create group");
     actionBtnSection.appendChild(btnGroup);
 
     const closeGroupForm = () => {
-        btnGroup.textContent = "group +";
+        btnGroup.classList.remove("is-selected");
+        setButtonIcon(btnGroup, "group", "Create group");
     };
 
     btnGroup.addEventListener("click", async () => {
@@ -21,7 +23,8 @@ export async function setupGroupAction(
             return;
         }
 
-        btnGroup.textContent = "cancel !";
+        btnGroup.classList.add("is-selected");
+        setButtonIcon(btnGroup, "group", "Cancel group creation");
 
         const groupForm = document.createElement("div");
         groupForm.className = "action-form";
@@ -53,8 +56,8 @@ export async function setupGroupAction(
 
         const confirmBtn = document.createElement("button");
         confirmBtn.type = "button";
-        confirmBtn.textContent = "confirm";
         confirmBtn.className = "control";
+        setButtonIcon(confirmBtn, "confirm", "Confirm group creation");
 
         groupInfoDropdown.append(textInput, colourSelect, confirmBtn);
         textInput.focus();

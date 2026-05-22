@@ -17,7 +17,7 @@
 .action-controls {
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 0.25rem;
 }
 
@@ -31,6 +31,28 @@
     display: none;
 }
 
+.selection-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.selection-summary {
+    min-width: 0;
+    color: var(--subsubtext);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 0.85rem;
+}
+
+.selection-delete:hover:not(:disabled) {
+    background: var(--red);
+    border-color: var(--red);
+    color: var(--text);
+}
+
 .action-toggle {
     border: 1px solid var(--border-light);
     border-radius: 0.25rem;
@@ -39,6 +61,9 @@
     padding: 0.25rem;
     font-variant-ligatures: none;
     cursor: pointer;
+    display: grid;
+    place-items: center;
+    min-height: 2rem;
 }
 
 .action-toggle.is-selected {
@@ -62,8 +87,8 @@
 }
 
 @media (max-width: 320px) {
-    .action-controls {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+    .selection-actions {
+        grid-template-columns: 1fr;
     }
 
     .info-dropdown {

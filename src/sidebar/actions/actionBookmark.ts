@@ -4,21 +4,23 @@ import {
     isAllowedBookmarkUrl,
 } from "../bookmark/bookmark.js";
 import { runButtonAction } from "../helpers/domFactory.js";
+import { setButtonIcon } from "../helpers/icons.js";
 
 export async function setupBookmarkAction(
     actionBtnSection: HTMLElement,
     actionPanel: ActionPanelController,
 ): Promise<void> {
     const btnNewBookmark = document.createElement("button");
-    btnNewBookmark.textContent = "bookmark +";
     btnNewBookmark.className = "control";
+    setButtonIcon(btnNewBookmark, "bookmark", "Create bookmark or folder");
     actionBtnSection.appendChild(btnNewBookmark);
 
     let isAddCurrentTab = false;
 
     const closeBookmarkForm = () => {
         isAddCurrentTab = false;
-        btnNewBookmark.textContent = "bookmark +";
+        btnNewBookmark.classList.remove("is-selected");
+        setButtonIcon(btnNewBookmark, "bookmark", "Create bookmark or folder");
     };
 
     btnNewBookmark.addEventListener("click", async () => {
@@ -27,7 +29,8 @@ export async function setupBookmarkAction(
             return;
         }
 
-        btnNewBookmark.textContent = "cancel !";
+        btnNewBookmark.classList.add("is-selected");
+        setButtonIcon(btnNewBookmark, "bookmark", "Cancel bookmark creation");
 
         const bookmarkForm = document.createElement("div");
         bookmarkForm.className = "action-form";
@@ -35,11 +38,25 @@ export async function setupBookmarkAction(
         const addCurrentTab = document.createElement("button");
         addCurrentTab.type = "button";
         addCurrentTab.className = "action-toggle";
+        const textInput = document.createElement("input");
+        textInput.type = "text";
+        textInput.id = "bookmark-name-input";
+        textInput.name = "bookmark-name";
+        textInput.className = "control";
 
         const updateCurrentTabToggle = () => {
             addCurrentTab.classList.toggle("is-selected", isAddCurrentTab);
-            addCurrentTab.textContent = `add current tab: ${isAddCurrentTab}`;
+            setButtonIcon(
+                addCurrentTab,
+                "addTab",
+                isAddCurrentTab
+                    ? "Create bookmark from current tab"
+                    : "Create folder instead of current tab bookmark",
+            );
             addCurrentTab.setAttribute("aria-pressed", String(isAddCurrentTab));
+            textInput.placeholder = isAddCurrentTab
+                ? "bookmark name"
+                : "folder name";
         };
 
         const bookmarkInfoDropdown = document.createElement("div");
@@ -52,13 +69,6 @@ export async function setupBookmarkAction(
             isAddCurrentTab = !isAddCurrentTab;
             updateCurrentTabToggle();
         });
-
-        const textInput = document.createElement("input");
-        textInput.type = "text";
-        textInput.id = "bookmark-name-input";
-        textInput.name = "bookmark-name";
-        textInput.placeholder = "folder / bookmark name";
-        textInput.className = "control";
 
         const bookmarkTree: chrome.bookmarks.BookmarkTreeNode[] =
             await chrome.bookmarks.getTree();
@@ -84,8 +94,8 @@ export async function setupBookmarkAction(
 
         const confirmBtn = document.createElement("button");
         confirmBtn.type = "button";
-        confirmBtn.textContent = "confirm";
         confirmBtn.className = "control";
+        setButtonIcon(confirmBtn, "confirm", "Confirm bookmark creation");
 
         bookmarkInfoDropdown.append(textInput, bookmarkSelect, confirmBtn);
         textInput.focus();

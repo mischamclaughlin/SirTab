@@ -5,3 +5,16 @@
     display: grid;
     gap: 0.25rem;
 }
+
+.bookmark-edit-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+}
+
+@media (max-width: 320px) {
+    .bookmark-edit-form {
+        grid-template-columns: 1fr;
+    }
+}

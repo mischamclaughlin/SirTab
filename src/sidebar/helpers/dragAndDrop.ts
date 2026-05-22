@@ -12,8 +12,9 @@ import {
 import type { DropPosition } from "../../shared/groupOrder.js";
 
 type DragPayload =
-    | { kind: "tab"; id: number }
+    | { kind: "tabs"; ids: number[] }
     | { kind: "group"; id: number };
+type NonEmptyNumberArray = [number, ...number[]];
 
 type DragEnabledCheck = () => boolean;
 
@@ -75,23 +76,35 @@ function parsePayload(rawPayload: string): DragPayload | null {
         if (
             typeof parsed !== "object" ||
             parsed == null ||
-            !("kind" in parsed) ||
-            !("id" in parsed)
+            !("kind" in parsed)
         ) {
             return null;
         }
 
         const kind = parsed.kind;
-        const id = parsed.id;
-        if (
-            (kind !== "tab" && kind !== "group") ||
-            typeof id !== "number" ||
-            !Number.isFinite(id)
-        ) {
-            return null;
+        if (kind !== "tabs" && kind !== "group") return null;
+
+        if (kind === "group") {
+            if (
+                !("id" in parsed) ||
+                typeof parsed.id !== "number" ||
+                !Number.isFinite(parsed.id)
+            ) {
+                return null;
+            }
+
+            return { kind, id: parsed.id };
         }
 
-        return { kind, id };
+        if (!("ids" in parsed) || !Array.isArray(parsed.ids)) return null;
+
+        const ids = parsed.ids.filter(
+            (rawId): rawId is number =>
+                typeof rawId === "number" && Number.isFinite(rawId),
+        );
+        if (ids.length === 0) return null;
+
+        return { kind, ids };
     } catch {
         return null;
     }
@@ -121,6 +134,10 @@ function writePayload(event: DragEvent, payload: DragPayload) {
 function getDropPosition(event: DragEvent, element: HTMLElement): DropPosition {
     const bounds = element.getBoundingClientRect();
     return event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+}
+
+function toNonEmptyNumberArray(ids: number[]): NonEmptyNumberArray | null {
+    return ids.length > 0 ? (ids as NonEmptyNumberArray) : null;
 }
 
 async function moveTabRelativeToTab(
@@ -167,6 +184,56 @@ async function moveTabToGroup(
     );
 }
 
+async function moveTabsToGroup(
+    windowId: number,
+    sourceTabIds: number[],
+    targetGroupId: number,
+) {
+    const sourceIdSet = new Set(sourceTabIds);
+    const { tabs, groups } = await loadLogicalTabGroupData(windowId);
+    if (!groups.some((group) => group.id === targetGroupId)) return;
+
+    const orderedSourceTabIds = tabs
+        .map((tab) => tab.id)
+        .filter(
+            (tabId): tabId is number =>
+                tabId != null && sourceIdSet.has(tabId),
+        );
+    if (orderedSourceTabIds.length === 0) return;
+    if (orderedSourceTabIds.length === 1) {
+        await moveTabToGroup(windowId, orderedSourceTabIds[0], targetGroupId);
+        return;
+    }
+
+    const { tabsByGroup } = buildTabsByLogicalGroup(tabs);
+    const targetGroupTabs = (tabsByGroup.get(targetGroupId) ?? []).filter(
+        (tab) => tab.id == null || !sourceIdSet.has(tab.id),
+    );
+
+    const tabIds = toNonEmptyNumberArray(orderedSourceTabIds);
+    if (!tabIds) return;
+
+    await chrome.tabs.group({
+        groupId: targetGroupId,
+        tabIds,
+    });
+
+    let previousTargetTabId = targetGroupTabs[targetGroupTabs.length - 1]?.id;
+    for (const tabId of orderedSourceTabIds) {
+        if (previousTargetTabId == null) {
+            await moveStoredTabToEnd(windowId, tabId);
+        } else {
+            await moveStoredTabRelative(
+                windowId,
+                tabId,
+                previousTargetTabId,
+                "after",
+            );
+        }
+        previousTargetTabId = tabId;
+    }
+}
+
 async function moveTabToUngroupedEnd(windowId: number, sourceTabId: number) {
     const { tabs } = await loadLogicalTabGroupData(windowId);
     const { ungroupedTabs } = buildTabsByLogicalGroup(tabs);
@@ -185,6 +252,47 @@ async function moveTabToUngroupedEnd(windowId: number, sourceTabId: number) {
         lastTargetTab.id,
         "after",
     );
+}
+
+async function moveTabsToUngroupedEnd(windowId: number, sourceTabIds: number[]) {
+    const sourceIdSet = new Set(sourceTabIds);
+    const { tabs } = await loadLogicalTabGroupData(windowId);
+    const orderedSourceTabIds = tabs
+        .map((tab) => tab.id)
+        .filter(
+            (tabId): tabId is number =>
+                tabId != null && sourceIdSet.has(tabId),
+        );
+    if (orderedSourceTabIds.length === 0) return;
+    if (orderedSourceTabIds.length === 1) {
+        await moveTabToUngroupedEnd(windowId, orderedSourceTabIds[0]);
+        return;
+    }
+
+    const { ungroupedTabs } = buildTabsByLogicalGroup(tabs);
+    const targetTabs = ungroupedTabs.filter(
+        (tab) => tab.id == null || !sourceIdSet.has(tab.id),
+    );
+
+    const tabIds = toNonEmptyNumberArray(orderedSourceTabIds);
+    if (!tabIds) return;
+
+    await chrome.tabs.ungroup(tabIds);
+
+    let previousTargetTabId = targetTabs[targetTabs.length - 1]?.id;
+    for (const tabId of orderedSourceTabIds) {
+        if (previousTargetTabId == null) {
+            await moveStoredTabToEnd(windowId, tabId);
+        } else {
+            await moveStoredTabRelative(
+                windowId,
+                tabId,
+                previousTargetTabId,
+                "after",
+            );
+        }
+        previousTargetTabId = tabId;
+    }
 }
 
 async function moveGroupRelativeToGroup(
@@ -239,7 +347,7 @@ export function setupSidebarDropZones(
         if (event.target !== tabsList) return;
 
         const payload = getEnabledPayload(event, isDragEnabled);
-        if (!payload || payload.kind !== "tab") return;
+        if (!payload || payload.kind !== "tabs") return;
 
         event.preventDefault();
         if (event.dataTransfer) {
@@ -252,11 +360,11 @@ export function setupSidebarDropZones(
         if (event.target !== tabsList) return;
 
         const payload = getEnabledPayload(event, isDragEnabled);
-        if (!payload || payload.kind !== "tab") return;
+        if (!payload || payload.kind !== "tabs") return;
 
         event.preventDefault();
         void runDropAction(
-            async () => moveTabToUngroupedEnd(windowId, payload.id),
+            async () => moveTabsToUngroupedEnd(windowId, payload.ids),
             requestRender,
         );
     });
@@ -295,6 +403,7 @@ export function makeTabDraggable(
     tabId: number,
     isDragEnabled: DragEnabledCheck,
     requestRender: RequestRender,
+    getDragTabIds?: (tabId: number) => number[],
 ) {
     handle.draggable = true;
     handle.classList.add("is-draggable");
@@ -305,7 +414,10 @@ export function makeTabDraggable(
             return;
         }
 
-        writePayload(event, { kind: "tab", id: tabId });
+        writePayload(event, {
+            kind: "tabs",
+            ids: getDragTabIds?.(tabId) ?? [tabId],
+        });
         setDragElement(row);
     });
 
@@ -316,7 +428,13 @@ export function makeTabDraggable(
     row.addEventListener("dragover", (event) => {
         const payload = getEnabledPayload(event, isDragEnabled);
         if (!payload) return;
-        if (payload.kind !== "tab" || payload.id === tabId) return;
+        if (
+            payload.kind !== "tabs" ||
+            payload.ids.length !== 1 ||
+            payload.ids[0] === tabId
+        ) {
+            return;
+        }
 
         event.preventDefault();
         if (event.dataTransfer) {
@@ -330,13 +448,24 @@ export function makeTabDraggable(
     row.addEventListener("drop", (event) => {
         const payload = getEnabledPayload(event, isDragEnabled);
         if (!payload) return;
-        if (payload.kind !== "tab" || payload.id === tabId) return;
+        if (
+            payload.kind !== "tabs" ||
+            payload.ids.length !== 1 ||
+            payload.ids[0] === tabId
+        ) {
+            return;
+        }
 
         event.preventDefault();
         const position = getDropPosition(event, row);
 
         void runDropAction(async () => {
-            await moveTabRelativeToTab(windowId, payload.id, tabId, position);
+            await moveTabRelativeToTab(
+                windowId,
+                payload.ids[0],
+                tabId,
+                position,
+            );
         }, requestRender);
     });
 }
@@ -376,7 +505,7 @@ export function makeGroupDraggable(
             event.dataTransfer.dropEffect = "move";
         }
 
-        if (payload.kind === "tab") {
+        if (payload.kind === "tabs") {
             setDropIndicator(row, "drop-inside");
             return;
         }
@@ -393,8 +522,8 @@ export function makeGroupDraggable(
         event.preventDefault();
 
         void runDropAction(async () => {
-            if (payload.kind === "tab") {
-                await moveTabToGroup(windowId, payload.id, groupId);
+            if (payload.kind === "tabs") {
+                await moveTabsToGroup(windowId, payload.ids, groupId);
                 return;
             }
 

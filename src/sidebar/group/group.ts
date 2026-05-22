@@ -1,8 +1,9 @@
-import type { RequestRender } from "../types.js";
+import type { RequestRender, TabSelectionView } from "../types.js";
 import { cycleTabs } from "../tab/tab.js";
 import {
     createDeleteButton,
     createToggleButton,
+    runButtonAction,
 } from "../helpers/domFactory.js";
 import { makeGroupDraggable } from "../helpers/dragAndDrop.js";
 import { matchesNodeQuery } from "../helpers/nodeSearch.js";
@@ -11,6 +12,82 @@ import {
     persistCollapse,
 } from "../helpers/collapseState.js";
 import { createEmptySearchState } from "../helpers/domFactory.js";
+import { groupColorMap, GroupColorChoice } from "../config.js";
+import { setButtonIcon } from "../helpers/icons.js";
+
+function getGroupColorChoice(color: chrome.tabGroups.TabGroup["color"]) {
+    const choices = Object.keys(groupColorMap) as GroupColorChoice[];
+
+    return (
+        choices.find((choice) => groupColorMap[choice] === color) ?? "none"
+    );
+}
+
+function createGroupEditForm(
+    group: chrome.tabGroups.TabGroup,
+    groupTitle: string,
+    groupColour: chrome.tabGroups.TabGroup["color"],
+    requestRender: RequestRender,
+    onClose: () => void,
+) {
+    const form = document.createElement("div");
+    form.className = "group-edit-form";
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "control";
+    nameInput.value = group.title?.trim() ?? "";
+    nameInput.placeholder = "group name";
+    nameInput.setAttribute("aria-label", `Name for ${groupTitle}`);
+
+    const colourSelect = document.createElement("select");
+    colourSelect.className = "control";
+    colourSelect.setAttribute("aria-label", `Colour for ${groupTitle}`);
+
+    const colourChoices = Object.keys(groupColorMap) as GroupColorChoice[];
+    for (const choice of colourChoices) {
+        const option = document.createElement("option");
+        option.value = choice;
+        option.textContent = choice;
+        colourSelect.append(option);
+    }
+    colourSelect.value = getGroupColorChoice(groupColour);
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "control";
+    setButtonIcon(saveBtn, "confirm", "Save group changes");
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "control";
+    setButtonIcon(cancelBtn, "clear", "Cancel group editing");
+
+    form.append(nameInput, colourSelect, saveBtn, cancelBtn);
+
+    nameInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") saveBtn.click();
+        if (event.key === "Escape") cancelBtn.click();
+    });
+
+    cancelBtn.addEventListener("click", onClose);
+    saveBtn.addEventListener("click", () => {
+        void runButtonAction(saveBtn, async () => {
+            if (group.id == null) return;
+
+            await chrome.tabGroups.update(group.id, {
+                title: nameInput.value.trim(),
+                color: groupColorMap[colourSelect.value as GroupColorChoice],
+            });
+            onClose();
+            requestRender();
+        }, "Update group failed:");
+    });
+
+    requestAnimationFrame(() => nameInput.focus());
+
+    return form;
+}
 
 export function buildGroup(
     hasUngroupedTabs: boolean,
@@ -23,6 +100,8 @@ export function buildGroup(
     windowId: number,
     requestRender: RequestRender,
     enableDragDrop: boolean,
+    tabSelection?: TabSelectionView,
+    visibleTabIds?: number[],
 ) {
     let renderedTabResults = hasUngroupedTabs;
 
@@ -65,6 +144,8 @@ export function buildGroup(
 
         const groupRow = document.createElement("div");
         groupRow.className = "tree-row";
+        const isSelectionMode = tabSelection?.isSelectionMode() ?? false;
+        if (isSelectionMode) groupRow.classList.add("tree-row--with-edit");
         const deleteGroupBtn = createDeleteButton("Close group", async () => {
             const tabIds = (tabsByGroup.get(groupId) ?? [])
                 .map((tab) => tab.id)
@@ -83,7 +164,21 @@ export function buildGroup(
                 await persistCollapse(collapsedGroups, "tab");
             }
         });
-        groupRow.append(btn, deleteGroupBtn);
+
+        let editGroupBtn: HTMLButtonElement | null = null;
+        if (isSelectionMode) {
+            editGroupBtn = document.createElement("button");
+            editGroupBtn.type = "button";
+            editGroupBtn.className = "row-icon-btn";
+            setButtonIcon(
+                editGroupBtn,
+                "edit",
+                `Edit group ${groupTitle}. Available in select mode.`,
+            );
+            groupRow.append(btn, editGroupBtn, deleteGroupBtn);
+        } else {
+            groupRow.append(btn, deleteGroupBtn);
+        }
         if (enableDragDrop) {
             makeGroupDraggable(
                 btn,
@@ -95,6 +190,32 @@ export function buildGroup(
             );
         }
         groupItem.appendChild(groupRow);
+
+        let editForm: HTMLElement | null = null;
+        editGroupBtn?.addEventListener("click", () => {
+            if (!editGroupBtn) return;
+
+            if (editForm) {
+                editForm.remove();
+                editForm = null;
+                editGroupBtn.classList.remove("is-selected");
+                return;
+            }
+
+            editGroupBtn.classList.add("is-selected");
+            editForm = createGroupEditForm(
+                group,
+                groupTitle,
+                groupColour,
+                requestRender,
+                () => {
+                    editForm?.remove();
+                    editForm = null;
+                    editGroupBtn.classList.remove("is-selected");
+                },
+            );
+            groupRow.after(editForm);
+        });
 
         if (visibleTabsInGroup.length > 0) {
             const nestedList = document.createElement("ul");
@@ -110,6 +231,8 @@ export function buildGroup(
                     windowId,
                     enableDragDrop,
                     requestRender,
+                    tabSelection,
+                    visibleTabIds,
                 });
             }
         }

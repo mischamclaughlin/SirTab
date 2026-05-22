@@ -1,11 +1,13 @@
-import { BookmarkFolderChoice } from "../types.js";
+import type { BookmarkFolderChoice, TabSelectionView } from "../types.js";
 import { persistCollapse, isCollapsedCheck } from "../helpers/collapseState.js";
 import { matchesNodeQuery } from "../helpers/nodeSearch.js";
 import { DEFAULT_TAB_ICON_URL } from "../config.js";
 import {
     createDeleteButton,
     createToggleButton,
+    runButtonAction,
 } from "../helpers/domFactory.js";
+import { setButtonIcon } from "../helpers/icons.js";
 
 function getBookmarkNodeTitle(node: chrome.bookmarks.BookmarkTreeNode) {
     return node.title?.trim() ?? "";
@@ -91,6 +93,60 @@ function orderBookmarkNodesForDisplay(
     return [...passthroughNodes, ...bookmarkNodes, ...folderNodes];
 }
 
+function createBookmarkEditForm(
+    node: chrome.bookmarks.BookmarkTreeNode,
+    fallbackTitle: string,
+    onSaved?: () => void,
+    onClose?: () => void,
+) {
+    const form = document.createElement("div");
+    form.className = "bookmark-edit-form";
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "control";
+    nameInput.value = getBookmarkNodeTitle(node);
+    nameInput.placeholder = node.url ? "bookmark name" : "folder name";
+    nameInput.setAttribute("aria-label", `Name for ${fallbackTitle}`);
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "control";
+    setButtonIcon(saveBtn, "confirm", "Save bookmark name");
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "control";
+    setButtonIcon(cancelBtn, "clear", "Cancel bookmark editing");
+
+    form.append(nameInput, saveBtn, cancelBtn);
+
+    const close = () => {
+        form.remove();
+        onClose?.();
+    };
+
+    nameInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") saveBtn.click();
+        if (event.key === "Escape") cancelBtn.click();
+    });
+
+    cancelBtn.addEventListener("click", close);
+    saveBtn.addEventListener("click", () => {
+        void runButtonAction(saveBtn, async () => {
+            await chrome.bookmarks.update(node.id, {
+                title: nameInput.value.trim(),
+            });
+            close();
+            onSaved?.();
+        }, "Update bookmark name failed:");
+    });
+
+    requestAnimationFrame(() => nameInput.focus());
+
+    return form;
+}
+
 export function isAllowedBookmarkUrl(rawUrl: string) {
     try {
         const parsedUrl = new URL(rawUrl);
@@ -132,6 +188,7 @@ export function cycleBookmarks(
     forceExpandFolders = false,
     collapsedBookmarkFolders?: Set<string>,
     onToggle?: () => void,
+    tabSelection?: TabSelectionView,
 ) {
     const collapsedBookmarkFoldersSet = collapsedBookmarkFolders
         ? collapsedBookmarkFolders
@@ -149,11 +206,13 @@ export function cycleBookmarks(
                     forceExpandFolders,
                     collapsedBookmarkFolders,
                     onToggle,
+                    tabSelection,
                 );
             continue;
         }
 
         const nodeTitle = getBookmarkNodeTitle(node);
+        const isSelectionMode = tabSelection?.isSelectionMode() ?? false;
         const li = document.createElement("li");
         li.className = "tab-item";
 
@@ -186,6 +245,7 @@ export function cycleBookmarks(
 
             const row = document.createElement("div");
             row.className = "tab-row";
+            if (isSelectionMode) row.classList.add("tab-row--with-edit");
 
             const deleteBookmarkBtn = createDeleteButton(
                 "Delete bookmark",
@@ -193,8 +253,44 @@ export function cycleBookmarks(
                     await chrome.bookmarks.remove(node.id);
                 },
             );
-            row.append(btn, deleteBookmarkBtn);
+            let editBookmarkBtn: HTMLButtonElement | null = null;
+            if (isSelectionMode) {
+                editBookmarkBtn = document.createElement("button");
+                editBookmarkBtn.type = "button";
+                editBookmarkBtn.className = "row-icon-btn";
+                setButtonIcon(
+                    editBookmarkBtn,
+                    "edit",
+                    `Edit bookmark ${nodeTitle || node.url || "(untitled)"}. Available in select mode.`,
+                );
+                row.append(btn, editBookmarkBtn, deleteBookmarkBtn);
+            } else {
+                row.append(btn, deleteBookmarkBtn);
+            }
             li.appendChild(row);
+            let editForm: HTMLElement | null = null;
+            editBookmarkBtn?.addEventListener("click", () => {
+                if (!editBookmarkBtn) return;
+
+                if (editForm) {
+                    editForm.remove();
+                    editForm = null;
+                    editBookmarkBtn.classList.remove("is-selected");
+                    return;
+                }
+
+                editBookmarkBtn.classList.add("is-selected");
+                editForm = createBookmarkEditForm(
+                    node,
+                    nodeTitle || node.url || "(untitled)",
+                    onToggle,
+                    () => {
+                        editForm = null;
+                        editBookmarkBtn.classList.remove("is-selected");
+                    },
+                );
+                row.after(editForm);
+            });
             parentElement.appendChild(li);
             continue;
         }
@@ -220,6 +316,7 @@ export function cycleBookmarks(
 
         const row = document.createElement("div");
         row.className = "tree-row";
+        if (isSelectionMode) row.classList.add("tree-row--with-edit");
         const deleteFolderBtn = createDeleteButton(
             "Delete folder",
             async () => {
@@ -241,8 +338,44 @@ export function cycleBookmarks(
                 }
             },
         );
-        row.append(btn, deleteFolderBtn);
+        let editFolderBtn: HTMLButtonElement | null = null;
+        if (isSelectionMode) {
+            editFolderBtn = document.createElement("button");
+            editFolderBtn.type = "button";
+            editFolderBtn.className = "row-icon-btn";
+            setButtonIcon(
+                editFolderBtn,
+                "edit",
+                `Edit folder ${nodeTitle || "(untitled)"}. Available in select mode.`,
+            );
+            row.append(btn, editFolderBtn, deleteFolderBtn);
+        } else {
+            row.append(btn, deleteFolderBtn);
+        }
         li.appendChild(row);
+        let editForm: HTMLElement | null = null;
+        editFolderBtn?.addEventListener("click", () => {
+            if (!editFolderBtn) return;
+
+            if (editForm) {
+                editForm.remove();
+                editForm = null;
+                editFolderBtn.classList.remove("is-selected");
+                return;
+            }
+
+            editFolderBtn.classList.add("is-selected");
+            editForm = createBookmarkEditForm(
+                node,
+                nodeTitle || "(untitled)",
+                onToggle,
+                () => {
+                    editForm = null;
+                    editFolderBtn.classList.remove("is-selected");
+                },
+            );
+            row.after(editForm);
+        });
 
         if (hasChildren) {
             const nestedList = document.createElement("ul");
@@ -258,6 +391,7 @@ export function cycleBookmarks(
                     forceExpandFolders,
                     collapsedBookmarkFoldersSet,
                     onToggle,
+                    tabSelection,
                 );
             }
         }

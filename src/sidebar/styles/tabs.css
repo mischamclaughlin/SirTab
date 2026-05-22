@@ -14,11 +14,42 @@
     min-width: 0;
 }
 
+.tab-button.is-selecting {
+    grid-template-columns: 1rem 16px minmax(0, 1fr);
+}
+
+.tab-button.is-selected .tab-label {
+    background: var(--surface-light);
+    border-color: rgba(var(--blue-colour-RGB), 0.7);
+    color: var(--text);
+}
+
+.tab-select-box {
+    width: 1rem;
+    height: 1rem;
+    border: 1px solid var(--border-light);
+    border-radius: 0.25rem;
+    display: grid;
+    place-items: center;
+    color: var(--text);
+    font-size: 0.75rem;
+    line-height: 1;
+}
+
+.tab-button.is-selected .tab-select-box {
+    background: rgba(var(--blue-colour-RGB), 0.18);
+    border-color: rgba(var(--blue-colour-RGB), 0.7);
+}
+
 .tab-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.25rem;
     align-items: center;
+}
+
+.tab-row--with-edit {
+    grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .tab-row.is-dragging {

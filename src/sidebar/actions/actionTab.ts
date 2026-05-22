@@ -1,9 +1,11 @@
+import { setButtonIcon } from "../helpers/icons.js";
+
 export async function setupTabAction(
     actionBtnSection: HTMLElement,
 ): Promise<void> {
     const btnNewTab = document.createElement("button");
-    btnNewTab.textContent = "tab +";
     btnNewTab.className = "control";
+    setButtonIcon(btnNewTab, "tab", "Create tab");
     actionBtnSection.appendChild(btnNewTab);
 
     btnNewTab.addEventListener("click", async () => {

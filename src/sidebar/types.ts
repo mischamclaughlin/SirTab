@@ -36,6 +36,14 @@ export type RenderStaleCheck = () => boolean;
 export type RenderFn = (isStale: RenderStaleCheck) => Promise<void>;
 export type RequestRender = () => void;
 
+export type TabSelectionView = {
+    isSelectionMode: () => boolean;
+    isSelected: (tabId: number) => boolean;
+    toggleTab: (tabId: number) => void;
+    selectRange: (visibleTabIds: number[], targetTabId: number) => void;
+    getDragTabIds: (tabId: number) => number[];
+};
+
 export type BookmarkFolderChoice = {
     id: string;
     label: string;

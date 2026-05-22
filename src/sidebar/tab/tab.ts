@@ -1,4 +1,4 @@
-import type { RequestRender } from "../types.js";
+import type { RequestRender, TabSelectionView } from "../types.js";
 import { DEFAULT_TAB_ICON_URL } from "../config.js";
 import { createDeleteButton } from "../helpers/domFactory.js";
 import { makeTabDraggable } from "../helpers/dragAndDrop.js";
@@ -10,6 +10,8 @@ type TabRenderOptions = {
     windowId?: number;
     enableDragDrop?: boolean;
     requestRender?: RequestRender;
+    tabSelection?: TabSelectionView;
+    visibleTabIds?: number[];
 };
 
 export function cycleTabs(
@@ -20,6 +22,10 @@ export function cycleTabs(
         windowId,
         enableDragDrop = false,
         requestRender,
+        tabSelection,
+        visibleTabIds = tabList
+            .map((tab) => tab.id)
+            .filter((tabId): tabId is number => tabId != null),
     }: TabRenderOptions = {},
 ) {
     for (const tab of tabList) {
@@ -27,10 +33,16 @@ export function cycleTabs(
 
         const li = document.createElement("li");
         li.className = "tab-item";
+        li.dataset.tabId = String(tab.id);
 
         const btn = document.createElement("button");
         btn.className = grouped ? "tab-button tab-button--grouped" : "tab-button";
         btn.type = "button";
+        const isSelected = tabSelection?.isSelected(tab.id) ?? false;
+        const isSelectionMode = tabSelection?.isSelectionMode() ?? false;
+        btn.setAttribute("aria-pressed", String(isSelected));
+        if (isSelectionMode) btn.classList.add("is-selecting");
+        if (isSelected) btn.classList.add("is-selected");
 
         const icon = document.createElement("img");
         icon.className = "tab-icon";
@@ -50,9 +62,30 @@ export function cycleTabs(
         const text = title || tab.url || "(Untitled tab)";
         label.textContent = text;
 
+        if (isSelectionMode) {
+            const checkbox = document.createElement("span");
+            checkbox.className = "tab-select-box";
+            checkbox.setAttribute("aria-hidden", "true");
+            checkbox.textContent = isSelected ? "✓" : "";
+            btn.append(checkbox);
+        }
+
         btn.append(icon, label);
 
-        btn.addEventListener("click", async () => {
+        btn.addEventListener("click", async (event) => {
+            if (
+                tabSelection &&
+                (event.shiftKey || tabSelection.isSelectionMode())
+            ) {
+                event.preventDefault();
+                if (event.shiftKey) {
+                    tabSelection.selectRange(visibleTabIds, tab.id!);
+                } else {
+                    tabSelection.toggleTab(tab.id!);
+                }
+                return;
+            }
+
             await chrome.tabs.update(tab.id!, { active: true });
         });
 
@@ -72,6 +105,7 @@ export function cycleTabs(
                 tab.id,
                 () => enableDragDrop,
                 requestRender,
+                tabSelection?.getDragTabIds,
             );
         }
         li.appendChild(row);

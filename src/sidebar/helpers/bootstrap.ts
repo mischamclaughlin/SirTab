@@ -15,13 +15,53 @@ import { createEmptySearchState } from "./domFactory.js";
 import { createRenderScheduler } from "./renderScheduler.js";
 import { createActionPanelController } from "./actionPanel.js";
 import { setupSidebarDropZones } from "./dragAndDrop.js";
+import { matchesNodeQuery } from "./nodeSearch.js";
 
 import { setupGroupAction } from "../actions/actionGroup.js";
 import { setupBookmarkAction } from "../actions/actionBookmark.js";
 import { setupTabAction } from "../actions/actionTab.js";
 import { setupSettingAction } from "../actions/actionSetting.js";
+import { setupSelectAction } from "../actions/actionSelect.js";
 import { buildGroup, groupCollapse } from "../group/group.js";
 import { cycleBookmarks, filterBookmarkNodes } from "../bookmark/bookmark.js";
+import { createTabSelectionController } from "./tabSelection.js";
+
+function buildVisibleTabIds(
+    visibleUngroupedTabs: chrome.tabs.Tab[],
+    groups: chrome.tabGroups.TabGroup[],
+    tabsByGroup: Map<number, chrome.tabs.Tab[]>,
+    collapsedGroups: Set<string>,
+    isSearching: boolean,
+    searchQuery: string,
+) {
+    const visibleTabIds: number[] = [];
+    const pushTabId = (tab: chrome.tabs.Tab) => {
+        if (tab.id != null) visibleTabIds.push(tab.id);
+    };
+
+    visibleUngroupedTabs.forEach(pushTabId);
+
+    for (const group of groups) {
+        const groupId = group.id;
+        if (groupId == null) continue;
+        if (!isSearching && collapsedGroups.has(String(groupId))) continue;
+
+        const tabsInGroup = tabsByGroup.get(groupId) ?? [];
+        const groupTitleMatches = isSearching
+            ? matchesNodeQuery(group, searchQuery)
+            : false;
+        const visibleTabsInGroup = isSearching
+            ? groupTitleMatches
+                ? tabsInGroup
+                : tabsInGroup.filter((tab) =>
+                      matchesNodeQuery(tab, searchQuery),
+                  )
+            : tabsInGroup;
+        visibleTabsInGroup.forEach(pushTabId);
+    }
+
+    return visibleTabIds;
+}
 
 function getSidebarElements(): SidebarElements | null {
     const actions = document.getElementById("actions");
@@ -66,10 +106,15 @@ export async function bootstrapSidebar() {
     let requestTabGroupRefresh: RequestRender = () => {};
     let requestBookmarkRender: RequestRender = () => {};
     let requestBookmarkRefresh: RequestRender = () => {};
+    let updateSelectAction: RequestRender = () => {};
 
     let tabs: chrome.tabs.Tab[] = [];
     let groups: chrome.tabGroups.TabGroup[] = [];
     let bookmarkTree: chrome.bookmarks.BookmarkTreeNode[] = [];
+    const tabSelection = createTabSelectionController(() => {
+        requestTabGroupRender();
+        requestBookmarkRender();
+    });
 
     async function renderTabGroups(isStale: RenderStaleCheck) {
         await groupCollapse(groups, collapsedGroups);
@@ -80,6 +125,14 @@ export async function bootstrapSidebar() {
 
         const [visibleUngroupedTabs, tabsByGroup, isSearching] =
             buildTabSearchState(tabs, searchQuery);
+        const visibleTabIds = buildVisibleTabIds(
+            visibleUngroupedTabs,
+            groups,
+            tabsByGroup,
+            collapsedGroups,
+            isSearching,
+            searchQuery,
+        );
 
         const nextTabs = document.createElement("ul");
         cycleTabs(nextTabs, visibleUngroupedTabs, {
@@ -87,6 +140,8 @@ export async function bootstrapSidebar() {
             windowId: currentWindowId,
             enableDragDrop,
             requestRender: requestTabGroupRefresh,
+            tabSelection,
+            visibleTabIds,
         });
         elements.tabsList.replaceChildren(...Array.from(nextTabs.children));
 
@@ -102,8 +157,11 @@ export async function bootstrapSidebar() {
             currentWindowId,
             requestTabGroupRefresh,
             enableDragDrop,
+            tabSelection,
+            visibleTabIds,
         );
         elements.groupsList.replaceChildren(...Array.from(nextGroups.children));
+        updateSelectAction();
     }
 
     async function renderBookmarks(_isStale: RenderStaleCheck) {
@@ -118,7 +176,8 @@ export async function bootstrapSidebar() {
             bookmarkNodes,
             isSearching,
             collapsedBookmarkFolders,
-            requestBookmarkRender,
+            requestBookmarkRefresh,
+            tabSelection,
         );
         if (isSearching && nextBookmarks.childElementCount === 0) {
             nextBookmarks.appendChild(
@@ -134,6 +193,11 @@ export async function bootstrapSidebar() {
     requestBookmarkRender = createRenderScheduler(renderBookmarks);
     requestTabGroupRefresh = createRenderScheduler(async (isStale) => {
         [tabs, groups] = await loadTabAndGroupData(currentWindowId);
+        tabSelection.prune(
+            tabs
+                .map((tab) => tab.id)
+                .filter((tabId): tabId is number => tabId != null),
+        );
         if (isStale()) return;
         await renderTabGroups(isStale);
     });
@@ -170,6 +234,12 @@ export async function bootstrapSidebar() {
         actionPanelController,
     );
     await setupTabAction(elements.actionBtnSection);
+    updateSelectAction = setupSelectAction(
+        elements.actionBtnSection,
+        actionPanelController,
+        tabSelection,
+        requestTabGroupRefresh,
+    );
     await loadThemePreference();
     await setupSettingAction(elements.settings);
 
@@ -194,6 +264,11 @@ export async function bootstrapSidebar() {
     setupEventListeners(currentWindowId, {
         requestTabGroupRefresh,
         requestBookmarkRefresh,
+    });
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || !tabSelection.isSelectionMode()) return;
+        tabSelection.clear();
     });
 
     requestRender();
