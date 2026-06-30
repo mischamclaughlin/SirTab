@@ -20,12 +20,81 @@ type DragEnabledCheck = () => boolean;
 
 const DRAG_DATA_MIME = "application/x-sirtab-drag";
 const NO_GROUP_ID = chrome.tabGroups.TAB_GROUP_ID_NONE;
+const AUTO_SCROLL_EDGE_PX = 72;
+const AUTO_SCROLL_MAX_STEP_PX = 18;
 
 let activeDropIndicator:
     | { element: HTMLElement; className: string }
     | null = null;
 let activeDragElement: HTMLElement | null = null;
 let activeDragPayload: DragPayload | null = null;
+let activeAutoScrollClientY: number | null = null;
+let activeAutoScrollFrame: number | null = null;
+
+function getScrollRoot() {
+    return document.scrollingElement ?? document.documentElement;
+}
+
+function getAutoScrollStep(clientY: number) {
+    if (clientY < AUTO_SCROLL_EDGE_PX) {
+        const ratio = (AUTO_SCROLL_EDGE_PX - clientY) / AUTO_SCROLL_EDGE_PX;
+        return -Math.ceil(ratio * AUTO_SCROLL_MAX_STEP_PX);
+    }
+
+    const bottomEdge = window.innerHeight - AUTO_SCROLL_EDGE_PX;
+    if (clientY > bottomEdge) {
+        const ratio = (clientY - bottomEdge) / AUTO_SCROLL_EDGE_PX;
+        return Math.ceil(ratio * AUTO_SCROLL_MAX_STEP_PX);
+    }
+
+    return 0;
+}
+
+function stopAutoScroll() {
+    activeAutoScrollClientY = null;
+    if (activeAutoScrollFrame == null) return;
+
+    cancelAnimationFrame(activeAutoScrollFrame);
+    activeAutoScrollFrame = null;
+}
+
+function stepAutoScroll() {
+    if (activeAutoScrollClientY == null) {
+        activeAutoScrollFrame = null;
+        return;
+    }
+
+    const scrollRoot = getScrollRoot();
+    const scrollStep = getAutoScrollStep(activeAutoScrollClientY);
+    const maxScrollTop = Math.max(
+        0,
+        scrollRoot.scrollHeight - scrollRoot.clientHeight,
+    );
+    const nextScrollTop = Math.min(
+        maxScrollTop,
+        Math.max(0, scrollRoot.scrollTop + scrollStep),
+    );
+
+    if (scrollStep === 0 || nextScrollTop === scrollRoot.scrollTop) {
+        activeAutoScrollFrame = null;
+        return;
+    }
+
+    scrollRoot.scrollTop = nextScrollTop;
+    activeAutoScrollFrame = requestAnimationFrame(stepAutoScroll);
+}
+
+function updateAutoScroll(event: DragEvent) {
+    activeAutoScrollClientY = event.clientY;
+    if (getAutoScrollStep(event.clientY) === 0) {
+        stopAutoScroll();
+        return;
+    }
+
+    if (activeAutoScrollFrame == null) {
+        activeAutoScrollFrame = requestAnimationFrame(stepAutoScroll);
+    }
+}
 
 function clearDropIndicator() {
     if (!activeDropIndicator) return;
@@ -59,6 +128,7 @@ function setDragElement(element: HTMLElement) {
 }
 
 function clearDragState() {
+    stopAutoScroll();
     clearDropIndicator();
     clearDragElement();
     activeDragPayload = null;
@@ -154,6 +224,67 @@ async function moveTabRelativeToTab(
 
     await setTabGroup(sourceTabId, getTabGroupId(targetTab));
     await moveStoredTabRelative(windowId, sourceTabId, targetTabId, position);
+}
+
+async function moveTabsRelativeToTab(
+    windowId: number,
+    sourceTabIds: number[],
+    targetTabId: number,
+    position: DropPosition,
+) {
+    const sourceIdSet = new Set(sourceTabIds);
+    if (sourceIdSet.has(targetTabId)) return;
+
+    const { tabs } = await loadLogicalTabGroupData(windowId);
+    const targetTab = tabs.find((tab) => tab.id === targetTabId);
+    if (targetTab?.id == null) return;
+
+    const orderedSourceTabIds = tabs
+        .map((tab) => tab.id)
+        .filter(
+            (tabId): tabId is number =>
+                tabId != null && sourceIdSet.has(tabId),
+        );
+    if (orderedSourceTabIds.length === 0) return;
+    if (orderedSourceTabIds.length === 1) {
+        await moveTabRelativeToTab(
+            windowId,
+            orderedSourceTabIds[0],
+            targetTabId,
+            position,
+        );
+        return;
+    }
+
+    const targetGroupId = getTabGroupId(targetTab);
+    for (const sourceTabId of orderedSourceTabIds) {
+        await setTabGroup(sourceTabId, targetGroupId);
+    }
+
+    if (position === "after") {
+        let previousTargetTabId = targetTabId;
+        for (const sourceTabId of orderedSourceTabIds) {
+            await moveStoredTabRelative(
+                windowId,
+                sourceTabId,
+                previousTargetTabId,
+                "after",
+            );
+            previousTargetTabId = sourceTabId;
+        }
+        return;
+    }
+
+    let nextTargetTabId = targetTabId;
+    for (const sourceTabId of [...orderedSourceTabIds].reverse()) {
+        await moveStoredTabRelative(
+            windowId,
+            sourceTabId,
+            nextTargetTabId,
+            "before",
+        );
+        nextTargetTabId = sourceTabId;
+    }
 }
 
 async function moveTabToGroup(
@@ -349,6 +480,7 @@ export function setupSidebarDropZones(
         const payload = getEnabledPayload(event, isDragEnabled);
         if (!payload || payload.kind !== "tabs") return;
 
+        updateAutoScroll(event);
         event.preventDefault();
         if (event.dataTransfer) {
             event.dataTransfer.dropEffect = "move";
@@ -375,6 +507,7 @@ export function setupSidebarDropZones(
         const payload = getEnabledPayload(event, isDragEnabled);
         if (!payload || payload.kind !== "group") return;
 
+        updateAutoScroll(event);
         event.preventDefault();
         if (event.dataTransfer) {
             event.dataTransfer.dropEffect = "move";
@@ -428,11 +561,8 @@ export function makeTabDraggable(
     row.addEventListener("dragover", (event) => {
         const payload = getEnabledPayload(event, isDragEnabled);
         if (!payload) return;
-        if (
-            payload.kind !== "tabs" ||
-            payload.ids.length !== 1 ||
-            payload.ids[0] === tabId
-        ) {
+        updateAutoScroll(event);
+        if (payload.kind !== "tabs" || payload.ids.includes(tabId)) {
             return;
         }
 
@@ -448,11 +578,7 @@ export function makeTabDraggable(
     row.addEventListener("drop", (event) => {
         const payload = getEnabledPayload(event, isDragEnabled);
         if (!payload) return;
-        if (
-            payload.kind !== "tabs" ||
-            payload.ids.length !== 1 ||
-            payload.ids[0] === tabId
-        ) {
+        if (payload.kind !== "tabs" || payload.ids.includes(tabId)) {
             return;
         }
 
@@ -460,9 +586,9 @@ export function makeTabDraggable(
         const position = getDropPosition(event, row);
 
         void runDropAction(async () => {
-            await moveTabRelativeToTab(
+            await moveTabsRelativeToTab(
                 windowId,
-                payload.ids[0],
+                payload.ids,
                 tabId,
                 position,
             );
@@ -498,6 +624,7 @@ export function makeGroupDraggable(
     row.addEventListener("dragover", (event) => {
         const payload = getEnabledPayload(event, isDragEnabled);
         if (!payload) return;
+        updateAutoScroll(event);
         if (payload.kind === "group" && payload.id === groupId) return;
 
         event.preventDefault();

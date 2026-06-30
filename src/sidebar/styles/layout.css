@@ -42,6 +42,20 @@ body {
     border-bottom: 1px solid var(--border);
 }
 
+#tabs-list.drop-append,
+#groups-list.drop-append {
+    border-bottom-color: rgba(var(--blue-colour-RGB), 0.85);
+}
+
+#tabs-list.drop-append::after,
+#groups-list.drop-append::after {
+    content: "";
+    display: block;
+    min-height: 0.75rem;
+    border: 1px dashed rgba(var(--blue-colour-RGB), 0.6);
+    border-radius: 0.25rem;
+}
+
 #settings {
     width: 100%;
     margin-top: auto;
