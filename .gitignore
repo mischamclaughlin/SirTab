@@ -1,3 +1,11 @@
 dist/
 node_modules/
 .vscode/
+
+# Chrome Web Store submission drafts and upload artifacts
+docs/chrome-web-store-listing.md
+docs/privacy-policy.md
+webstore/
+store-assets/
+*.crx
+*.zip
