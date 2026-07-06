@@ -87,12 +87,12 @@
 
 .tab-button:hover .tab-label,
 .tab-button:focus-visible .tab-label {
-    background: var(--surface-light);
+    background: var(--surface);
     color: var(--subtext);
 }
 
 .tab-label.is-current {
-    background: var(--surface);
+    background: var(--surface-light);
     border-color: var(--border);
     color: var(--text);
 }
