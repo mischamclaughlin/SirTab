@@ -63,15 +63,23 @@
     display: none;
 }
 
+.theme-settings {
+    display: grid;
+    gap: 0.5rem;
+}
+
 .theme-options {
     width: 100%;
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.5rem;
 }
 
 .theme-option {
-    text-align: left;
+    min-height: 2.25rem;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+    text-align: center;
 }
 
 .theme-option.is-selected {

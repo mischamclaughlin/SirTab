@@ -145,11 +145,15 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
     shortcutPromptActions.append(shortcutPromptSetBtn, shortcutPromptDismissBtn);
     shortcutPrompt.append(shortcutPromptText, shortcutPromptActions);
 
-    const themeOptions = document.createElement("div");
-    themeOptions.className = "theme-options";
+    const themeSection = document.createElement("div");
+    themeSection.className = "theme-settings";
+
     const themeHeading = document.createElement("h2");
     themeHeading.className = "setting-heading";
     themeHeading.textContent = "theme";
+
+    const themeOptions = document.createElement("div");
+    themeOptions.className = "theme-options";
 
     const themeLabels: Record<SidebarTheme, string> = {
         dark: "dark",
@@ -259,7 +263,8 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
     shortcutActions.append(openShortcutsBtn, refreshShortcutsBtn);
     shortcutSection.append(shortcutHeading, shortcutList, shortcutActions);
 
-    settingInfoSection.append(shortcutSection, themeHeading, themeOptions);
+    themeSection.append(themeHeading, themeOptions);
+    settingInfoSection.append(shortcutSection, themeSection);
 
     let isSettingOpen = false;
 
