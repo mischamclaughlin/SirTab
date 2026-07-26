@@ -5,8 +5,9 @@
     },
     "scripts": {
         "build": "node scripts/copy-static.mjs --clean && tsc",
-        "test": "npm run test:order",
-        "test:order": "npm run build && node tests/order.test.mjs",
+        "test": "npm run build && node --test",
+        "test:coverage": "npm run build && node --experimental-test-coverage --test-coverage-include=\"dist/**/*.js\" --test",
+        "test:order": "npm run build && node --test tests/order.test.mjs",
         "watch": "node scripts/watch.mjs",
         "watch:static": "node scripts/watch-static.mjs",
         "watch:ts": "tsc --watch --preserveWatchOutput"

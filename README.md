@@ -50,6 +50,18 @@ npm run build
 
 Load the generated `dist/` directory as an unpacked extension in Chrome.
 
+Run the automated behavioural tests:
+
+```bash
+npm test
+```
+
+Generate a coverage report for the modules exercised by the tests:
+
+```bash
+npm run test:coverage
+```
+
 > Not submitted to the Webstore yet, using and testing first.
 >
 > Works Best, with Brave using sidetabs and having them hidden.
