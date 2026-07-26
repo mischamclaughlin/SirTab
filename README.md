@@ -48,7 +48,7 @@ npm install
 npm run build
 ```
 
-Load the generated `dist/` directory as an unpacked extension in Chrome.
+> Load the generated dist/ directory as an unpacked extension in Chrome 141+ or a compatible Chromium-based browser such as Brave
 
 Run the automated behavioural tests:
 
