@@ -110,6 +110,35 @@ test("bookmark filtering retains ancestors and only matching descendants", () =>
     assert.strictEqual(filterBookmarkNodes(tree, ""), tree);
 });
 
+test("bookmark filtering expands a folder-name match with all descendants", () => {
+    const tree = [
+        {
+            id: "work",
+            title: "Work",
+            children: [
+                {
+                    id: "cloudflare",
+                    title: "Cloudflare dashboard",
+                    url: "https://dash.cloudflare.com",
+                },
+                {
+                    id: "reference",
+                    title: "Reference",
+                    children: [
+                        {
+                            id: "docs",
+                            title: "MDN",
+                            url: "https://developer.mozilla.org",
+                        },
+                    ],
+                },
+            ],
+        },
+    ];
+
+    assert.deepEqual(filterBookmarkNodes(tree, "work"), tree);
+});
+
 test("removing a folder clears its entire subtree from collapse state", () => {
     const collapsed = new Set(["folder", "nested", "leaf-folder", "other"]);
     const folder = {

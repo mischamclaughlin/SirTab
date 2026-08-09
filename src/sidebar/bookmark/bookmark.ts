@@ -175,7 +175,7 @@ export function filterBookmarkNodes(
 
         filteredNodes.push({
             ...node,
-            children: filteredChildren,
+            children: matchesSelf ? node.children : filteredChildren,
         });
     }
 
