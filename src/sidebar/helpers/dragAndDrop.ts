@@ -51,23 +51,31 @@ export function deferRenderUntilDragSettles(requestRender: RequestRender) {
 }
 
 function getScrollRoot() {
-    return document.scrollingElement ?? document.documentElement;
+    return document.getElementById("sidebar-content") ??
+        document.scrollingElement ?? document.documentElement;
 }
 
 function getAutoScrollStep(clientY: number) {
-    if (clientY < AUTO_SCROLL_EDGE_PX) {
+    const contentBounds = document.getElementById("sidebar-content")
+        ?.getBoundingClientRect();
+    const top = contentBounds?.top ?? 0;
+    const bottom = contentBounds?.bottom ?? window.innerHeight;
+    const edge = Math.min(AUTO_SCROLL_EDGE_PX, (bottom - top) / 2);
+    if (edge <= 0 || clientY < top || clientY > bottom) return 0;
+
+    if (clientY < top + edge) {
         const ratio = Math.min(
             1,
-            (AUTO_SCROLL_EDGE_PX - clientY) / AUTO_SCROLL_EDGE_PX,
+            (top + edge - clientY) / edge,
         );
         return -Math.ceil(ratio * AUTO_SCROLL_MAX_STEP_PX);
     }
 
-    const bottomEdge = window.innerHeight - AUTO_SCROLL_EDGE_PX;
+    const bottomEdge = bottom - edge;
     if (clientY > bottomEdge) {
         const ratio = Math.min(
             1,
-            (clientY - bottomEdge) / AUTO_SCROLL_EDGE_PX,
+            (clientY - bottomEdge) / edge,
         );
         return Math.ceil(ratio * AUTO_SCROLL_MAX_STEP_PX);
     }

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="../dist/sidebar/sidebar.css">
+</head>
+<body>
+  <output id="result">RUNNING</output>
+  <main id="sidebar-content">
+    <ul id="tabs-list"></ul>
+    <ul id="groups-list"></ul>
+    <ul id="bookmarks-list"></ul>
+  </main>
+  <script>
+    const lists = [
+      document.getElementById('tabs-list'),
+      document.getElementById('groups-list'),
+      document.getElementById('bookmarks-list'),
+    ];
+    const item = (className) => {
+      const node = document.createElement('li');
+      node.className = className;
+      return node;
+    };
+    const cases = [
+      { name: 'empty', children: [null, null, null], lines: [0, 0] },
+      { name: 'tabs only', children: ['tab-item', null, null], lines: [0, 0] },
+      { name: 'groups only', children: [null, 'group-item', null], lines: [0, 0] },
+      { name: 'bookmarks only', children: [null, null, 'tab-item'], lines: [0, 0] },
+      { name: 'tabs and groups', children: ['tab-item', 'group-item', null], lines: [1, 0] },
+      { name: 'tabs and bookmarks', children: ['tab-item', null, 'tab-item'], lines: [1, 0] },
+      { name: 'groups and bookmarks', children: [null, 'group-item', 'tab-item'], lines: [0, 1] },
+      { name: 'all sections', children: ['tab-item', 'group-item', 'tab-item'], lines: [1, 1] },
+      { name: 'empty group result', children: ['tab-item', 'empty-search-state-message', 'tab-item'], lines: [1, 0] },
+      { name: 'empty bookmark result', children: ['tab-item', null, 'empty-search-state-message'], lines: [0, 0] },
+    ];
+    try {
+      for (const scenario of cases) {
+        lists.forEach((list, index) => list.replaceChildren(
+          ...(scenario.children[index] ? [item(scenario.children[index])] : []),
+        ));
+        const actual = lists.slice(0, 2).map((list) =>
+          Number.parseFloat(getComputedStyle(list).borderBottomWidth),
+        );
+        if (actual.some((width, index) => width !== scenario.lines[index])) {
+          throw new Error(`${scenario.name}: expected ${scenario.lines}, got ${actual}`);
+        }
+      }
+      lists.forEach((list) => list.replaceChildren());
+      lists[0].classList.add('drop-append');
+      if (Number.parseFloat(getComputedStyle(lists[0]).borderBottomWidth) !== 1) {
+        throw new Error('drag append marker lost its bottom line');
+      }
+      document.getElementById('result').textContent = 'PASS';
+    } catch (error) {
+      document.getElementById('result').textContent = `FAIL: ${error.message}`;
+    }
+  </script>
+</body>
+</html>

@@ -29,7 +29,8 @@ const server = createServer(async (request, response) => {
         const contents = await readFile(file);
         response.setHeader(
             "Content-Type",
-            file.endsWith(".js") ? "text/javascript" : "text/html",
+            file.endsWith(".js") ? "text/javascript" :
+                file.endsWith(".css") ? "text/css" : "text/html",
         );
         response.end(contents);
     } catch {
@@ -61,7 +62,9 @@ try {
     let output = "";
     let errors = "";
     const result = await new Promise((resolve, reject) => {
-        timeout = setTimeout(() => reject(new Error("Browser test timed out")), 30000);
+        timeout = setTimeout(() => reject(new Error(
+            `Browser test timed out: ${output.slice(-1200)} ${errors.slice(-600)}`,
+        )), 30000);
         child.on("error", reject);
         child.stdout.on("data", (chunk) => {
             output += chunk;

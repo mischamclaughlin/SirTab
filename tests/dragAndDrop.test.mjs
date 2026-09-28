@@ -52,6 +52,7 @@ class FakeElement {
 
 globalThis.Element = FakeElement;
 globalThis.document = new FakeElement();
+document.getElementById = () => null;
 document.scrollingElement = { scrollTop: 0, scrollHeight: 1000, clientHeight: 500 };
 let hitTarget = null;
 document.elementFromPoint = () => hitTarget;

@@ -1,6 +1,6 @@
 .setting-info-section {
     width: 100%;
-    grid-column: 1 / -1;
+    min-height: 0;
     border: 1px solid var(--border);
     border-radius: 0.25rem;
     padding: 0.5rem;
@@ -8,6 +8,7 @@
     grid-template-columns: 1fr;
     gap: 0.5rem;
     color: var(--subtext);
+    overflow-y: auto;
 }
 
 .shortcut-prompt {

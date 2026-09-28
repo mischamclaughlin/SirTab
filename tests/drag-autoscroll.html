@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="../dist/sidebar/sidebar.css">
   <style>
-    body { width: 300px; min-height: 0; }
+    body { width: 300px; }
     #tabs-list { display: block; }
     .tab-row { height: 38px; }
     .tab-button { width: 100%; height: 100%; }
@@ -14,8 +14,27 @@
 </head>
 <body>
   <output id="result">RUNNING</output>
-  <ul id="tabs-list"></ul>
-  <ul id="groups-list"></ul>
+  <div id="actions">
+    <input class="search-input" aria-label="Search tabs and bookmarks" placeholder="search tabs and bookmarks">
+    <div class="action-controls">
+      <button class="control">Group</button><button class="control">Save</button>
+      <button class="control">Tab</button><button class="control">Select</button>
+    </div>
+  </div>
+  <main id="sidebar-content">
+    <ul id="tabs-list"></ul>
+    <ul id="groups-list"></ul>
+    <ul id="bookmarks-list"></ul>
+  </main>
+  <div id="settings"><button class="control settings-btn">settings</button></div>
+  <script>
+    addEventListener('error', (event) => {
+      document.getElementById('result').textContent = `FAIL: ${event.message}`;
+    });
+    addEventListener('unhandledrejection', (event) => {
+      document.getElementById('result').textContent = `FAIL: ${event.reason}`;
+    });
+  </script>
   <script type="module">
     globalThis.chrome = { tabGroups: { TAB_GROUP_ID_NONE: -1 } };
     // Step frames explicitly so the pointer remains over a valid row while the
@@ -40,13 +59,33 @@
       makeTabDraggable(button, row, 1, id, () => true, () => {});
     }
     setupSidebarDropZones(list, document.getElementById('groups-list'), 1, () => true, () => {});
+    const content = document.getElementById('sidebar-content');
+    const header = document.getElementById('actions');
+    const footer = document.getElementById('settings');
+    const settingsButton = footer.querySelector('button');
+    const actionControls = header.querySelector('.action-controls');
+    const searchHeight = header.querySelector('.search-input').getBoundingClientRect().height;
+    const controlsMatchSearch = [...actionControls.querySelectorAll('button'), settingsButton]
+      .every((button) => button.getBoundingClientRect().height === searchHeight);
+    const headerTop = header.getBoundingClientRect().top;
+    const actionControlsBottom = actionControls.getBoundingClientRect().bottom;
+    const headerBottom = header.getBoundingClientRect().bottom;
+    const footerBottom = footer.getBoundingClientRect().bottom;
+    const settingsButtonBottom = settingsButton.getBoundingClientRect().bottom;
+    const edgeClearance = headerTop >= 7 && headerTop <= 10 &&
+      headerBottom - actionControlsBottom >= 7 &&
+      innerHeight - footerBottom >= 7 &&
+      innerHeight - settingsButtonBottom >= 11 &&
+      innerHeight - settingsButtonBottom <= 14;
     const source = list.querySelector('.tab-button');
     source.dispatchEvent(new DragEvent('dragstart', {
-      bubbles: true, dataTransfer: new DataTransfer(), clientX: 60, clientY: 22,
+      bubbles: true, dataTransfer: new DataTransfer(), clientX: 60,
+      clientY: source.getBoundingClientRect().top + 10,
     }));
-    const pointerY = innerHeight - 12;
+    const pointerY = content.getBoundingClientRect().bottom - 12;
     const pointerX = 80;
     const initial = document.elementFromPoint(pointerX, pointerY);
+    if (!initial) throw new Error(`no hit at ${pointerX},${pointerY}; content=${JSON.stringify(content.getBoundingClientRect().toJSON())}; viewport=${innerWidth}x${innerHeight}`);
     initial.dispatchEvent(new DragEvent('dragover', {
       bubbles: true, dataTransfer: new DataTransfer(), clientX: pointerX, clientY: pointerY,
     }));
@@ -54,10 +93,24 @@
     for (let frame = 0; frame < 8; frame++) frames.shift()?.();
     const underPointer = document.elementFromPoint(pointerX, pointerY)?.closest('.tab-row');
     const marked = document.querySelector('.drop-before, .drop-after');
-    const passed = document.scrollingElement.scrollTop > 0 &&
+    const scrollsBetweenBars = content.scrollTop > 0 &&
+      document.scrollingElement.scrollTop === 0 &&
+      header.getBoundingClientRect().top === headerTop &&
+      footer.getBoundingClientRect().bottom === footerBottom;
+    const panel = document.createElement('div');
+    panel.className = 'setting-info-section';
+    for (let item = 0; item < 40; item++) {
+      const line = document.createElement('p');
+      line.textContent = `Setting ${item}`;
+      panel.append(line);
+    }
+    footer.insertBefore(panel, settingsButton);
+    const settingsScrolls = panel.scrollHeight > panel.clientHeight &&
+      settingsButton.getBoundingClientRect().bottom === settingsButtonBottom;
+    const passed = controlsMatchSearch && edgeClearance && scrollsBetweenBars && settingsScrolls &&
       underPointer && marked === underPointer && marked !== firstMarked;
     document.getElementById('result').textContent = passed
-      ? 'PASS' : `FAIL: scroll=${document.scrollingElement.scrollTop}, marker=${marked?.textContent}, under=${underPointer?.textContent}`;
+      ? 'PASS' : `FAIL: heights=${controlsMatchSearch} (${searchHeight}, ${[...actionControls.querySelectorAll('button'), settingsButton].map((button) => button.getBoundingClientRect().height)}), edges=${edgeClearance} (${headerTop}, ${headerBottom - actionControlsBottom}, ${innerHeight - footerBottom}, ${innerHeight - settingsButtonBottom}), scroll=${content.scrollTop}, bars=${scrollsBetweenBars}, settings=${settingsScrolls} (${panel.scrollHeight}, ${panel.clientHeight}, ${settingsButton.getBoundingClientRect().bottom - settingsButtonBottom}), marker=${marked?.textContent}, under=${underPointer?.textContent}`;
   </script>
 </body>
 </html>

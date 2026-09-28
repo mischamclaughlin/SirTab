@@ -7,9 +7,9 @@
 @import "./styles/settings.css";
 
 * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 button,
@@ -18,85 +18,91 @@ select,
 textarea,
 option,
 optgroup {
-    font: inherit;
-    font-family: var(--sidebar-font-family);
+  font: inherit;
+  font-family: var(--sidebar-font-family);
 }
 
 .control {
-    min-width: 0;
-    border: 1px solid var(--border-light);
-    border-radius: 0.25rem;
-    background: transparent;
-    color: var(--subtext);
-    padding: 0.25rem;
-    font-variant-ligatures: none;
-    cursor: pointer;
-    transition:
-        border-color 150ms ease-in-out,
-        background 200ms ease-in-out;
+  min-width: 0;
+  border: 1px solid var(--border-light);
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--subtext);
+  padding: 0.25rem;
+  font-variant-ligatures: none;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease-in-out,
+    background 200ms ease-in-out;
 }
 
 button.control {
-    display: grid;
-    place-items: center;
-    min-height: 2rem;
+  display: grid;
+  place-items: center;
+  min-height: 1.5rem;
+}
+
+.search-input,
+.action-controls > .control,
+#settings > .settings-btn {
+  height: 1.5rem;
 }
 
 .control-icon {
-    width: 1.25rem;
-    height: 1.25rem;
-    display: block;
-    fill: currentColor;
+  width: 1rem;
+  height: 1rem;
+  display: block;
+  fill: currentColor;
 }
 
 :where(button, select).control {
-    cursor: pointer;
+  cursor: pointer;
 }
 
 :where(button, select).control:hover {
-    background: var(--surface);
-    border-color: var(--border);
+  background: var(--surface);
+  border-color: var(--border);
 }
 
 .control.is-selected {
-    background: var(--surface-light);
-    border-color: var(--border);
-    color: var(--text);
+  background: var(--surface-light);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 :where(button, input, select):focus-visible {
-    outline: none;
-    border-color: var(--border-light);
-    box-shadow: 0 0 0 2px rgba(var(--blue-colour-RGB), 0.25);
+  outline: none;
+  border-color: var(--border-light);
+  box-shadow: 0 0 0 2px rgba(var(--blue-colour-RGB), 0.25);
 }
 
 [draggable="true"] {
-    cursor: grab;
+  cursor: grab;
 }
 
 [draggable="true"]:active {
-    cursor: grabbing;
+  cursor: grabbing;
 }
 
 [hidden] {
-    display: none !important;
+  display: none !important;
 }
 
 .row-delete-btn {
-    border: 1px solid var(--border-faded);
-    border-radius: 0.25rem;
-    background: transparent;
-    color: var(--subtext);
-    cursor: pointer;
-    display: grid;
-    place-items: center;
-    padding: 0.25rem;
-    font-size: 0.85rem;
-    font-weight: 600;
+  border: 1px solid var(--border-faded);
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--subtext);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .row-delete-btn:hover {
-    border-color: var(--red);
-    color: var(--text);
-    background: var(--red);
+  border-color: var(--red);
+  color: var(--text);
+  background: var(--red);
 }

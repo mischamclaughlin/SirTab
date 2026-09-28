@@ -1,97 +1,97 @@
 .search-input {
-    width: 100%;
-    border: 1px solid var(--border-light);
-    border-radius: 0.25rem;
-    background: transparent;
-    color: var(--subtext);
-    padding: 0.25rem 0.5rem;
-    font-variant-ligatures: none;
-    caret-color: var(--text);
+  width: 100%;
+  border: 1px solid var(--border-light);
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--subtext);
+  padding: 0.25rem 0.5rem;
+  font-variant-ligatures: none;
+  caret-color: var(--text);
 }
 
 .search-input:focus-visible {
-    background: var(--surface-light);
-    color: var(--text);
+  background: var(--surface-light);
+  color: var(--text);
 }
 
 .action-controls {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0.25rem;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.25rem;
 }
 
 .action-panel,
 .action-form {
-    display: grid;
-    gap: 0.5rem;
+  display: grid;
+  gap: 0.5rem;
 }
 
 .action-panel:empty {
-    display: none;
+  display: none;
 }
 
 .selection-actions {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    gap: 0.25rem;
-    align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.25rem;
+  align-items: center;
 }
 
 .selection-summary {
-    min-width: 0;
-    color: var(--subsubtext);
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    font-size: 0.85rem;
+  min-width: 0;
+  color: var(--subsubtext);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.85rem;
 }
 
 .selection-delete:hover:not(:disabled) {
-    background: var(--red);
-    border-color: var(--red);
-    color: var(--text);
+  background: var(--red);
+  border-color: var(--red);
+  color: var(--text);
 }
 
 .action-toggle {
-    border: 1px solid var(--border-light);
-    border-radius: 0.25rem;
-    background: transparent;
-    color: var(--subtext);
-    padding: 0.25rem;
-    font-variant-ligatures: none;
-    cursor: pointer;
-    display: grid;
-    place-items: center;
-    min-height: 2rem;
+  border: 1px solid var(--border-light);
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--subtext);
+  padding: 0.25rem;
+  font-variant-ligatures: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  min-height: 2rem;
 }
 
 .action-toggle.is-selected {
-    background: var(--surface-light);
-    border-color: var(--border);
-    color: var(--text);
+  background: var(--surface-light);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 .info-dropdown {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, auto) auto;
-    gap: 0.25rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) auto;
+  gap: 0.25rem;
 }
 
 .empty-search-state-message {
-    list-style: none;
-    border: 1px dashed var(--border-faded);
-    border-radius: 0.25rem;
-    color: var(--subsubtext);
-    padding: 0.25rem 0.5rem;
+  list-style: none;
+  border: 1px dashed var(--border-faded);
+  border-radius: 0.25rem;
+  color: var(--subsubtext);
+  padding: 0.25rem 0.5rem;
 }
 
 @media (max-width: 320px) {
-    .selection-actions {
-        grid-template-columns: 1fr;
-    }
+  .selection-actions {
+    grid-template-columns: 1fr;
+  }
 
-    .info-dropdown {
-        grid-template-columns: 1fr;
-    }
+  .info-dropdown {
+    grid-template-columns: 1fr;
+  }
 }
