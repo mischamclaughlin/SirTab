@@ -14,8 +14,12 @@ import { loadCollapse } from "./collapseState.js";
 import { createEmptySearchState } from "./domFactory.js";
 import { createRenderScheduler } from "./renderScheduler.js";
 import { createActionPanelController } from "./actionPanel.js";
-import { setupSidebarDropZones } from "./dragAndDrop.js";
+import {
+    deferRenderUntilDragSettles,
+    setupSidebarDropZones,
+} from "./dragAndDrop.js";
 import { matchesNodeQuery } from "./nodeSearch.js";
+import { replaceListsPreservingInteraction } from "./preserveInteraction.js";
 
 import { setupGroupAction } from "../actions/actionGroup.js";
 import { setupBookmarkAction } from "../actions/actionBookmark.js";
@@ -143,8 +147,6 @@ export async function bootstrapSidebar() {
             tabSelection,
             visibleTabIds,
         });
-        elements.tabsList.replaceChildren(...Array.from(nextTabs.children));
-
         const nextGroups = document.createElement("ul");
         buildGroup(
             visibleUngroupedTabs.length > 0,
@@ -160,7 +162,11 @@ export async function bootstrapSidebar() {
             tabSelection,
             visibleTabIds,
         );
-        elements.groupsList.replaceChildren(...Array.from(nextGroups.children));
+        if (deferRenderUntilDragSettles(requestTabGroupRefresh)) return;
+        replaceListsPreservingInteraction([
+            { host: elements.tabsList, next: nextTabs },
+            { host: elements.groupsList, next: nextGroups },
+        ]);
         updateSelectAction();
     }
 
@@ -184,9 +190,9 @@ export async function bootstrapSidebar() {
                 createEmptySearchState("No matching bookmarks."),
             );
         }
-        elements.bookmarksList.replaceChildren(
-            ...Array.from(nextBookmarks.children),
-        );
+        replaceListsPreservingInteraction([
+            { host: elements.bookmarksList, next: nextBookmarks },
+        ]);
     }
 
     requestTabGroupRender = createRenderScheduler(renderTabGroups);

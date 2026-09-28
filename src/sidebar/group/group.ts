@@ -14,6 +14,10 @@ import {
 import { createEmptySearchState } from "../helpers/domFactory.js";
 import { groupColorMap, GroupColorChoice } from "../config.js";
 import { setButtonIcon } from "../helpers/icons.js";
+import {
+    createEditSession,
+    finishEditSession,
+} from "../helpers/preserveInteraction.js";
 
 function getGroupColorChoice(color: chrome.tabGroups.TabGroup["color"]) {
     const choices = Object.keys(groupColorMap) as GroupColorChoice[];
@@ -29,9 +33,11 @@ function createGroupEditForm(
     groupColour: chrome.tabGroups.TabGroup["color"],
     requestRender: RequestRender,
     onClose: () => void,
+    focusName = true,
 ) {
     const form = document.createElement("div");
     form.className = "group-edit-form";
+    createEditSession(form);
 
     const nameInput = document.createElement("input");
     nameInput.type = "text";
@@ -57,11 +63,13 @@ function createGroupEditForm(
     saveBtn.type = "button";
     saveBtn.className = "control";
     setButtonIcon(saveBtn, "confirm", "Save group changes");
+    saveBtn.dataset.editSave = "";
 
     const cancelBtn = document.createElement("button");
     cancelBtn.type = "button";
     cancelBtn.className = "control";
     setButtonIcon(cancelBtn, "clear", "Cancel group editing");
+    cancelBtn.dataset.editCancel = "";
 
     form.append(nameInput, colourSelect, saveBtn, cancelBtn);
 
@@ -79,12 +87,13 @@ function createGroupEditForm(
                 title: nameInput.value.trim(),
                 color: groupColorMap[colourSelect.value as GroupColorChoice],
             });
-            onClose();
-            requestRender();
-        }, "Update group failed:");
+        }, "Update group failed:").then((saved) => {
+            finishEditSession(form, saved, onClose);
+            if (saved) requestRender();
+        });
     });
 
-    requestAnimationFrame(() => nameInput.focus());
+    if (focusName) requestAnimationFrame(() => nameInput.focus());
 
     return form;
 }
@@ -129,6 +138,7 @@ export function buildGroup(
 
         const groupItem = document.createElement("li");
         groupItem.className = "group-item";
+        groupItem.dataset.groupId = String(groupId);
 
         const isCollapsed =
             !isSearching && isCollapsedCheck(String(groupId), collapsedGroups);
@@ -213,6 +223,7 @@ export function buildGroup(
                     editForm = null;
                     editGroupBtn.classList.remove("is-selected");
                 },
+                editGroupBtn.dataset.restoringEdit !== "true",
             );
             groupRow.after(editForm);
         });

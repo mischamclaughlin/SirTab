@@ -28,8 +28,28 @@ let activeDropIndicator:
     | null = null;
 let activeDragElement: HTMLElement | null = null;
 let activeDragPayload: DragPayload | null = null;
+let activeDragVersion = 0;
+let pendingDropActions = 0;
+let documentListenersInstalled = false;
+const renderAfterDrag = new Set<RequestRender>();
 let activeAutoScrollClientY: number | null = null;
 let activeAutoScrollFrame: number | null = null;
+
+function notifyDragSettled() {
+    if (activeDragPayload || pendingDropActions > 0) return;
+
+    const pendingRenders = [...renderAfterDrag];
+    renderAfterDrag.clear();
+    for (const requestRender of pendingRenders) requestRender();
+}
+
+/** Preserve the native drag source until dragging and its drop action finish. */
+export function deferRenderUntilDragSettles(requestRender: RequestRender) {
+    if (!activeDragPayload && pendingDropActions === 0) return false;
+
+    renderAfterDrag.add(requestRender);
+    return true;
+}
 
 function getScrollRoot() {
     return document.scrollingElement ?? document.documentElement;
@@ -37,13 +57,19 @@ function getScrollRoot() {
 
 function getAutoScrollStep(clientY: number) {
     if (clientY < AUTO_SCROLL_EDGE_PX) {
-        const ratio = (AUTO_SCROLL_EDGE_PX - clientY) / AUTO_SCROLL_EDGE_PX;
+        const ratio = Math.min(
+            1,
+            (AUTO_SCROLL_EDGE_PX - clientY) / AUTO_SCROLL_EDGE_PX,
+        );
         return -Math.ceil(ratio * AUTO_SCROLL_MAX_STEP_PX);
     }
 
     const bottomEdge = window.innerHeight - AUTO_SCROLL_EDGE_PX;
     if (clientY > bottomEdge) {
-        const ratio = (clientY - bottomEdge) / AUTO_SCROLL_EDGE_PX;
+        const ratio = Math.min(
+            1,
+            (clientY - bottomEdge) / AUTO_SCROLL_EDGE_PX,
+        );
         return Math.ceil(ratio * AUTO_SCROLL_MAX_STEP_PX);
     }
 
@@ -132,6 +158,7 @@ function clearDragState() {
     clearDropIndicator();
     clearDragElement();
     activeDragPayload = null;
+    notifyDragSettled();
 }
 
 function serialisePayload(payload: DragPayload) {
@@ -192,6 +219,7 @@ function readPayload(event: DragEvent): DragPayload | null {
 
 function writePayload(event: DragEvent, payload: DragPayload) {
     const dataTransfer = event.dataTransfer;
+    activeDragVersion += 1;
     activeDragPayload = payload;
     if (!dataTransfer) return;
 
@@ -448,13 +476,20 @@ async function runDropAction(
     action: () => Promise<void>,
     requestRender: RequestRender,
 ) {
+    const dragVersion = activeDragVersion;
+    pendingDropActions += 1;
     try {
         await action();
-        requestRender();
     } catch (error) {
         console.error("Drag and drop move failed:", error);
     } finally {
-        clearDragState();
+        renderAfterDrag.add(requestRender);
+        pendingDropActions -= 1;
+        if (dragVersion === activeDragVersion) {
+            clearDragState();
+        } else {
+            notifyDragSettled();
+        }
     }
 }
 
@@ -474,6 +509,19 @@ export function setupSidebarDropZones(
     isDragEnabled: DragEnabledCheck,
     requestRender: RequestRender,
 ) {
+    if (!documentListenersInstalled) {
+        documentListenersInstalled = true;
+        // Invalid targets do not receive a drop. Clear the last target once its
+        // dragover has bubbled up, including when leaving either list entirely.
+        document.addEventListener("dragover", (event) => {
+            if (event.defaultPrevented) return;
+            clearDropIndicator();
+            stopAutoScroll();
+        });
+        document.addEventListener("drop", clearDragState);
+        document.addEventListener("dragend", clearDragState);
+    }
+
     tabsList.addEventListener("dragover", (event) => {
         if (event.target !== tabsList) return;
 

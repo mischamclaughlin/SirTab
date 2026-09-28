@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Sidebar refresh interaction regression</title>
+<ul id="tabs"></ul>
+<ul id="groups"></ul>
+<ul id="bookmarks"></ul>
+<output id="result">RUNNING</output>
+<script type="module">
+    const result = document.getElementById("result");
+    window.addEventListener("unhandledrejection", (event) => {
+        result.textContent = `FAIL: ${event.reason}`;
+    });
+    window.addEventListener("error", (event) => {
+        result.textContent = `FAIL: ${event.message}`;
+    });
+    const saved = { group: null, bookmark: null };
+    globalThis.chrome = {
+        runtime: { getURL: (path) => `chrome-extension://test/${path}` },
+        tabGroups: { update: async (_id, details) => { saved.group = details; } },
+        bookmarks: { update: async (_id, details) => { saved.bookmark = details; } },
+        tabs: { update: async () => {} },
+    };
+
+    const { cycleTabs } = await import("../dist/sidebar/tab/tab.js");
+    const { buildGroup } = await import("../dist/sidebar/group/group.js");
+    const { cycleBookmarks } = await import("../dist/sidebar/bookmark/bookmark.js");
+    const { replaceListsPreservingInteraction } = await import(
+        "../dist/sidebar/helpers/preserveInteraction.js"
+    );
+
+    const hosts = ["tabs", "groups", "bookmarks"].map((id) =>
+        document.getElementById(id)
+    );
+    const tab = { id: 11, title: "Active page", url: "https://example.com", active: true };
+    const group = { id: 21, title: "Projects", color: "blue", windowId: 1 };
+    const bookmark = { id: "31", title: "Reference", url: "https://example.com" };
+    const folder = { id: "32", title: "Folder", children: [] };
+    const selected = {
+        isSelectionMode: () => true,
+        isSelected: () => false,
+    };
+
+    function assert(condition, message) {
+        if (!condition) throw Error(message);
+    }
+
+    function render() {
+        const next = hosts.map((host) => document.createElement(host.tagName));
+        cycleTabs(next[0], [tab], { tabSelection: selected });
+        buildGroup(
+            true, [group], new Map([[21, []]]), new Set(), false, "",
+            next[1], 1, () => {}, false, selected,
+        );
+        cycleBookmarks(next[2], [bookmark, folder], false, new Set(), () => {}, selected);
+        replaceListsPreservingInteraction(hosts.map((host, index) => ({ host, next: next[index] })));
+    }
+
+    try {
+        render();
+        const tabButton = hosts[0].querySelector(".tab-button");
+        tabButton.focus();
+        // This was the original render path: replacing children discards focus.
+        const plainList = document.createElement("ul");
+        cycleTabs(plainList, [tab], { tabSelection: selected });
+        hosts[0].replaceChildren(...plainList.children);
+        assert(document.activeElement !== hosts[0].querySelector(".tab-button"),
+            "baseline child replacement unexpectedly retained focus");
+
+        hosts[0].querySelector(".tab-button").focus();
+        render();
+        assert(document.activeElement === hosts[0].querySelector(".tab-button"),
+            "tab focus was lost on refresh");
+
+        const groupItem = () => hosts[1].querySelector("[data-group-id='21']");
+        groupItem().querySelector(".row-icon-btn").click();
+        const groupInput = groupItem().querySelector(".group-edit-form input");
+        groupInput.value = "Draft group name";
+        groupInput.focus();
+        groupInput.setSelectionRange(5, 10);
+        groupItem().querySelector(".group-edit-form select").value = "red";
+        render();
+        assert(groupItem().querySelector(".group-edit-form input").value === "Draft group name",
+            "group draft name was lost on refresh");
+        assert(groupItem().querySelector(".group-edit-form select").value === "red",
+            "group draft colour was lost on refresh");
+        assert(document.activeElement === groupItem().querySelector(".group-edit-form input"),
+            "group input focus was lost on refresh");
+        assert(document.activeElement.selectionStart === 5 && document.activeElement.selectionEnd === 10,
+            "group input selection was lost on refresh");
+        groupItem().querySelector(".group-edit-form button").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert(saved.group?.title === "Draft group name" && saved.group?.color === "red",
+            "restored group form did not save its draft");
+
+        let resolveGroupUpdate;
+        chrome.tabGroups.update = (_id, details) => new Promise((resolve) => {
+            resolveGroupUpdate = () => { saved.group = details; resolve(); };
+        });
+        groupItem().querySelector(".row-icon-btn").click();
+        groupItem().querySelector(".group-edit-form input").value = "Saving group";
+        groupItem().querySelector(".group-edit-form button").click();
+        render();
+        assert(groupItem().querySelector(".group-edit-form"),
+            "group form disappeared before the pending save completed");
+        assert(groupItem().querySelector("[data-edit-save]").disabled,
+            "restored group save button allowed a duplicate pending save");
+        resolveGroupUpdate();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert(!groupItem().querySelector(".group-edit-form"),
+            "successful group save left the restored form open");
+
+        chrome.tabGroups.update = async () => { throw Error("simulated save failure"); };
+        groupItem().querySelector(".row-icon-btn").click();
+        groupItem().querySelector(".group-edit-form input").value = "Retry group";
+        groupItem().querySelector("[data-edit-save]").click();
+        render();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert(groupItem().querySelector(".group-edit-form input").value === "Retry group",
+            "failed group save lost the restored draft");
+        assert(!groupItem().querySelector("[data-edit-save]").disabled,
+            "failed group save left the restored form disabled");
+        groupItem().querySelector("[data-edit-cancel]").click();
+
+        const bookmarkItem = () => hosts[2].querySelector("[data-bookmark-id='31']");
+        bookmarkItem().querySelector(".row-icon-btn").click();
+        bookmarkItem().querySelector(".bookmark-edit-form input").value = "Draft bookmark";
+        bookmarkItem().querySelector(".bookmark-edit-form input").focus();
+        render();
+        assert(bookmarkItem().querySelector(".bookmark-edit-form input").value === "Draft bookmark",
+            "bookmark draft was lost on refresh");
+        assert(document.activeElement === bookmarkItem().querySelector(".bookmark-edit-form input"),
+            "bookmark input focus was lost on refresh");
+        bookmarkItem().querySelector(".bookmark-edit-form button").click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert(saved.bookmark?.title === "Draft bookmark",
+            "restored bookmark form did not save its draft");
+
+        let resolveBookmarkUpdate;
+        chrome.bookmarks.update = (_id, details) => new Promise((resolve) => {
+            resolveBookmarkUpdate = () => { saved.bookmark = details; resolve(); };
+        });
+        bookmarkItem().querySelector(".row-icon-btn").click();
+        bookmarkItem().querySelector(".bookmark-edit-form input").value = "Saving bookmark";
+        bookmarkItem().querySelector(".bookmark-edit-form button").click();
+        render();
+        assert(bookmarkItem().querySelector(".bookmark-edit-form"),
+            "bookmark form disappeared before the pending save completed");
+        assert(bookmarkItem().querySelector("[data-edit-save]").disabled,
+            "restored bookmark save button allowed a duplicate pending save");
+        resolveBookmarkUpdate();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert(!bookmarkItem().querySelector(".bookmark-edit-form"),
+            "successful bookmark save left the restored form open");
+
+        const folderItem = () => hosts[2].querySelector("[data-bookmark-id='32']");
+        folderItem().querySelector(".row-icon-btn").click();
+        folderItem().querySelector(".bookmark-edit-form input").value = "Draft folder";
+        render();
+        assert(folderItem().querySelector(".bookmark-edit-form input").value === "Draft folder",
+            "folder draft was lost on refresh");
+
+        result.textContent = "PASS";
+    } catch (error) {
+        result.textContent = `FAIL: ${error.message} ${error.stack?.split("\n")[1] ?? ""}`;
+    }
+</script>
+</html>

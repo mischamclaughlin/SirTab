@@ -8,6 +8,10 @@ import {
     runButtonAction,
 } from "../helpers/domFactory.js";
 import { setButtonIcon } from "../helpers/icons.js";
+import {
+    createEditSession,
+    finishEditSession,
+} from "../helpers/preserveInteraction.js";
 
 function getBookmarkNodeTitle(node: chrome.bookmarks.BookmarkTreeNode) {
     return node.title?.trim() ?? "";
@@ -98,9 +102,11 @@ function createBookmarkEditForm(
     fallbackTitle: string,
     onSaved?: () => void,
     onClose?: () => void,
+    focusName = true,
 ) {
     const form = document.createElement("div");
     form.className = "bookmark-edit-form";
+    createEditSession(form);
 
     const nameInput = document.createElement("input");
     nameInput.type = "text";
@@ -113,11 +119,13 @@ function createBookmarkEditForm(
     saveBtn.type = "button";
     saveBtn.className = "control";
     setButtonIcon(saveBtn, "confirm", "Save bookmark name");
+    saveBtn.dataset.editSave = "";
 
     const cancelBtn = document.createElement("button");
     cancelBtn.type = "button";
     cancelBtn.className = "control";
     setButtonIcon(cancelBtn, "clear", "Cancel bookmark editing");
+    cancelBtn.dataset.editCancel = "";
 
     form.append(nameInput, saveBtn, cancelBtn);
 
@@ -137,12 +145,13 @@ function createBookmarkEditForm(
             await chrome.bookmarks.update(node.id, {
                 title: nameInput.value.trim(),
             });
-            close();
-            onSaved?.();
-        }, "Update bookmark name failed:");
+        }, "Update bookmark name failed:").then((saved) => {
+            finishEditSession(form, saved, close);
+            if (saved) onSaved?.();
+        });
     });
 
-    requestAnimationFrame(() => nameInput.focus());
+    if (focusName) requestAnimationFrame(() => nameInput.focus());
 
     return form;
 }
@@ -215,6 +224,7 @@ export function cycleBookmarks(
         const isSelectionMode = tabSelection?.isSelectionMode() ?? false;
         const li = document.createElement("li");
         li.className = "tab-item";
+        li.dataset.bookmarkId = node.id;
 
         if (node.url) {
             const btn = document.createElement("button");
@@ -288,6 +298,7 @@ export function cycleBookmarks(
                         editForm = null;
                         editBookmarkBtn.classList.remove("is-selected");
                     },
+                    editBookmarkBtn.dataset.restoringEdit !== "true",
                 );
                 row.after(editForm);
             });
@@ -373,6 +384,7 @@ export function cycleBookmarks(
                     editForm = null;
                     editFolderBtn.classList.remove("is-selected");
                 },
+                editFolderBtn.dataset.restoringEdit !== "true",
             );
             row.after(editForm);
         });
