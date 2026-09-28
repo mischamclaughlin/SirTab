@@ -46,7 +46,8 @@ try {
         server.listen(0, "127.0.0.1", resolve);
     });
     const address = server.address();
-    const url = `http://127.0.0.1:${address.port}/tests/refresh-interaction.html`;
+    const page = process.env.SIRTAB_TEST_PAGE ?? "tests/refresh-interaction.html";
+    const url = `http://127.0.0.1:${address.port}/${page}`;
     child = spawn(browser, [
         "--headless=new",
         "--no-first-run",
@@ -77,7 +78,7 @@ try {
         });
     });
     assert.equal(result, "PASS", result);
-    process.stdout.write(`PASS: refresh interaction in ${path.basename(browser)}\n`);
+    process.stdout.write(`PASS: ${page} in ${path.basename(browser)}\n`);
 } finally {
     clearTimeout(timeout);
     if (child && child.exitCode == null) {

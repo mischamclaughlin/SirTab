@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../dist/sidebar/sidebar.css">
+  <style>
+    body { width: 300px; min-height: 0; }
+    #tabs-list { display: block; }
+    .tab-row { height: 38px; }
+    .tab-button { width: 100%; height: 100%; }
+    #result { position: fixed; top: 0; right: 0; z-index: 20; background: white; color: black; }
+  </style>
+</head>
+<body>
+  <output id="result">RUNNING</output>
+  <ul id="tabs-list"></ul>
+  <ul id="groups-list"></ul>
+  <script type="module">
+    globalThis.chrome = { tabGroups: { TAB_GROUP_ID_NONE: -1 } };
+    // Step frames explicitly so the pointer remains over a valid row while the
+    // browser performs real scrolling and hit testing.
+    const frames = [];
+    globalThis.requestAnimationFrame = (callback) => { frames.push(callback); return frames.length; };
+    globalThis.cancelAnimationFrame = () => {};
+    const { makeTabDraggable, setupSidebarDropZones } = await import('../dist/sidebar/helpers/dragAndDrop.js');
+    const list = document.getElementById('tabs-list');
+    for (let id = 1; id <= 45; id++) {
+      const item = document.createElement('li');
+      item.className = 'tab-item';
+      item.dataset.tabId = String(id);
+      const row = document.createElement('div');
+      row.className = 'tab-row';
+      const button = document.createElement('button');
+      button.className = 'tab-button';
+      button.textContent = `Tab ${id}`;
+      row.append(button);
+      item.append(row);
+      list.append(item);
+      makeTabDraggable(button, row, 1, id, () => true, () => {});
+    }
+    setupSidebarDropZones(list, document.getElementById('groups-list'), 1, () => true, () => {});
+    const source = list.querySelector('.tab-button');
+    source.dispatchEvent(new DragEvent('dragstart', {
+      bubbles: true, dataTransfer: new DataTransfer(), clientX: 60, clientY: 22,
+    }));
+    const pointerY = innerHeight - 12;
+    const pointerX = 80;
+    const initial = document.elementFromPoint(pointerX, pointerY);
+    initial.dispatchEvent(new DragEvent('dragover', {
+      bubbles: true, dataTransfer: new DataTransfer(), clientX: pointerX, clientY: pointerY,
+    }));
+    const firstMarked = document.querySelector('.drop-before, .drop-after');
+    for (let frame = 0; frame < 8; frame++) frames.shift()?.();
+    const underPointer = document.elementFromPoint(pointerX, pointerY)?.closest('.tab-row');
+    const marked = document.querySelector('.drop-before, .drop-after');
+    const passed = document.scrollingElement.scrollTop > 0 &&
+      underPointer && marked === underPointer && marked !== firstMarked;
+    document.getElementById('result').textContent = passed
+      ? 'PASS' : `FAIL: scroll=${document.scrollingElement.scrollTop}, marker=${marked?.textContent}, under=${underPointer?.textContent}`;
+  </script>
+</body>
+</html>

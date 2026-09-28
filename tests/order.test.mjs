@@ -11,6 +11,7 @@ const state = {
     grouped: [],
     ungrouped: [],
     setBarrier: null,
+    setCount: 0,
 };
 
 globalThis.chrome = {
@@ -64,6 +65,7 @@ globalThis.chrome = {
             },
             set: async (updates) => {
                 if (state.setBarrier) await state.setBarrier();
+                state.setCount += 1;
                 Object.assign(state.storage, structuredClone(updates));
             },
             remove: async (keys) => {
@@ -83,10 +85,14 @@ const {
     loadLogicalTabGroupData,
     moveIdRelative,
     moveIdToEnd,
+    moveIdsRelative,
+    moveIdsToEnd,
     moveStoredGroupRelative,
     moveStoredGroupToEnd,
     moveStoredTabRelative,
     moveStoredTabToEnd,
+    moveStoredTabsRelative,
+    moveStoredTabsToEnd,
     orderGroupsByTabPosition,
     setTabGroup,
     sortTabsByIndex,
@@ -134,6 +140,7 @@ function resetState({
     state.grouped = [];
     state.ungrouped = [];
     state.setBarrier = null;
+    state.setCount = 0;
     state.storage = {
         [TAB_ORDER_STORAGE_KEY]: tabOrderByWindow,
         [GROUP_ORDER_STORAGE_KEY]: groupOrderByWindow,
@@ -217,6 +224,31 @@ test("move helpers reposition ids without mutating the original order", () => {
     assert.deepEqual(moveIdRelative(order, 2, 3, "after"), [1, 3, 2, 4]);
     assert.deepEqual(moveIdRelative(order, 4, 1, "before"), [4, 1, 2, 3]);
     assert.deepEqual(order, [1, 2, 3, 4]);
+});
+
+test("selected IDs move together in logical order", () => {
+    const order = [1, 2, 3, 4, 5];
+    assert.deepEqual(moveIdsRelative(order, [4, 2], 5, "after"), [1, 3, 5, 2, 4]);
+    assert.deepEqual(moveIdsRelative(order, [4, 2], 1, "before"), [2, 4, 1, 3, 5]);
+    assert.deepEqual(moveIdsToEnd(order, [4, 2]), [1, 3, 5, 2, 4]);
+    assert.deepEqual(order, [1, 2, 3, 4, 5]);
+});
+
+test("multi-tab moves persist one logical order write per drop", async () => {
+    resetState({ tabs: [tab(1, 0), tab(2, 1, 10), tab(3, 2), tab(4, 3, 10), tab(5, 4)], groups: [group(10)] });
+    await moveStoredTabsRelative(WINDOW_ID, [4, 2], 5, "after");
+    assert.deepEqual(state.storage[`${TAB_ORDER_WINDOW_PREFIX}${WINDOW_ID}`].order, [1, 3, 5, 2, 4]);
+    assert.equal(state.setCount, 1);
+
+    resetState({ tabs: [tab(1, 0), tab(2, 1, 10), tab(3, 2), tab(4, 3, 10), tab(5, 4)], groups: [group(10)] });
+    await moveStoredTabsRelative(WINDOW_ID, [4, 2], 1, "before");
+    assert.deepEqual(state.storage[`${TAB_ORDER_WINDOW_PREFIX}${WINDOW_ID}`].order, [2, 4, 1, 3, 5]);
+    assert.equal(state.setCount, 1);
+
+    resetState({ tabs: [tab(1, 0), tab(2, 1, 10), tab(3, 2), tab(4, 3, 10), tab(5, 4)], groups: [group(10)] });
+    await moveStoredTabsToEnd(WINDOW_ID, [4, 2]);
+    assert.deepEqual(state.storage[`${TAB_ORDER_WINDOW_PREFIX}${WINDOW_ID}`].order, [1, 3, 5, 2, 4]);
+    assert.equal(state.setCount, 1);
 });
 
 test("stored tab moves persist against the cleaned logical order", async () => {

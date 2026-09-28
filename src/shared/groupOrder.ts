@@ -736,6 +736,30 @@ export function moveIdToEnd(order: number[], sourceId: number) {
     return [...order.filter((id) => id !== sourceId), sourceId];
 }
 
+/** Move the selected IDs as one block, retaining their current logical order. */
+export function moveIdsRelative(
+    order: number[],
+    sourceIds: number[],
+    targetId: number,
+    position: DropPosition,
+) {
+    const selected = new Set(sourceIds);
+    if (selected.has(targetId) || !order.includes(targetId)) return order;
+    const moving = order.filter((id) => selected.has(id));
+    if (moving.length === 0) return order;
+    const remaining = order.filter((id) => !selected.has(id));
+    const targetIndex = remaining.indexOf(targetId);
+    remaining.splice(position === "before" ? targetIndex : targetIndex + 1, 0, ...moving);
+    return remaining;
+}
+
+export function moveIdsToEnd(order: number[], sourceIds: number[]) {
+    const selected = new Set(sourceIds);
+    const moving = order.filter((id) => selected.has(id));
+    if (moving.length === 0) return order;
+    return [...order.filter((id) => !selected.has(id)), ...moving];
+}
+
 export function getVisibleMovePosition({
     sourceGroupId,
     targetGroupId,
@@ -776,6 +800,18 @@ export async function moveStoredTabRelative(
     await saveWindowOrders(windowId, data, nextOrder, groupOrder, "tab");
 }
 
+export async function moveStoredTabsRelative(
+    windowId: number,
+    sourceTabIds: number[],
+    targetTabId: number,
+    position: DropPosition,
+) {
+    const data = await loadLogicalTabGroupData(windowId);
+    const nextOrder = moveIdsRelative(data.tabOrder, sourceTabIds, targetTabId, position);
+    if (areOrdersEqual(data.tabOrder, nextOrder)) return;
+    await saveWindowOrders(windowId, data, nextOrder, data.groupOrder, "tab");
+}
+
 export async function moveStoredTabToEnd(
     windowId: number,
     sourceTabId: number,
@@ -786,6 +822,13 @@ export async function moveStoredTabToEnd(
     if (areOrdersEqual(tabOrder, nextOrder)) return;
 
     await saveWindowOrders(windowId, data, nextOrder, groupOrder, "tab");
+}
+
+export async function moveStoredTabsToEnd(windowId: number, sourceTabIds: number[]) {
+    const data = await loadLogicalTabGroupData(windowId);
+    const nextOrder = moveIdsToEnd(data.tabOrder, sourceTabIds);
+    if (areOrdersEqual(data.tabOrder, nextOrder)) return;
+    await saveWindowOrders(windowId, data, nextOrder, data.groupOrder, "tab");
 }
 
 export async function moveStoredGroupRelative(

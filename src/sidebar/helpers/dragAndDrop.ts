@@ -5,16 +5,14 @@ import {
     loadLogicalTabGroupData,
     moveStoredGroupRelative,
     moveStoredGroupToEnd,
-    moveStoredTabRelative,
-    moveStoredTabToEnd,
-    setTabGroup,
+    moveStoredTabsRelative,
+    moveStoredTabsToEnd,
 } from "../../shared/groupOrder.js";
 import type { DropPosition } from "../../shared/groupOrder.js";
 
 type DragPayload =
     | { kind: "tabs"; ids: number[] }
     | { kind: "group"; id: number };
-type NonEmptyNumberArray = [number, ...number[]];
 
 type DragEnabledCheck = () => boolean;
 
@@ -32,8 +30,9 @@ let activeDragVersion = 0;
 let pendingDropActions = 0;
 let documentListenersInstalled = false;
 const renderAfterDrag = new Set<RequestRender>();
-let activeAutoScrollClientY: number | null = null;
+let activeDragPoint: { x: number; y: number } | null = null;
 let activeAutoScrollFrame: number | null = null;
+let updateDropAtPoint: ((x: number, y: number) => void) | null = null;
 
 function notifyDragSettled() {
     if (activeDragPayload || pendingDropActions > 0) return;
@@ -77,7 +76,6 @@ function getAutoScrollStep(clientY: number) {
 }
 
 function stopAutoScroll() {
-    activeAutoScrollClientY = null;
     if (activeAutoScrollFrame == null) return;
 
     cancelAnimationFrame(activeAutoScrollFrame);
@@ -85,13 +83,13 @@ function stopAutoScroll() {
 }
 
 function stepAutoScroll() {
-    if (activeAutoScrollClientY == null) {
+    if (activeDragPoint == null) {
         activeAutoScrollFrame = null;
         return;
     }
 
     const scrollRoot = getScrollRoot();
-    const scrollStep = getAutoScrollStep(activeAutoScrollClientY);
+    const scrollStep = getAutoScrollStep(activeDragPoint.y);
     const maxScrollTop = Math.max(
         0,
         scrollRoot.scrollHeight - scrollRoot.clientHeight,
@@ -107,11 +105,14 @@ function stepAutoScroll() {
     }
 
     scrollRoot.scrollTop = nextScrollTop;
+    // The pointer can remain stationary while the rows scroll underneath it.
+    // Native dragover is not guaranteed to fire on every scroll frame.
+    updateDropAtPoint?.(activeDragPoint.x, activeDragPoint.y);
     activeAutoScrollFrame = requestAnimationFrame(stepAutoScroll);
 }
 
 function updateAutoScroll(event: DragEvent) {
-    activeAutoScrollClientY = event.clientY;
+    activeDragPoint = { x: event.clientX, y: event.clientY };
     if (getAutoScrollStep(event.clientY) === 0) {
         stopAutoScroll();
         return;
@@ -155,6 +156,7 @@ function setDragElement(element: HTMLElement) {
 
 function clearDragState() {
     stopAutoScroll();
+    activeDragPoint = null;
     clearDropIndicator();
     clearDragElement();
     activeDragPayload = null;
@@ -165,59 +167,7 @@ function serialisePayload(payload: DragPayload) {
     return JSON.stringify(payload);
 }
 
-function parsePayload(rawPayload: string): DragPayload | null {
-    if (rawPayload.length === 0) return null;
-
-    try {
-        const parsed = JSON.parse(rawPayload) as unknown;
-        if (
-            typeof parsed !== "object" ||
-            parsed == null ||
-            !("kind" in parsed)
-        ) {
-            return null;
-        }
-
-        const kind = parsed.kind;
-        if (kind !== "tabs" && kind !== "group") return null;
-
-        if (kind === "group") {
-            if (
-                !("id" in parsed) ||
-                typeof parsed.id !== "number" ||
-                !Number.isFinite(parsed.id)
-            ) {
-                return null;
-            }
-
-            return { kind, id: parsed.id };
-        }
-
-        if (!("ids" in parsed) || !Array.isArray(parsed.ids)) return null;
-
-        const ids = parsed.ids.filter(
-            (rawId): rawId is number =>
-                typeof rawId === "number" && Number.isFinite(rawId),
-        );
-        if (ids.length === 0) return null;
-
-        return { kind, ids };
-    } catch {
-        return null;
-    }
-}
-
-function readPayload(event: DragEvent): DragPayload | null {
-    const dataTransfer = event.dataTransfer;
-    if (!dataTransfer) return null;
-
-    return parsePayload(
-        dataTransfer.getData(DRAG_DATA_MIME) ||
-        dataTransfer.getData("text/plain"),
-    );
-}
-
-function writePayload(event: DragEvent, payload: DragPayload) {
+function writePayload(event: DragEvent, payload: DragPayload, row: HTMLElement) {
     const dataTransfer = event.dataTransfer;
     activeDragVersion += 1;
     activeDragPayload = payload;
@@ -226,32 +176,17 @@ function writePayload(event: DragEvent, payload: DragPayload) {
     const serialisedPayload = serialisePayload(payload);
     dataTransfer.effectAllowed = "move";
     dataTransfer.setData(DRAG_DATA_MIME, serialisedPayload);
-    dataTransfer.setData("text/plain", serialisedPayload);
+    const bounds = row.getBoundingClientRect();
+    dataTransfer.setDragImage(
+        row,
+        Math.max(0, Math.min(event.clientX - bounds.left, bounds.width)),
+        Math.max(0, Math.min(event.clientY - bounds.top, bounds.height)),
+    );
 }
 
 function getDropPosition(event: DragEvent, element: HTMLElement): DropPosition {
     const bounds = element.getBoundingClientRect();
     return event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
-}
-
-function toNonEmptyNumberArray(ids: number[]): NonEmptyNumberArray | null {
-    return ids.length > 0 ? (ids as NonEmptyNumberArray) : null;
-}
-
-async function moveTabRelativeToTab(
-    windowId: number,
-    sourceTabId: number,
-    targetTabId: number,
-    position: DropPosition,
-) {
-    if (sourceTabId === targetTabId) return;
-
-    const { tabs } = await loadLogicalTabGroupData(windowId);
-    const targetTab = tabs.find((tab) => tab.id === targetTabId);
-    if (targetTab?.id == null) return;
-
-    await setTabGroup(sourceTabId, getTabGroupId(targetTab));
-    await moveStoredTabRelative(windowId, sourceTabId, targetTabId, position);
 }
 
 async function moveTabsRelativeToTab(
@@ -274,73 +209,28 @@ async function moveTabsRelativeToTab(
                 tabId != null && sourceIdSet.has(tabId),
         );
     if (orderedSourceTabIds.length === 0) return;
-    if (orderedSourceTabIds.length === 1) {
-        await moveTabRelativeToTab(
-            windowId,
-            orderedSourceTabIds[0],
-            targetTabId,
-            position,
-        );
-        return;
-    }
-
     const targetGroupId = getTabGroupId(targetTab);
-    for (const sourceTabId of orderedSourceTabIds) {
-        await setTabGroup(sourceTabId, targetGroupId);
-    }
-
-    if (position === "after") {
-        let previousTargetTabId = targetTabId;
-        for (const sourceTabId of orderedSourceTabIds) {
-            await moveStoredTabRelative(
-                windowId,
-                sourceTabId,
-                previousTargetTabId,
-                "after",
-            );
-            previousTargetTabId = sourceTabId;
-        }
-        return;
-    }
-
-    let nextTargetTabId = targetTabId;
-    for (const sourceTabId of [...orderedSourceTabIds].reverse()) {
-        await moveStoredTabRelative(
-            windowId,
-            sourceTabId,
-            nextTargetTabId,
-            "before",
-        );
-        nextTargetTabId = sourceTabId;
-    }
+    await changeTabsGroup(tabs, orderedSourceTabIds, targetGroupId);
+    await moveStoredTabsRelative(windowId, orderedSourceTabIds, targetTabId, position);
 }
 
-async function moveTabToGroup(
-    windowId: number,
-    sourceTabId: number,
+async function changeTabsGroup(
+    tabs: chrome.tabs.Tab[],
+    sourceTabIds: number[],
     targetGroupId: number,
 ) {
-    const { tabs, groups } = await loadLogicalTabGroupData(windowId);
-    if (!groups.some((group) => group.id === targetGroupId)) return;
-
-    const { tabsByGroup } = buildTabsByLogicalGroup(tabs);
-    const targetGroupTabs = (tabsByGroup.get(targetGroupId) ?? []).filter(
-        (tab) => tab.id !== sourceTabId,
-    );
-
-    await setTabGroup(sourceTabId, targetGroupId);
-    const lastTargetTab = targetGroupTabs[targetGroupTabs.length - 1];
-    if (lastTargetTab?.id == null) {
-        await moveStoredTabToEnd(windowId, sourceTabId);
-        return;
+    const sourceIds = new Set(sourceTabIds);
+    const changing = tabs
+        .filter((tab) => tab.id != null && sourceIds.has(tab.id) &&
+            getTabGroupId(tab) !== targetGroupId)
+        .map((tab) => tab.id as number);
+    if (changing.length === 0) return;
+    const tabIds = changing as [number, ...number[]];
+    if (targetGroupId === NO_GROUP_ID) {
+        await chrome.tabs.ungroup(tabIds);
+    } else {
+        await chrome.tabs.group({ groupId: targetGroupId, tabIds });
     }
-
-    await moveStoredTabRelative(
-        windowId,
-        sourceTabId,
-        lastTargetTab.id,
-        "after",
-    );
 }
 
 async function moveTabsToGroup(
@@ -359,58 +249,19 @@ async function moveTabsToGroup(
                 tabId != null && sourceIdSet.has(tabId),
         );
     if (orderedSourceTabIds.length === 0) return;
-    if (orderedSourceTabIds.length === 1) {
-        await moveTabToGroup(windowId, orderedSourceTabIds[0], targetGroupId);
-        return;
-    }
-
     const { tabsByGroup } = buildTabsByLogicalGroup(tabs);
     const targetGroupTabs = (tabsByGroup.get(targetGroupId) ?? []).filter(
         (tab) => tab.id == null || !sourceIdSet.has(tab.id),
     );
 
-    const tabIds = toNonEmptyNumberArray(orderedSourceTabIds);
-    if (!tabIds) return;
+    await changeTabsGroup(tabs, orderedSourceTabIds, targetGroupId);
 
-    await chrome.tabs.group({
-        groupId: targetGroupId,
-        tabIds,
-    });
-
-    let previousTargetTabId = targetGroupTabs[targetGroupTabs.length - 1]?.id;
-    for (const tabId of orderedSourceTabIds) {
-        if (previousTargetTabId == null) {
-            await moveStoredTabToEnd(windowId, tabId);
-        } else {
-            await moveStoredTabRelative(
-                windowId,
-                tabId,
-                previousTargetTabId,
-                "after",
-            );
-        }
-        previousTargetTabId = tabId;
+    const lastTargetTabId = targetGroupTabs[targetGroupTabs.length - 1]?.id;
+    if (lastTargetTabId == null) {
+        await moveStoredTabsToEnd(windowId, orderedSourceTabIds);
+    } else {
+        await moveStoredTabsRelative(windowId, orderedSourceTabIds, lastTargetTabId, "after");
     }
-}
-
-async function moveTabToUngroupedEnd(windowId: number, sourceTabId: number) {
-    const { tabs } = await loadLogicalTabGroupData(windowId);
-    const { ungroupedTabs } = buildTabsByLogicalGroup(tabs);
-    const targetTabs = ungroupedTabs.filter((tab) => tab.id !== sourceTabId);
-
-    await setTabGroup(sourceTabId, NO_GROUP_ID);
-    const lastTargetTab = targetTabs[targetTabs.length - 1];
-    if (lastTargetTab?.id == null) {
-        await moveStoredTabToEnd(windowId, sourceTabId);
-        return;
-    }
-
-    await moveStoredTabRelative(
-        windowId,
-        sourceTabId,
-        lastTargetTab.id,
-        "after",
-    );
 }
 
 async function moveTabsToUngroupedEnd(windowId: number, sourceTabIds: number[]) {
@@ -423,34 +274,18 @@ async function moveTabsToUngroupedEnd(windowId: number, sourceTabIds: number[]) 
                 tabId != null && sourceIdSet.has(tabId),
         );
     if (orderedSourceTabIds.length === 0) return;
-    if (orderedSourceTabIds.length === 1) {
-        await moveTabToUngroupedEnd(windowId, orderedSourceTabIds[0]);
-        return;
-    }
-
     const { ungroupedTabs } = buildTabsByLogicalGroup(tabs);
     const targetTabs = ungroupedTabs.filter(
         (tab) => tab.id == null || !sourceIdSet.has(tab.id),
     );
 
-    const tabIds = toNonEmptyNumberArray(orderedSourceTabIds);
-    if (!tabIds) return;
+    await changeTabsGroup(tabs, orderedSourceTabIds, NO_GROUP_ID);
 
-    await chrome.tabs.ungroup(tabIds);
-
-    let previousTargetTabId = targetTabs[targetTabs.length - 1]?.id;
-    for (const tabId of orderedSourceTabIds) {
-        if (previousTargetTabId == null) {
-            await moveStoredTabToEnd(windowId, tabId);
-        } else {
-            await moveStoredTabRelative(
-                windowId,
-                tabId,
-                previousTargetTabId,
-                "after",
-            );
-        }
-        previousTargetTabId = tabId;
+    const lastTargetTabId = targetTabs[targetTabs.length - 1]?.id;
+    if (lastTargetTabId == null) {
+        await moveStoredTabsToEnd(windowId, orderedSourceTabIds);
+    } else {
+        await moveStoredTabsRelative(windowId, orderedSourceTabIds, lastTargetTabId, "after");
     }
 }
 
@@ -493,13 +328,74 @@ async function runDropAction(
     }
 }
 
-function getEnabledPayload(
-    event: DragEvent,
-    isDragEnabled: DragEnabledCheck,
-) {
-    if (!isDragEnabled()) return null;
+type DropTarget = {
+    element: HTMLElement;
+    className: string;
+    action: () => Promise<void>;
+};
 
-    return readPayload(event) ?? activeDragPayload;
+function getDropTarget(
+    target: EventTarget | null,
+    clientY: number,
+    payload: DragPayload,
+    tabsList: HTMLElement,
+    groupsList: HTMLElement,
+    windowId: number,
+): DropTarget | null {
+    if (!(target instanceof Element)) return null;
+
+    const tabRow = target.closest<HTMLElement>(".tab-row");
+    if (tabRow && (tabsList.contains(tabRow) || groupsList.contains(tabRow))) {
+        const tabId = Number(tabRow.closest<HTMLElement>(".tab-item")?.dataset.tabId);
+        if (payload.kind !== "tabs" || !Number.isInteger(tabId) ||
+            payload.ids.includes(tabId)) return null;
+        const position = getDropPosition({ clientY } as DragEvent, tabRow);
+        return {
+            element: tabRow,
+            className: position === "before" ? "drop-before" : "drop-after",
+            action: () => moveTabsRelativeToTab(windowId, payload.ids, tabId, position),
+        };
+    }
+
+    if (groupsList.contains(target)) {
+        const groupItem = target.closest<HTMLElement>(".group-item");
+        const groupId = Number(groupItem?.dataset.groupId);
+        const groupRow = groupItem?.querySelector<HTMLElement>(".tree-row");
+        if (groupItem && groupRow && Number.isInteger(groupId)) {
+            if (payload.kind === "tabs") {
+                return {
+                    element: groupRow,
+                    className: "drop-inside",
+                    action: () => moveTabsToGroup(windowId, payload.ids, groupId),
+                };
+            }
+            if (groupRow.contains(target) && payload.id !== groupId) {
+                const position = getDropPosition({ clientY } as DragEvent, groupRow);
+                return {
+                    element: groupRow,
+                    className: position === "before" ? "drop-before" : "drop-after",
+                    action: () => moveGroupRelativeToGroup(windowId, payload.id, groupId, position),
+                };
+            }
+            return null;
+        }
+        if (payload.kind === "group") {
+            return {
+                element: groupsList,
+                className: "drop-append",
+                action: () => moveGroupToGroupListEnd(windowId, payload.id),
+            };
+        }
+    }
+
+    if (tabsList.contains(target) && payload.kind === "tabs") {
+        return {
+            element: tabsList,
+            className: "drop-append",
+            action: () => moveTabsToUngroupedEnd(windowId, payload.ids),
+        };
+    }
+    return null;
 }
 
 export function setupSidebarDropZones(
@@ -511,70 +407,45 @@ export function setupSidebarDropZones(
 ) {
     if (!documentListenersInstalled) {
         documentListenersInstalled = true;
-        // Invalid targets do not receive a drop. Clear the last target once its
-        // dragover has bubbled up, including when leaving either list entirely.
+        const hitTest = (x: number, y: number) => document.elementFromPoint(x, y);
+        const resolveAt = (target: EventTarget | null, y: number) =>
+            activeDragPayload && isDragEnabled()
+                ? getDropTarget(target, y, activeDragPayload, tabsList, groupsList, windowId)
+                : null;
+        updateDropAtPoint = (x, y) => {
+            const dropTarget = resolveAt(hitTest(x, y), y);
+            if (dropTarget) {
+                setDropIndicator(dropTarget.element, dropTarget.className);
+            } else {
+                clearDropIndicator();
+            }
+        };
         document.addEventListener("dragover", (event) => {
-            if (event.defaultPrevented) return;
-            clearDropIndicator();
-            stopAutoScroll();
+            if (!activeDragPayload) return;
+            const dropTarget = resolveAt(event.target, event.clientY);
+            if (dropTarget) {
+                event.preventDefault();
+                if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+                setDropIndicator(dropTarget.element, dropTarget.className);
+            } else {
+                clearDropIndicator();
+            }
+            updateAutoScroll(event);
         });
-        document.addEventListener("drop", clearDragState);
+        document.addEventListener("drop", (event) => {
+            const dropTarget = resolveAt(
+                hitTest(event.clientX, event.clientY) ?? event.target,
+                event.clientY,
+            );
+            if (!dropTarget) {
+                clearDragState();
+                return;
+            }
+            event.preventDefault();
+            void runDropAction(dropTarget.action, requestRender);
+        });
         document.addEventListener("dragend", clearDragState);
     }
-
-    tabsList.addEventListener("dragover", (event) => {
-        if (event.target !== tabsList) return;
-
-        const payload = getEnabledPayload(event, isDragEnabled);
-        if (!payload || payload.kind !== "tabs") return;
-
-        updateAutoScroll(event);
-        event.preventDefault();
-        if (event.dataTransfer) {
-            event.dataTransfer.dropEffect = "move";
-        }
-        setDropIndicator(tabsList, "drop-append");
-    });
-
-    tabsList.addEventListener("drop", (event) => {
-        if (event.target !== tabsList) return;
-
-        const payload = getEnabledPayload(event, isDragEnabled);
-        if (!payload || payload.kind !== "tabs") return;
-
-        event.preventDefault();
-        void runDropAction(
-            async () => moveTabsToUngroupedEnd(windowId, payload.ids),
-            requestRender,
-        );
-    });
-
-    groupsList.addEventListener("dragover", (event) => {
-        if (event.target !== groupsList) return;
-
-        const payload = getEnabledPayload(event, isDragEnabled);
-        if (!payload || payload.kind !== "group") return;
-
-        updateAutoScroll(event);
-        event.preventDefault();
-        if (event.dataTransfer) {
-            event.dataTransfer.dropEffect = "move";
-        }
-        setDropIndicator(groupsList, "drop-append");
-    });
-
-    groupsList.addEventListener("drop", (event) => {
-        if (event.target !== groupsList) return;
-
-        const payload = getEnabledPayload(event, isDragEnabled);
-        if (!payload || payload.kind !== "group") return;
-
-        event.preventDefault();
-        void runDropAction(
-            async () => moveGroupToGroupListEnd(windowId, payload.id),
-            requestRender,
-        );
-    });
 }
 
 export function makeTabDraggable(
@@ -598,7 +469,7 @@ export function makeTabDraggable(
         writePayload(event, {
             kind: "tabs",
             ids: getDragTabIds?.(tabId) ?? [tabId],
-        });
+        }, row);
         setDragElement(row);
     });
 
@@ -606,42 +477,6 @@ export function makeTabDraggable(
         clearDragState();
     });
 
-    row.addEventListener("dragover", (event) => {
-        const payload = getEnabledPayload(event, isDragEnabled);
-        if (!payload) return;
-        updateAutoScroll(event);
-        if (payload.kind !== "tabs" || payload.ids.includes(tabId)) {
-            return;
-        }
-
-        event.preventDefault();
-        if (event.dataTransfer) {
-            event.dataTransfer.dropEffect = "move";
-        }
-
-        const position = getDropPosition(event, row);
-        setDropIndicator(row, position === "before" ? "drop-before" : "drop-after");
-    });
-
-    row.addEventListener("drop", (event) => {
-        const payload = getEnabledPayload(event, isDragEnabled);
-        if (!payload) return;
-        if (payload.kind !== "tabs" || payload.ids.includes(tabId)) {
-            return;
-        }
-
-        event.preventDefault();
-        const position = getDropPosition(event, row);
-
-        void runDropAction(async () => {
-            await moveTabsRelativeToTab(
-                windowId,
-                payload.ids,
-                tabId,
-                position,
-            );
-        }, requestRender);
-    });
 }
 
 export function makeGroupDraggable(
@@ -661,7 +496,7 @@ export function makeGroupDraggable(
             return;
         }
 
-        writePayload(event, { kind: "group", id: groupId });
+        writePayload(event, { kind: "group", id: groupId }, row);
         setDragElement(row);
     });
 
@@ -669,46 +504,4 @@ export function makeGroupDraggable(
         clearDragState();
     });
 
-    row.addEventListener("dragover", (event) => {
-        const payload = getEnabledPayload(event, isDragEnabled);
-        if (!payload) return;
-        updateAutoScroll(event);
-        if (payload.kind === "group" && payload.id === groupId) return;
-
-        event.preventDefault();
-        if (event.dataTransfer) {
-            event.dataTransfer.dropEffect = "move";
-        }
-
-        if (payload.kind === "tabs") {
-            setDropIndicator(row, "drop-inside");
-            return;
-        }
-
-        const position = getDropPosition(event, row);
-        setDropIndicator(row, position === "before" ? "drop-before" : "drop-after");
-    });
-
-    row.addEventListener("drop", (event) => {
-        const payload = getEnabledPayload(event, isDragEnabled);
-        if (!payload) return;
-        if (payload.kind === "group" && payload.id === groupId) return;
-
-        event.preventDefault();
-
-        void runDropAction(async () => {
-            if (payload.kind === "tabs") {
-                await moveTabsToGroup(windowId, payload.ids, groupId);
-                return;
-            }
-
-            const position = getDropPosition(event, row);
-            await moveGroupRelativeToGroup(
-                windowId,
-                payload.id,
-                groupId,
-                position,
-            );
-        }, requestRender);
-    });
 }
