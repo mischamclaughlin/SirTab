@@ -1,13 +1,24 @@
 import {
     COLLAPSED_GROUPS_STORAGE_KEY,
     GROUP_ORDER_STORAGE_KEY,
+    GROUP_ORDER_SNAPSHOT_PREFIX,
+    GROUP_ORDER_WINDOW_PREFIX,
     TAB_ORDER_STORAGE_KEY,
+    TAB_ORDER_SNAPSHOT_PREFIX,
+    TAB_ORDER_WINDOW_PREFIX,
 } from "./storageKeys.js";
 
 const NO_GROUP_ID = chrome.tabGroups.TAB_GROUP_ID_NONE;
 
 type WindowOrderMap = Record<string, number[]>;
 type WindowCollapsedMap = Record<string, unknown>;
+type StoredOrder = {
+    order: number[];
+    fingerprints: string[] | null;
+    inventory: string[] | null;
+    sourceWindowId?: number;
+    windowInventory?: string[] | null;
+};
 type TabWithId = chrome.tabs.Tab & { id: number };
 type GroupWithId = chrome.tabGroups.TabGroup & { id: number };
 
@@ -18,6 +29,7 @@ export type LogicalTabGroupData = {
     groups: chrome.tabGroups.TabGroup[];
     tabOrder: number[];
     groupOrder: number[];
+    restoredFromWindowId?: number;
 };
 
 export type VisibleMovePositionOptions = {
@@ -168,16 +180,310 @@ function getWindowOrder(orderMap: WindowOrderMap, windowId: number) {
     return orderMap[String(windowId)] ?? [];
 }
 
-async function saveWindowOrder(
-    storageKey: string,
-    windowId: number,
-    order: number[],
-) {
-    const storage = await chrome.storage.local.get(storageKey);
-    const orderMap = readWindowOrderMap(storage[storageKey]);
-    orderMap[String(windowId)] = order;
+function readStoredOrder(value: unknown): StoredOrder | null {
+    if (typeof value !== "object" || value == null) return null;
+    const raw = value as Record<string, unknown>;
+    if (!Array.isArray(raw.order)) return null;
+    const order = raw.order.map(parseStoredId);
+    if (order.some((id) => id == null)) return null;
+    const fingerprints = raw.fingerprints;
+    const inventory = raw.inventory;
+    const windowInventory = raw.windowInventory;
+    if (
+        fingerprints !== null &&
+        (!Array.isArray(fingerprints) ||
+            fingerprints.length !== order.length ||
+            !fingerprints.every((item) => typeof item === "string"))
+    ) return null;
+    if (
+        inventory !== null &&
+        (!Array.isArray(inventory) ||
+            !inventory.every((item) => typeof item === "string"))
+    ) return null;
+    if (fingerprints === undefined || inventory === undefined) return null;
+    if (windowInventory !== undefined && windowInventory !== null &&
+        (!Array.isArray(windowInventory) ||
+            !windowInventory.every((item) => typeof item === "string"))) return null;
+    return {
+        order: order as number[],
+        fingerprints: fingerprints as string[] | null,
+        inventory: inventory as string[] | null,
+        ...(isFiniteId(raw.sourceWindowId)
+            ? { sourceWindowId: raw.sourceWindowId }
+            : {}),
+        ...(windowInventory === undefined
+            ? {}
+            : { windowInventory: windowInventory as string[] | null }),
+    };
+}
 
-    await chrome.storage.local.set({ [storageKey]: orderMap });
+function tabUrl(tab: chrome.tabs.Tab) {
+    return tab.url || tab.pendingUrl || null;
+}
+
+function itemFingerprints(
+    tabs: chrome.tabs.Tab[],
+    groups: chrome.tabGroups.TabGroup[],
+) {
+    const groupFingerprints = new Map<number, string | null>();
+    for (const group of groups) {
+        if (group.id == null) continue;
+        const memberUrls = tabs
+            .filter((tab) => tab.groupId === group.id)
+            .map(tabUrl);
+        groupFingerprints.set(
+            group.id,
+            memberUrls.every((url) => url != null)
+                ? JSON.stringify([
+                      group.title ?? "",
+                      group.color ?? "",
+                      [...(memberUrls as string[])].sort(),
+                  ])
+                : null,
+        );
+    }
+
+    const tabFingerprints = new Map<number, string | null>();
+    for (const tab of tabs) {
+        if (tab.id == null) continue;
+        const url = tabUrl(tab);
+        tabFingerprints.set(tab.id, url);
+    }
+    return { tabFingerprints, groupFingerprints };
+}
+
+function makeStoredOrder(
+    order: number[],
+    fingerprintsById: Map<number, string | null>,
+    sourceWindowId?: number,
+): StoredOrder {
+    const fingerprints = order.map((id) => fingerprintsById.get(id) ?? null);
+    return {
+        order,
+        fingerprints: fingerprints.every((value) => value != null)
+            ? (fingerprints as string[])
+            : null,
+        inventory: fingerprints.every((value) => value != null)
+            ? [...(fingerprints as string[])].sort()
+            : null,
+        ...(sourceWindowId == null ? {} : { sourceWindowId }),
+    };
+}
+
+function makeGroupStoredOrder(
+    groupOrder: number[],
+    groupFingerprints: Map<number, string | null>,
+    tabOrder: number[],
+    tabFingerprints: Map<number, string | null>,
+): StoredOrder {
+    return {
+        ...makeStoredOrder(groupOrder, groupFingerprints),
+        windowInventory: makeStoredOrder(tabOrder, tabFingerprints).inventory,
+    };
+}
+
+function restoreOrder(
+    stored: StoredOrder | null,
+    liveOrder: number[],
+    fingerprintsById: Map<number, string | null>,
+) {
+    if (!stored?.fingerprints) return liveOrder;
+    const idsByFingerprint = new Map<string, number[]>();
+    for (const id of liveOrder) {
+        const fingerprint = fingerprintsById.get(id);
+        if (fingerprint == null) return liveOrder;
+        const ids = idsByFingerprint.get(fingerprint) ?? [];
+        ids.push(id);
+        idsByFingerprint.set(fingerprint, ids);
+    }
+    const restored: number[] = [];
+    for (const fingerprint of stored.fingerprints) {
+        const id = idsByFingerprint.get(fingerprint)?.shift();
+        if (id != null) restored.push(id);
+    }
+    const used = new Set(restored);
+    return [...restored, ...liveOrder.filter((id) => !used.has(id))];
+}
+
+function groupLabel(fingerprint: string) {
+    try {
+        const parsed: unknown = JSON.parse(fingerprint);
+        return Array.isArray(parsed) &&
+            typeof parsed[0] === "string" &&
+            typeof parsed[1] === "string"
+            ? JSON.stringify([parsed[0], parsed[1]])
+            : null;
+    } catch {
+        return null;
+    }
+}
+
+function restoreGroupOrder(
+    stored: StoredOrder | null,
+    liveOrder: number[],
+    fingerprintsById: Map<number, string | null>,
+) {
+    if (!stored?.fingerprints) return liveOrder;
+    const idsByFingerprint = new Map<string, number[]>();
+    for (const id of liveOrder) {
+        const fingerprint = fingerprintsById.get(id);
+        if (fingerprint == null) return liveOrder;
+        const ids = idsByFingerprint.get(fingerprint) ?? [];
+        ids.push(id);
+        idsByFingerprint.set(fingerprint, ids);
+    }
+    const assigned = stored.fingerprints.map((fingerprint) =>
+        idsByFingerprint.get(fingerprint)?.shift() ?? null,
+    );
+    const used = new Set(assigned.filter((id): id is number => id != null));
+    const unmatchedByLabel = new Map<string, number[]>();
+    for (const id of liveOrder) {
+        if (used.has(id)) continue;
+        const label = groupLabel(fingerprintsById.get(id) ?? "");
+        if (label == null) continue;
+        const ids = unmatchedByLabel.get(label) ?? [];
+        ids.push(id);
+        unmatchedByLabel.set(label, ids);
+    }
+    for (let index = 0; index < assigned.length; index++) {
+        if (assigned[index] != null) continue;
+        const label = groupLabel(stored.fingerprints[index] ?? "");
+        if (label == null) continue;
+        const storedMatches = stored.fingerprints.filter((fingerprint, slot) =>
+            assigned[slot] == null && groupLabel(fingerprint) === label,
+        );
+        const liveMatches = unmatchedByLabel.get(label) ?? [];
+        if (storedMatches.length === 1 && liveMatches.length === 1) {
+            assigned[index] = liveMatches[0];
+            used.add(liveMatches[0]);
+            unmatchedByLabel.delete(label);
+        }
+    }
+    return [
+        ...assigned.filter((id): id is number => id != null),
+        ...liveOrder.filter((id) => !used.has(id)),
+    ];
+}
+
+function hasMatchingLiveIdentity(
+    stored: StoredOrder | null,
+    liveIds: Set<number>,
+    fingerprintsById: Map<number, string | null>,
+) {
+    return stored?.fingerprints?.some((fingerprint, index) => {
+        const id = stored.order[index];
+        return id != null && liveIds.has(id) &&
+            fingerprintsById.get(id) === fingerprint;
+    }) ?? false;
+}
+
+async function findRestartRecord(
+    windowId: number,
+    storage: Record<string, unknown>,
+    liveInventory: string[] | null,
+) {
+    if (liveInventory == null || !chrome.windows?.getAll) return null;
+    const liveWindowIds = new Set(
+        (await chrome.windows.getAll()).map((window) => window.id),
+    );
+    const previousWindowIds = new Set<number>();
+    for (const key of Object.keys(storage)) {
+        const prefix = key.startsWith(TAB_ORDER_SNAPSHOT_PREFIX)
+            ? TAB_ORDER_SNAPSHOT_PREFIX
+            : key.startsWith(GROUP_ORDER_SNAPSHOT_PREFIX)
+              ? GROUP_ORDER_SNAPSHOT_PREFIX
+              : null;
+        if (!prefix) continue;
+        const id = Number(key.slice(prefix.length));
+        if (isFiniteId(id)) previousWindowIds.add(id);
+    }
+    const candidates = [...previousWindowIds].flatMap((previousWindowId) => {
+        if (!isFiniteId(previousWindowId) ||
+            (previousWindowId !== windowId && liveWindowIds.has(previousWindowId))) return [];
+        const claimedByLiveWindow = [...liveWindowIds].some((liveWindowId) => {
+            if (liveWindowId == null || liveWindowId === windowId) return false;
+            const active = readStoredOrder(
+                storage[`${TAB_ORDER_WINDOW_PREFIX}${liveWindowId}`],
+            );
+            return active?.sourceWindowId === previousWindowId;
+        });
+        if (claimedByLiveWindow) return [];
+        const tabRecord = readStoredOrder(
+            storage[`${TAB_ORDER_SNAPSHOT_PREFIX}${previousWindowId}`],
+        );
+        const groupRecord = readStoredOrder(
+            storage[`${GROUP_ORDER_SNAPSHOT_PREFIX}${previousWindowId}`],
+        );
+        const tabMatches = tabRecord?.inventory &&
+            isConservativeInventoryMatch(tabRecord.inventory, liveInventory);
+        const groupMatches = groupRecord?.windowInventory &&
+            isConservativeInventoryMatch(groupRecord.windowInventory, liveInventory);
+        if (!tabMatches && !groupMatches) return [];
+        return [{ previousWindowId, tabRecord, groupRecord }];
+    });
+    return candidates.length === 1 ? candidates[0] : null;
+}
+
+function isConservativeInventoryMatch(stored: string[], live: string[]) {
+    if (live.length === 0) return false;
+    if (live.length > stored.length && stored.length < 3) return false;
+    if (live.length < 2 && live.length !== stored.length) return false;
+    if (Math.min(live.length, stored.length) * 2 <
+        Math.max(live.length, stored.length)) return false;
+    const smaller = live.length <= stored.length ? live : stored;
+    const larger = live.length <= stored.length ? stored : live;
+    const counts = new Map<string, number>();
+    for (const item of larger) counts.set(item, (counts.get(item) ?? 0) + 1);
+    for (const item of smaller) {
+        const remaining = counts.get(item) ?? 0;
+        if (remaining === 0) return false;
+        counts.set(item, remaining - 1);
+    }
+    return true;
+}
+
+function isSameInventory(left: string[] | null | undefined, right: string[] | null) {
+    return left != null && right != null && left.length === right.length &&
+        left.every((value, index) => value === right[index]);
+}
+
+async function saveWindowOrders(
+    windowId: number,
+    data: LogicalTabGroupData,
+    tabOrder: number[],
+    groupOrder: number[],
+    changed: "tab" | "group",
+) {
+    const fingerprints = itemFingerprints(data.tabs, data.groups);
+    const tabKey = `${TAB_ORDER_WINDOW_PREFIX}${windowId}`;
+    const groupKey = `${GROUP_ORDER_WINDOW_PREFIX}${windowId}`;
+    const updates: Record<string, StoredOrder> = {};
+    if (changed === "tab") {
+        updates[tabKey] = makeStoredOrder(
+            tabOrder,
+            fingerprints.tabFingerprints,
+        );
+        updates[`${TAB_ORDER_SNAPSHOT_PREFIX}${windowId}`] = makeStoredOrder(
+            tabOrder,
+            fingerprints.tabFingerprints,
+        );
+    }
+    if (changed === "group") {
+        updates[groupKey] = makeGroupStoredOrder(
+            groupOrder,
+            fingerprints.groupFingerprints,
+            tabOrder,
+            fingerprints.tabFingerprints,
+        );
+        updates[`${GROUP_ORDER_SNAPSHOT_PREFIX}${windowId}`] = updates[groupKey];
+    }
+    await chrome.storage.local.set(updates);
+    if (data.restoredFromWindowId != null && chrome.storage.local.remove) {
+        await chrome.storage.local.remove([
+            `${TAB_ORDER_SNAPSHOT_PREFIX}${data.restoredFromWindowId}`,
+            `${GROUP_ORDER_SNAPSHOT_PREFIX}${data.restoredFromWindowId}`,
+        ]);
+    }
 }
 
 export async function loadLogicalTabGroupData(
@@ -186,7 +492,7 @@ export async function loadLogicalTabGroupData(
     const [liveTabs, liveGroups, storage] = await Promise.all([
         chrome.tabs.query({ windowId }),
         chrome.tabGroups.query({ windowId }),
-        chrome.storage.local.get([TAB_ORDER_STORAGE_KEY, GROUP_ORDER_STORAGE_KEY]),
+        chrome.storage.local.get(null),
     ]);
 
     const tabsById = buildIdMap(liveTabs);
@@ -201,24 +507,126 @@ export async function loadLogicalTabGroupData(
         .map((group) => group.id)
         .filter((id): id is number => id != null);
 
-    const tabOrderMap = readWindowOrderMap(storage[TAB_ORDER_STORAGE_KEY]);
-    const groupOrderMap = readWindowOrderMap(storage[GROUP_ORDER_STORAGE_KEY]);
-    const storedTabOrder = getWindowOrder(tabOrderMap, windowId);
-    const storedGroupOrder = getWindowOrder(groupOrderMap, windowId);
-    const tabOrder = normaliseStoredOrder(storedTabOrder, liveTabOrder);
-    const groupOrder = normaliseStoredOrder(storedGroupOrder, liveGroupOrder);
+    const tabKey = `${TAB_ORDER_WINDOW_PREFIX}${windowId}`;
+    const groupKey = `${GROUP_ORDER_WINDOW_PREFIX}${windowId}`;
+    const rawTabRecord = readStoredOrder(storage[tabKey]);
+    const rawGroupRecord = readStoredOrder(storage[groupKey]);
+    const fingerprints = itemFingerprints(liveTabs, liveGroups);
+    const liveTabInventory = makeStoredOrder(
+        liveTabOrder,
+        fingerprints.tabFingerprints,
+    ).inventory;
+    const groupIdsContinuing = rawGroupRecord?.order.every((id) => groupsById.has(id)) ?? false;
+    const groupTabInventoryContinuing = groupIdsContinuing &&
+        isSameInventory(rawGroupRecord?.windowInventory, liveTabInventory);
+    const directTabRecord = hasMatchingLiveIdentity(
+        rawTabRecord,
+        new Set(tabsById.keys()),
+        fingerprints.tabFingerprints,
+    )
+        ? rawTabRecord
+        : null;
+    const directGroupRecord = groupTabInventoryContinuing || hasMatchingLiveIdentity(
+        rawGroupRecord,
+        new Set(groupsById.keys()),
+        fingerprints.groupFingerprints,
+    )
+        ? rawGroupRecord
+        : null;
+    const legacyTabOrder = getWindowOrder(
+        readWindowOrderMap(storage[TAB_ORDER_STORAGE_KEY]),
+        windowId,
+    );
+    const legacyGroupOrder = getWindowOrder(
+        readWindowOrderMap(storage[GROUP_ORDER_STORAGE_KEY]),
+        windowId,
+    );
+    const useLegacyTab = legacyTabOrder.some((id) => tabsById.has(id));
+    const useLegacyGroup = legacyGroupOrder.some((id) => groupsById.has(id));
+    const matchingDirectIds = directTabRecord?.order.filter((id, index) =>
+        tabsById.has(id) &&
+        directTabRecord.fingerprints?.[index] === fingerprints.tabFingerprints.get(id),
+    ).length ?? 0;
+    const restart = !directTabRecord || matchingDirectIds < liveTabOrder.length
+        ? await findRestartRecord(windowId, storage, liveTabInventory)
+        : null;
+    const restoredGroupRecord = restart?.groupRecord ?? null;
 
-    const storageUpdates: Record<string, WindowOrderMap> = {};
-    if (!areOrdersEqual(storedTabOrder, tabOrder)) {
-        tabOrderMap[String(windowId)] = tabOrder;
-        storageUpdates[TAB_ORDER_STORAGE_KEY] = tabOrderMap;
-    }
-    if (!areOrdersEqual(storedGroupOrder, groupOrder)) {
-        groupOrderMap[String(windowId)] = groupOrder;
-        storageUpdates[GROUP_ORDER_STORAGE_KEY] = groupOrderMap;
-    }
-    if (Object.keys(storageUpdates).length > 0) {
-        await chrome.storage.local.set(storageUpdates);
+    const tabOrder = restart
+        ? restoreOrder(restart.tabRecord, liveTabOrder, fingerprints.tabFingerprints)
+        : directTabRecord
+          ? normaliseStoredOrder(directTabRecord.order, liveTabOrder)
+          : normaliseStoredOrder(
+                useLegacyTab ? legacyTabOrder : [],
+                liveTabOrder,
+            );
+    const groupOrder = restart
+          ? restoreGroupOrder(
+                restoredGroupRecord,
+                liveGroupOrder,
+                fingerprints.groupFingerprints,
+            )
+        : directGroupRecord
+          ? normaliseStoredOrder(directGroupRecord.order, liveGroupOrder)
+          : normaliseStoredOrder(
+                useLegacyGroup ? legacyGroupOrder : [],
+                liveGroupOrder,
+            );
+
+    const nextTabRecord = makeStoredOrder(tabOrder, fingerprints.tabFingerprints);
+    const nextGroupRecord = makeGroupStoredOrder(
+        groupOrder,
+        fingerprints.groupFingerprints,
+        tabOrder,
+        fingerprints.tabFingerprints,
+    );
+    const hasPersistedOrder = Boolean(
+        directTabRecord || directGroupRecord || useLegacyTab ||
+        useLegacyGroup || restart,
+    );
+    if (hasPersistedOrder) {
+        const sourceWindowId = rawTabRecord?.sourceWindowId ?? restart?.previousWindowId;
+        const updates: Record<string, StoredOrder> = {};
+        const activeTabRecord = {
+            ...nextTabRecord,
+            ...(sourceWindowId == null ? {} : { sourceWindowId }),
+        };
+        if (JSON.stringify(rawTabRecord) !== JSON.stringify(activeTabRecord)) {
+            updates[tabKey] = activeTabRecord;
+        }
+        if (JSON.stringify(rawGroupRecord) !== JSON.stringify(nextGroupRecord)) {
+            updates[groupKey] = nextGroupRecord;
+        }
+        if ((useLegacyTab || useLegacyGroup) &&
+            !readStoredOrder(storage[`${TAB_ORDER_SNAPSHOT_PREFIX}${windowId}`])) {
+            updates[`${TAB_ORDER_SNAPSHOT_PREFIX}${windowId}`] = nextTabRecord;
+            updates[`${GROUP_ORDER_SNAPSHOT_PREFIX}${windowId}`] = nextGroupRecord;
+        }
+        const matchingExistingTabs = rawTabRecord?.order.filter((id, index) =>
+            tabsById.has(id) &&
+            rawTabRecord.fingerprints?.[index] === fingerprints.tabFingerprints.get(id),
+        ).length ?? 0;
+        const tabIdsContinuing = rawTabRecord != null &&
+            rawTabRecord.order.length > 0 &&
+            rawTabRecord.order.every((id) => tabsById.has(id)) &&
+            matchingExistingTabs >= Math.ceil(rawTabRecord.order.length / 2);
+        const tabSnapshotKey = `${TAB_ORDER_SNAPSHOT_PREFIX}${windowId}`;
+        const groupSnapshotKey = `${GROUP_ORDER_SNAPSHOT_PREFIX}${windowId}`;
+        const tabSnapshot = readStoredOrder(storage[tabSnapshotKey]);
+        const groupSnapshot = readStoredOrder(storage[groupSnapshotKey]);
+        if (tabSnapshot && tabIdsContinuing &&
+            liveTabOrder.length >= tabSnapshot.order.length &&
+            JSON.stringify(tabSnapshot) !== JSON.stringify(nextTabRecord)) {
+            updates[tabSnapshotKey] = nextTabRecord;
+        }
+        if (groupSnapshot && (groupTabInventoryContinuing || tabIdsContinuing) &&
+            liveTabOrder.length >= (groupSnapshot.windowInventory?.length ?? Infinity) &&
+            JSON.stringify(groupSnapshot) !== JSON.stringify(nextGroupRecord)) {
+            updates[groupSnapshotKey] = nextGroupRecord;
+        }
+        if (Object.keys(updates).length > 0) {
+            await chrome.storage.local.set(updates);
+        }
     }
 
     return {
@@ -230,6 +638,10 @@ export async function loadLogicalTabGroupData(
             .filter((group): group is GroupWithId => group != null),
         tabOrder,
         groupOrder,
+        ...(rawTabRecord?.sourceWindowId ?? restart?.previousWindowId) == null ||
+            (rawTabRecord?.sourceWindowId ?? restart?.previousWindowId) === windowId
+            ? {}
+            : { restoredFromWindowId: rawTabRecord?.sourceWindowId ?? restart?.previousWindowId },
     };
 }
 
@@ -351,7 +763,8 @@ export async function moveStoredTabRelative(
     targetTabId: number,
     position: DropPosition,
 ) {
-    const { tabOrder } = await loadLogicalTabGroupData(windowId);
+    const data = await loadLogicalTabGroupData(windowId);
+    const { tabOrder, groupOrder } = data;
     const nextOrder = moveIdRelative(
         tabOrder,
         sourceTabId,
@@ -360,18 +773,19 @@ export async function moveStoredTabRelative(
     );
     if (areOrdersEqual(tabOrder, nextOrder)) return;
 
-    await saveWindowOrder(TAB_ORDER_STORAGE_KEY, windowId, nextOrder);
+    await saveWindowOrders(windowId, data, nextOrder, groupOrder, "tab");
 }
 
 export async function moveStoredTabToEnd(
     windowId: number,
     sourceTabId: number,
 ) {
-    const { tabOrder } = await loadLogicalTabGroupData(windowId);
+    const data = await loadLogicalTabGroupData(windowId);
+    const { tabOrder, groupOrder } = data;
     const nextOrder = moveIdToEnd(tabOrder, sourceTabId);
     if (areOrdersEqual(tabOrder, nextOrder)) return;
 
-    await saveWindowOrder(TAB_ORDER_STORAGE_KEY, windowId, nextOrder);
+    await saveWindowOrders(windowId, data, nextOrder, groupOrder, "tab");
 }
 
 export async function moveStoredGroupRelative(
@@ -380,7 +794,8 @@ export async function moveStoredGroupRelative(
     targetGroupId: number,
     position: DropPosition,
 ) {
-    const { groupOrder } = await loadLogicalTabGroupData(windowId);
+    const data = await loadLogicalTabGroupData(windowId);
+    const { tabOrder, groupOrder } = data;
     const nextOrder = moveIdRelative(
         groupOrder,
         sourceGroupId,
@@ -389,18 +804,19 @@ export async function moveStoredGroupRelative(
     );
     if (areOrdersEqual(groupOrder, nextOrder)) return;
 
-    await saveWindowOrder(GROUP_ORDER_STORAGE_KEY, windowId, nextOrder);
+    await saveWindowOrders(windowId, data, tabOrder, nextOrder, "group");
 }
 
 export async function moveStoredGroupToEnd(
     windowId: number,
     sourceGroupId: number,
 ) {
-    const { groupOrder } = await loadLogicalTabGroupData(windowId);
+    const data = await loadLogicalTabGroupData(windowId);
+    const { tabOrder, groupOrder } = data;
     const nextOrder = moveIdToEnd(groupOrder, sourceGroupId);
     if (areOrdersEqual(groupOrder, nextOrder)) return;
 
-    await saveWindowOrder(GROUP_ORDER_STORAGE_KEY, windowId, nextOrder);
+    await saveWindowOrders(windowId, data, tabOrder, nextOrder, "group");
 }
 
 export async function setTabGroup(tabId: number, targetGroupId: number) {

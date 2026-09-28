@@ -85,6 +85,7 @@ globalThis.chrome = {
                         keys.map((key) => [key, state.storage[key]]),
                     );
                 }
+                if (keys == null) return { ...state.storage };
                 return { [keys]: state.storage[keys] };
             },
             set: async (updates) => Object.assign(state.storage, updates),
@@ -96,6 +97,7 @@ const {
     COLLAPSED_GROUPS_STORAGE_KEY,
     GROUP_ORDER_STORAGE_KEY,
     TAB_ORDER_STORAGE_KEY,
+    TAB_ORDER_WINDOW_PREFIX,
 } = await import("../dist/shared/storageKeys.js");
 await import("../dist/background/background.js");
 
@@ -195,7 +197,7 @@ test("moving within a group updates logical order and preserves active tab", asy
 
     await dispatchCommand("move_active_tab_next");
 
-    assert.deepEqual(state.storage[TAB_ORDER_STORAGE_KEY][WINDOW_ID], [2, 1]);
+    assert.deepEqual(state.storage[`${TAB_ORDER_WINDOW_PREFIX}${WINDOW_ID}`].order, [2, 1]);
     assert.deepEqual(state.grouped, []);
     assert.deepEqual(state.ungrouped, []);
     assert.deepEqual(state.tabUpdates, [

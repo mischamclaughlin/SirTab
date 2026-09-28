@@ -1,7 +1,9 @@
 import type { RequestRender } from "../types.js";
 import {
     GROUP_ORDER_STORAGE_KEY,
+    GROUP_ORDER_WINDOW_PREFIX,
     TAB_ORDER_STORAGE_KEY,
+    TAB_ORDER_WINDOW_PREFIX,
 } from "../../shared/storageKeys.js";
 
 type SidebarEventHandlers = {
@@ -104,7 +106,9 @@ export function setupEventListeners(
         if (areaName !== "local") return;
         if (
             TAB_ORDER_STORAGE_KEY in changes ||
-            GROUP_ORDER_STORAGE_KEY in changes
+            GROUP_ORDER_STORAGE_KEY in changes ||
+            `${TAB_ORDER_WINDOW_PREFIX}${currentWindowId}` in changes ||
+            `${GROUP_ORDER_WINDOW_PREFIX}${currentWindowId}` in changes
         ) {
             requestTabGroupRefresh();
         }
