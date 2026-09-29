@@ -17,7 +17,7 @@
 .action-controls {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.25rem;
 }
 

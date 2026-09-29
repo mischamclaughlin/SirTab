@@ -16,20 +16,23 @@
   <output id="result">RUNNING</output>
   <div id="actions">
     <input class="search-input" aria-label="Search tabs and bookmarks" placeholder="search tabs and bookmarks">
-    <div class="action-controls">
-      <button class="control">Group</button><button class="control">Save</button>
-      <button class="control">Tab</button><button class="control">Select</button>
-    </div>
   </div>
   <main id="sidebar-content">
     <ul id="tabs-list"></ul>
     <ul id="groups-list"></ul>
     <ul id="bookmarks-list"></ul>
   </main>
-  <div id="settings"><button class="control settings-btn">settings</button></div>
+  <div id="settings">
+    <div class="action-panel"></div>
+    <div class="action-controls">
+      <button class="control">Group</button><button class="control">Save</button>
+      <button class="control">Tab</button><button class="control">Select</button>
+    </div>
+    <button class="control settings-btn">settings</button>
+  </div>
   <script>
     addEventListener('error', (event) => {
-      document.getElementById('result').textContent = `FAIL: ${event.message}`;
+      document.getElementById('result').textContent = `FAIL: ${event.error?.stack ?? event.message} (${event.filename}:${event.lineno})`;
     });
     addEventListener('unhandledrejection', (event) => {
       document.getElementById('result').textContent = `FAIL: ${event.reason}`;
@@ -62,18 +65,22 @@
     const content = document.getElementById('sidebar-content');
     const header = document.getElementById('actions');
     const footer = document.getElementById('settings');
-    const settingsButton = footer.querySelector('button');
-    const actionControls = header.querySelector('.action-controls');
+    const settingsButton = footer.querySelector('.settings-btn');
+    const actionControls = footer.querySelector('.action-controls');
     const searchHeight = header.querySelector('.search-input').getBoundingClientRect().height;
     const controlsMatchSearch = [...actionControls.querySelectorAll('button'), settingsButton]
       .every((button) => button.getBoundingClientRect().height === searchHeight);
+    const controlsFillSidebar = [...actionControls.querySelectorAll('button')]
+      .every((button) => button.getBoundingClientRect().width === actionControls.getBoundingClientRect().width);
     const headerTop = header.getBoundingClientRect().top;
-    const actionControlsBottom = actionControls.getBoundingClientRect().bottom;
+    const searchBottom = header.querySelector('.search-input').getBoundingClientRect().bottom;
     const headerBottom = header.getBoundingClientRect().bottom;
     const footerBottom = footer.getBoundingClientRect().bottom;
     const settingsButtonBottom = settingsButton.getBoundingClientRect().bottom;
     const edgeClearance = headerTop >= 7 && headerTop <= 10 &&
-      headerBottom - actionControlsBottom >= 7 &&
+      headerBottom - searchBottom >= 7 &&
+      actionControls.getBoundingClientRect().top > content.getBoundingClientRect().bottom &&
+      actionControls.getBoundingClientRect().bottom < settingsButton.getBoundingClientRect().top &&
       innerHeight - footerBottom >= 7 &&
       innerHeight - settingsButtonBottom >= 11 &&
       innerHeight - settingsButtonBottom <= 14;
@@ -107,10 +114,10 @@
     footer.insertBefore(panel, settingsButton);
     const settingsScrolls = panel.scrollHeight > panel.clientHeight &&
       settingsButton.getBoundingClientRect().bottom === settingsButtonBottom;
-    const passed = controlsMatchSearch && edgeClearance && scrollsBetweenBars && settingsScrolls &&
+    const passed = controlsMatchSearch && controlsFillSidebar && edgeClearance && scrollsBetweenBars && settingsScrolls &&
       underPointer && marked === underPointer && marked !== firstMarked;
     document.getElementById('result').textContent = passed
-      ? 'PASS' : `FAIL: heights=${controlsMatchSearch} (${searchHeight}, ${[...actionControls.querySelectorAll('button'), settingsButton].map((button) => button.getBoundingClientRect().height)}), edges=${edgeClearance} (${headerTop}, ${headerBottom - actionControlsBottom}, ${innerHeight - footerBottom}, ${innerHeight - settingsButtonBottom}), scroll=${content.scrollTop}, bars=${scrollsBetweenBars}, settings=${settingsScrolls} (${panel.scrollHeight}, ${panel.clientHeight}, ${settingsButton.getBoundingClientRect().bottom - settingsButtonBottom}), marker=${marked?.textContent}, under=${underPointer?.textContent}`;
+      ? 'PASS' : `FAIL: heights=${controlsMatchSearch} (${searchHeight}, ${[...actionControls.querySelectorAll('button'), settingsButton].map((button) => button.getBoundingClientRect().height)}), widths=${controlsFillSidebar}, edges=${edgeClearance} (${headerTop}, ${headerBottom - searchBottom}, ${innerHeight - footerBottom}, ${innerHeight - settingsButtonBottom}), scroll=${content.scrollTop}, bars=${scrollsBetweenBars}, settings=${settingsScrolls} (${panel.scrollHeight}, ${panel.clientHeight}, ${settingsButton.getBoundingClientRect().bottom - settingsButtonBottom}), marker=${marked?.textContent}, under=${underPointer?.textContent}`;
   </script>
 </body>
 </html>

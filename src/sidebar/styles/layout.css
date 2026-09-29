@@ -36,9 +36,6 @@ body {
 
 #actions {
   flex: none;
-  min-height: 0;
-  max-height: 40dvh;
-  overflow-y: auto;
 }
 
 #actions,
@@ -105,13 +102,22 @@ body {
   width: 100%;
   flex: none;
   min-height: 0;
-  max-height: 40dvh;
+  max-height: 60dvh;
   padding-top: 0.5rem;
   padding-bottom: 0.25rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   overflow: hidden;
+}
+
+#settings > .action-panel {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+#settings > .action-controls {
+  flex: none;
 }
 
 #settings > .settings-btn,

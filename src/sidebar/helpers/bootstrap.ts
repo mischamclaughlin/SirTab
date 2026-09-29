@@ -227,8 +227,8 @@ export async function bootstrapSidebar() {
         requestTabGroupRefresh,
     );
 
-    elements.actions.appendChild(elements.actionBtnSection);
-    elements.actions.appendChild(elements.actionPanelSection);
+    elements.settings.appendChild(elements.actionPanelSection);
+    elements.settings.appendChild(elements.actionBtnSection);
 
     const actionPanelController = createActionPanelController(
         elements.actionPanelSection,
