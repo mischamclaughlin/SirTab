@@ -5,6 +5,7 @@ import {
     SidebarTheme,
 } from "../config.js";
 import { runButtonAction } from "../helpers/domFactory.js";
+import { setButtonIcon } from "../helpers/icons.js";
 import { applyTheme } from "../helpers/theme.js";
 
 type ShortcutCommandId =
@@ -108,8 +109,8 @@ export async function setupSettingAction(
 ): Promise<void> {
     const settingsBtn = document.createElement("button");
     settingsBtn.type = "button";
-    settingsBtn.textContent = "settings";
     settingsBtn.className = "control settings-btn";
+    setButtonIcon(settingsBtn, "settings", "Settings");
     settingsBtn.setAttribute("aria-expanded", "false");
 
     const settingInfoSection = document.createElement("div");
@@ -284,6 +285,6 @@ export async function setupSettingAction(
 
     const footerControls = document.createElement("div");
     footerControls.className = "footer-controls";
-    footerControls.append(actionControls, settingsBtn);
+    footerControls.append(settingsBtn, actionControls);
     settings.append(shortcutPrompt, settingInfoSection, footerControls);
 }

@@ -25,11 +25,11 @@
   <div id="settings">
     <div class="action-panel"></div>
     <div class="footer-controls">
+      <button class="control settings-btn"></button>
       <div class="action-controls">
         <button class="control">▦</button><button class="control">☆</button>
         <button class="control">▣</button><button class="control">☑</button>
       </div>
-      <button class="control settings-btn">settings</button>
     </div>
   </div>
   <script>
@@ -68,6 +68,8 @@
     const header = document.getElementById('actions');
     const footer = document.getElementById('settings');
     const settingsButton = footer.querySelector('.settings-btn');
+    const { setButtonIcon } = await import('../dist/sidebar/helpers/icons.js');
+    setButtonIcon(settingsButton, 'settings', 'Settings');
     const actionControls = footer.querySelector('.action-controls');
     const footerControls = footer.querySelector('.footer-controls');
     const searchHeight = header.querySelector('.search-input').getBoundingClientRect().height;
@@ -77,13 +79,15 @@
     const firstAction = actionButtons[0].getBoundingClientRect();
     const lastAction = actionButtons.at(-1).getBoundingClientRect();
     const controlsRect = footerControls.getBoundingClientRect();
+    const settingsRect = settingsButton.getBoundingClientRect();
     const controlsFillSidebar = actionButtons.length === 4 &&
-      firstAction.left === controlsRect.left && settingsButton.getBoundingClientRect().right === controlsRect.right &&
+      settingsButton.getAttribute('aria-label') === 'Settings' &&
+      settingsButton.querySelector('svg.control-icon') !== null &&
+      settingsRect.left === controlsRect.left && lastAction.right === controlsRect.right &&
       actionButtons.every((button) => {
         const rect = button.getBoundingClientRect();
-        return rect.top === firstAction.top && Math.abs(rect.width - firstAction.width) < 1;
-      }) && settingsButton.getBoundingClientRect().top === firstAction.top &&
-      lastAction.right < settingsButton.getBoundingClientRect().left;
+        return rect.top === settingsRect.top && Math.abs(rect.width - settingsRect.width) < 1;
+      }) && settingsRect.right < firstAction.left;
     const headerTop = header.getBoundingClientRect().top;
     const searchBottom = header.querySelector('.search-input').getBoundingClientRect().bottom;
     const headerBottom = header.getBoundingClientRect().bottom;
