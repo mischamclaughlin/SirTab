@@ -44,7 +44,7 @@ button.control {
 
 .search-input,
 .action-controls > .control,
-#settings > .settings-btn {
+.footer-controls > .settings-btn {
   height: var(--control-height);
 }
 

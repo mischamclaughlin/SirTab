@@ -228,7 +228,6 @@ export async function bootstrapSidebar() {
     );
 
     elements.settings.appendChild(elements.actionPanelSection);
-    elements.settings.appendChild(elements.actionBtnSection);
 
     const actionPanelController = createActionPanelController(
         elements.actionPanelSection,
@@ -247,7 +246,7 @@ export async function bootstrapSidebar() {
         requestTabGroupRefresh,
     );
     await loadThemePreference();
-    await setupSettingAction(elements.settings);
+    await setupSettingAction(elements.settings, elements.actionBtnSection);
 
     const loadInitialData = async () => {
         const [[loadedTabs, loadedGroups], loadedBookmarkTree] =

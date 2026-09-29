@@ -24,11 +24,13 @@
   </main>
   <div id="settings">
     <div class="action-panel"></div>
-    <div class="action-controls">
-      <button class="control">Group</button><button class="control">Save</button>
-      <button class="control">Tab</button><button class="control">Select</button>
+    <div class="footer-controls">
+      <div class="action-controls">
+        <button class="control">▦</button><button class="control">☆</button>
+        <button class="control">▣</button><button class="control">☑</button>
+      </div>
+      <button class="control settings-btn">settings</button>
     </div>
-    <button class="control settings-btn">settings</button>
   </div>
   <script>
     addEventListener('error', (event) => {
@@ -67,19 +69,21 @@
     const footer = document.getElementById('settings');
     const settingsButton = footer.querySelector('.settings-btn');
     const actionControls = footer.querySelector('.action-controls');
+    const footerControls = footer.querySelector('.footer-controls');
     const searchHeight = header.querySelector('.search-input').getBoundingClientRect().height;
     const controlsMatchSearch = [...actionControls.querySelectorAll('button'), settingsButton]
       .every((button) => button.getBoundingClientRect().height === searchHeight);
     const actionButtons = [...actionControls.querySelectorAll('button')];
     const firstAction = actionButtons[0].getBoundingClientRect();
     const lastAction = actionButtons.at(-1).getBoundingClientRect();
-    const controlsRect = actionControls.getBoundingClientRect();
+    const controlsRect = footerControls.getBoundingClientRect();
     const controlsFillSidebar = actionButtons.length === 4 &&
-      firstAction.left === controlsRect.left && lastAction.right === controlsRect.right &&
+      firstAction.left === controlsRect.left && settingsButton.getBoundingClientRect().right === controlsRect.right &&
       actionButtons.every((button) => {
         const rect = button.getBoundingClientRect();
         return rect.top === firstAction.top && Math.abs(rect.width - firstAction.width) < 1;
-      });
+      }) && settingsButton.getBoundingClientRect().top === firstAction.top &&
+      lastAction.right < settingsButton.getBoundingClientRect().left;
     const headerTop = header.getBoundingClientRect().top;
     const searchBottom = header.querySelector('.search-input').getBoundingClientRect().bottom;
     const headerBottom = header.getBoundingClientRect().bottom;
@@ -88,7 +92,7 @@
     const edgeClearance = headerTop >= 7 && headerTop <= 10 &&
       headerBottom - searchBottom >= 7 &&
       actionControls.getBoundingClientRect().top > content.getBoundingClientRect().bottom &&
-      actionControls.getBoundingClientRect().bottom < settingsButton.getBoundingClientRect().top &&
+      actionControls.getBoundingClientRect().bottom === settingsButton.getBoundingClientRect().bottom &&
       innerHeight - footerBottom >= 7 &&
       innerHeight - settingsButtonBottom >= 11 &&
       innerHeight - settingsButtonBottom <= 14;
@@ -119,7 +123,7 @@
       line.textContent = `Setting ${item}`;
       panel.append(line);
     }
-    footer.insertBefore(panel, settingsButton);
+    footer.insertBefore(panel, footerControls);
     const settingsScrolls = panel.scrollHeight > panel.clientHeight &&
       settingsButton.getBoundingClientRect().bottom === settingsButtonBottom;
     const passed = controlsMatchSearch && controlsFillSidebar && edgeClearance && scrollsBetweenBars && settingsScrolls &&

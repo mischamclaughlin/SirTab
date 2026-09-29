@@ -116,11 +116,14 @@ body {
   overflow-y: auto;
 }
 
-#settings > .action-controls {
+.footer-controls {
+  width: 100%;
   flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(max-content, 1fr);
+  gap: 0.25rem;
 }
 
-#settings > .settings-btn,
 #settings > .shortcut-prompt {
   flex: none;
 }

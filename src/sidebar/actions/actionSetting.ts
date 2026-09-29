@@ -102,7 +102,10 @@ async function refreshShortcutList(list: HTMLElement) {
     }
 }
 
-export async function setupSettingAction(settings: HTMLElement): Promise<void> {
+export async function setupSettingAction(
+    settings: HTMLElement,
+    actionControls: HTMLElement,
+): Promise<void> {
     const settingsBtn = document.createElement("button");
     settingsBtn.type = "button";
     settingsBtn.textContent = "settings";
@@ -279,5 +282,8 @@ export async function setupSettingAction(settings: HTMLElement): Promise<void> {
 
     await refreshShortcutPrompt(shortcutPrompt, shortcutPromptCount);
 
-    settings?.append(shortcutPrompt, settingInfoSection, settingsBtn);
+    const footerControls = document.createElement("div");
+    footerControls.className = "footer-controls";
+    footerControls.append(actionControls, settingsBtn);
+    settings.append(shortcutPrompt, settingInfoSection, footerControls);
 }
