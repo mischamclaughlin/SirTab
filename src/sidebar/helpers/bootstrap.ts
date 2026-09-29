@@ -29,6 +29,7 @@ import { setupSelectAction } from "../actions/actionSelect.js";
 import { buildGroup, groupCollapse } from "../group/group.js";
 import { cycleBookmarks, filterBookmarkNodes } from "../bookmark/bookmark.js";
 import { createTabSelectionController } from "./tabSelection.js";
+import { setupAutoHideScrollbars } from "./scrollbar.js";
 
 function buildVisibleTabIds(
     visibleUngroupedTabs: chrome.tabs.Tab[],
@@ -97,6 +98,7 @@ function getSidebarElements(): SidebarElements | null {
 export async function bootstrapSidebar() {
     const sidebarElements = getSidebarElements();
     if (!sidebarElements) return;
+    setupAutoHideScrollbars();
     const elements: SidebarElements = sidebarElements;
     const currentWindow = await chrome.windows.getCurrent();
     if (currentWindow.id == null) return;

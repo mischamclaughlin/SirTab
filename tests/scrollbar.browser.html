@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="../dist/sidebar/sidebar.css">
+</head>
+<body>
+  <output id="result">RUNNING</output>
+  <main id="sidebar-content"></main>
+  <div id="settings">
+    <div class="action-panel"></div>
+    <div class="setting-info-section"></div>
+  </div>
+  <script type="module">
+    try {
+      const { setupAutoHideScrollbars } = await import('../dist/sidebar/helpers/scrollbar.js');
+      setupAutoHideScrollbars();
+      const areas = [
+        document.getElementById('sidebar-content'),
+        document.querySelector('#settings > .action-panel'),
+        document.querySelector('.setting-info-section'),
+      ];
+      const idleColour = getComputedStyle(areas[0]).scrollbarColor;
+      if (areas.some((area) => getComputedStyle(area).scrollbarWidth !== 'thin')) {
+        throw new Error('scrollbar is not thin');
+      }
+      areas.forEach((area) => area.dispatchEvent(new Event('scroll')));
+      if (areas.some((area) => !area.classList.contains('is-scrolling') ||
+          getComputedStyle(area).scrollbarColor === idleColour)) {
+        throw new Error('scrollbar did not appear during scrolling');
+      }
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      if (areas.some((area) => area.classList.contains('is-scrolling') ||
+          getComputedStyle(area).scrollbarColor !== idleColour)) {
+        throw new Error('scrollbar did not become transparent after scrolling');
+      }
+      document.getElementById('result').textContent = 'PASS';
+    } catch (error) {
+      document.getElementById('result').textContent = `FAIL: ${error.message}`;
+    }
+  </script>
+</body>
+</html>

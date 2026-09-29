@@ -34,6 +34,44 @@ body {
   overscroll-behavior: contain;
 }
 
+#sidebar-content,
+#settings > .action-panel,
+.setting-info-section {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+#sidebar-content.is-scrolling,
+#settings > .action-panel.is-scrolling,
+.setting-info-section.is-scrolling {
+  scrollbar-color: rgba(var(--subsubtext-colour-RGB), 0.65) transparent;
+}
+
+#sidebar-content::-webkit-scrollbar,
+#settings > .action-panel::-webkit-scrollbar,
+.setting-info-section::-webkit-scrollbar {
+  width: 5px;
+}
+
+#sidebar-content::-webkit-scrollbar-track,
+#settings > .action-panel::-webkit-scrollbar-track,
+.setting-info-section::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#sidebar-content::-webkit-scrollbar-thumb,
+#settings > .action-panel::-webkit-scrollbar-thumb,
+.setting-info-section::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+#sidebar-content.is-scrolling::-webkit-scrollbar-thumb,
+#settings > .action-panel.is-scrolling::-webkit-scrollbar-thumb,
+.setting-info-section.is-scrolling::-webkit-scrollbar-thumb {
+  background: rgba(var(--subsubtext-colour-RGB), 0.65);
+}
+
 #actions {
   flex: none;
 }
