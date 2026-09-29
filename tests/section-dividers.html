@@ -23,16 +23,16 @@
       return node;
     };
     const cases = [
-      { name: 'empty', children: [null, null, null], lines: [0, 0] },
-      { name: 'tabs only', children: ['tab-item', null, null], lines: [0, 0] },
-      { name: 'groups only', children: [null, 'group-item', null], lines: [0, 0] },
-      { name: 'bookmarks only', children: [null, null, 'tab-item'], lines: [0, 0] },
-      { name: 'tabs and groups', children: ['tab-item', 'group-item', null], lines: [1, 0] },
-      { name: 'tabs and bookmarks', children: ['tab-item', null, 'tab-item'], lines: [1, 0] },
-      { name: 'groups and bookmarks', children: [null, 'group-item', 'tab-item'], lines: [0, 1] },
-      { name: 'all sections', children: ['tab-item', 'group-item', 'tab-item'], lines: [1, 1] },
-      { name: 'empty group result', children: ['tab-item', 'empty-search-state-message', 'tab-item'], lines: [1, 0] },
-      { name: 'empty bookmark result', children: ['tab-item', null, 'empty-search-state-message'], lines: [0, 0] },
+      { name: 'empty', children: [null, null, null], lines: [0, 0], visible: [false, false, false] },
+      { name: 'tabs only', children: ['tab-item', null, null], lines: [0, 0], visible: [true, false, false] },
+      { name: 'groups only', children: [null, 'group-item', null], lines: [0, 0], visible: [true, true, false] },
+      { name: 'bookmarks only', children: [null, null, 'tab-item'], lines: [0, 0], visible: [false, false, true] },
+      { name: 'tabs and groups', children: ['tab-item', 'group-item', null], lines: [1, 0], visible: [true, true, false] },
+      { name: 'tabs and bookmarks', children: ['tab-item', null, 'tab-item'], lines: [1, 0], visible: [true, false, true] },
+      { name: 'groups and bookmarks', children: [null, 'group-item', 'tab-item'], lines: [0, 1], visible: [true, true, true] },
+      { name: 'all sections', children: ['tab-item', 'group-item', 'tab-item'], lines: [1, 1], visible: [true, true, true] },
+      { name: 'empty group result', children: ['tab-item', 'empty-search-state-message', 'tab-item'], lines: [1, 0], visible: [true, true, true] },
+      { name: 'empty bookmark result', children: ['tab-item', null, 'empty-search-state-message'], lines: [0, 0], visible: [true, false, true] },
     ];
     try {
       for (const scenario of cases) {
@@ -44,6 +44,17 @@
         );
         if (actual.some((width, index) => width !== scenario.lines[index])) {
           throw new Error(`${scenario.name}: expected ${scenario.lines}, got ${actual}`);
+        }
+        const visible = lists.map((list) => getComputedStyle(list).display !== 'none');
+        if (visible.some((value, index) => value !== scenario.visible[index])) {
+          throw new Error(`${scenario.name}: expected visible ${scenario.visible}, got ${visible}`);
+        }
+        if (scenario.name === 'tabs and bookmarks') {
+          const gap = lists[2].getBoundingClientRect().top - lists[0].getBoundingClientRect().bottom;
+          if (gap !== 8) throw new Error(`empty groups left a ${gap}px gap`);
+        }
+        if (scenario.name === 'groups only' && lists[0].getBoundingClientRect().height < 16) {
+          throw new Error('empty ungrouped tab drop area collapsed');
         }
       }
       lists.forEach((list) => list.replaceChildren());
