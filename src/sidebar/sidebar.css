@@ -28,7 +28,7 @@ optgroup {
   border-radius: 0.25rem;
   background: transparent;
   color: var(--subtext);
-  padding: 0.25rem;
+  padding: 0 0.25rem;
   font-variant-ligatures: none;
   cursor: pointer;
   transition:
@@ -39,13 +39,13 @@ optgroup {
 button.control {
   display: grid;
   place-items: center;
-  min-height: 1.5rem;
+  height: var(--control-height);
 }
 
 .search-input,
 .action-controls > .control,
 #settings > .settings-btn {
-  height: 1.5rem;
+  height: var(--control-height);
 }
 
 .control-icon {
@@ -96,7 +96,9 @@ button.control {
   cursor: pointer;
   display: grid;
   place-items: center;
-  padding: 0.25rem;
+  padding: 0;
+  width: var(--control-height);
+  height: var(--control-height);
   font-size: 0.85rem;
   font-weight: 600;
 }

@@ -4,7 +4,7 @@
   border-radius: 0.25rem;
   background: transparent;
   color: var(--subtext);
-  padding: 0.25rem 0.5rem;
+  padding: 0 0.5rem;
   font-variant-ligatures: none;
   caret-color: var(--text);
 }
@@ -58,12 +58,12 @@
   border-radius: 0.25rem;
   background: transparent;
   color: var(--subtext);
-  padding: 0.25rem;
+  padding: 0;
   font-variant-ligatures: none;
   cursor: pointer;
   display: grid;
   place-items: center;
-  min-height: 2rem;
+  height: var(--control-height);
 }
 
 .action-toggle.is-selected {
