@@ -70,6 +70,11 @@ button.control {
   color: var(--text);
 }
 
+input.control,
+textarea.control {
+  cursor: text;
+}
+
 :where(button, input, select):focus-visible {
   outline: none;
   border-color: var(--border-light);

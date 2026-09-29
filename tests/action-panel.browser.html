@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<link rel="stylesheet" href="../dist/sidebar/sidebar.css">
+<title>Action panel keyboard and cursor check</title>
+<div id="settings">
+  <div class="action-panel"></div>
+  <div class="footer-controls">
+    <button class="control settings-btn" aria-label="Settings"></button>
+    <div class="action-controls"></div>
+  </div>
+</div>
+<output id="result">RUNNING</output>
+<script type="module">
+  const result = document.getElementById('result');
+  addEventListener('error', (event) => {
+    result.textContent = `FAIL: ${event.error?.stack ?? event.message}`;
+  });
+  addEventListener('unhandledrejection', (event) => {
+    result.textContent = `FAIL: ${event.reason}`;
+  });
+
+  globalThis.chrome = {
+    runtime: { getURL: (path) => path },
+    bookmarks: { getTree: async () => [{ id: '1', title: 'Bookmarks Bar', children: [] }] },
+  };
+
+  const { createActionPanelController } = await import('../dist/sidebar/helpers/actionPanel.js');
+  const { setupGroupAction } = await import('../dist/sidebar/actions/actionGroup.js');
+  const { setupBookmarkAction } = await import('../dist/sidebar/actions/actionBookmark.js');
+
+  const panel = document.querySelector('.action-panel');
+  const controls = document.querySelector('.action-controls');
+  const controller = createActionPanelController(panel);
+  await setupGroupAction(controls, controller);
+  await setupBookmarkAction(controls, controller);
+
+  function assert(condition, message) {
+    if (!condition) throw new Error(message);
+  }
+
+  function escapeFrom(element) {
+    element.focus();
+    element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  }
+
+  const [groupButton, bookmarkButton] = controls.querySelectorAll('button');
+  groupButton.click();
+  const groupInput = panel.querySelector('#group-name-input');
+  assert(groupInput && getComputedStyle(groupInput).cursor === 'text', 'group input needs a text cursor');
+  assert(getComputedStyle(panel.querySelector('select')).cursor === 'pointer', 'select needs a pointer cursor');
+  escapeFrom(groupInput);
+  assert(!controller.isOpen('group') && panel.childElementCount === 0, 'Escape did not close group form');
+  assert(document.activeElement === groupButton && !groupButton.classList.contains('is-selected'),
+    'group button did not regain focus and reset');
+
+  bookmarkButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const bookmarkInput = panel.querySelector('#bookmark-name-input');
+  assert(bookmarkInput && getComputedStyle(bookmarkInput).cursor === 'text', 'bookmark input needs a text cursor');
+  escapeFrom(panel.querySelector('select'));
+  assert(!controller.isOpen('bookmark') && panel.childElementCount === 0, 'Escape did not close bookmark form');
+  assert(document.activeElement === bookmarkButton && !bookmarkButton.classList.contains('is-selected'),
+    'bookmark button did not regain focus and reset');
+
+  result.textContent = 'PASS';
+</script>
+</html>

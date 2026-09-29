@@ -78,7 +78,7 @@ export function setupSelectAction(
 
         selectPanel.replaceChildren(summary, deleteBtn, clearBtn);
         if (!actionPanel.isOpen("select")) {
-            actionPanel.open("select", selectPanel, handleSelectPanelClosed);
+            actionPanel.open("select", selectPanel, handleSelectPanelClosed, btnSelect);
         }
     }
 

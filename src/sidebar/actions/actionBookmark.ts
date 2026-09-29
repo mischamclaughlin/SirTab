@@ -62,7 +62,7 @@ export async function setupBookmarkAction(
         const bookmarkInfoDropdown = document.createElement("div");
         bookmarkInfoDropdown.className = "info-dropdown";
         bookmarkForm.append(addCurrentTab, bookmarkInfoDropdown);
-        actionPanel.open("bookmark", bookmarkForm, closeBookmarkForm);
+        actionPanel.open("bookmark", bookmarkForm, closeBookmarkForm, btnNewBookmark);
         updateCurrentTabToggle();
 
         addCurrentTab.addEventListener("click", () => {

@@ -32,7 +32,7 @@ export async function setupGroupAction(
         const groupInfoDropdown = document.createElement("div");
         groupInfoDropdown.className = "info-dropdown";
         groupForm.appendChild(groupInfoDropdown);
-        actionPanel.open("group", groupForm, closeGroupForm);
+        actionPanel.open("group", groupForm, closeGroupForm, btnGroup);
 
         const textInput = document.createElement("input");
         textInput.type = "text";

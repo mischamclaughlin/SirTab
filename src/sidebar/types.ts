@@ -13,6 +13,7 @@ export type ActionPanelController = {
         ownerId: string,
         content: HTMLElement,
         onClose: () => void,
+        trigger: HTMLButtonElement,
     ) => void;
     close: (ownerId?: string) => boolean;
     isOpen: (ownerId: string) => boolean;
