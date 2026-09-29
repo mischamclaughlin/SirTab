@@ -66,11 +66,12 @@ globalThis.requestAnimationFrame = (callback) => {
 };
 globalThis.cancelAnimationFrame = (id) => frames.delete(id);
 
-const state = { tabs: [], groups: [], storage: {}, groupCalls: [] };
+const state = { tabs: [], groups: [], storage: {}, groupCalls: [], bookmarks: [] };
 globalThis.chrome = {
     tabGroups: { TAB_GROUP_ID_NONE: -1, query: async () => state.groups },
     tabs: {
         query: async () => state.tabs,
+        get: async (id) => state.tabs.find((tab) => tab.id === id),
         group: async ({ groupId, tabIds }) => {
             state.groupCalls.push({ groupId, tabIds: [...tabIds] });
             for (const tab of state.tabs) if (tabIds.includes(tab.id)) tab.groupId = groupId;
@@ -86,6 +87,10 @@ globalThis.chrome = {
         },
     },
     windows: { getAll: async () => [{ id: 1 }] },
+    bookmarks: {
+        getTree: async () => [{ id: "0", children: [{ id: "1", folderType: "bookmarks-bar" }] }],
+        create: async (details) => { state.bookmarks.push(details); },
+    },
 };
 
 const {
@@ -132,6 +137,7 @@ test("marker follows rows during bottom auto-scroll; selected tabs drop together
     state.storage = {};
     const tabsList = new FakeElement(["tabs-list"]);
     const groupsList = new FakeElement(["groups-list"]);
+    const bookmarksList = new FakeElement(["bookmarks-list"]);
     const sourceItem = new FakeElement(["tab-item"], tabsList, { tabId: "10" });
     const sourceRow = new FakeElement(["tab-row"], sourceItem);
     const sourceHandle = new FakeElement([], sourceRow);
@@ -147,8 +153,8 @@ test("marker follows rows during bottom auto-scroll; selected tabs drop together
     let renders = 0;
     const requestRender = () => { renders++; };
 
-    setupSidebarDropZones(tabsList, groupsList, 1, enabled, requestRender);
-    setupSidebarDropZones(tabsList, groupsList, 1, enabled, requestRender);
+    setupSidebarDropZones(tabsList, groupsList, bookmarksList, 1, enabled, requestRender, requestRender);
+    setupSidebarDropZones(tabsList, groupsList, bookmarksList, 1, enabled, requestRender, requestRender);
     assert.equal(document.listeners.get("dragover").length, 1);
     assert.equal(document.listeners.get("drop").length, 1);
     makeTabDraggable(sourceHandle, sourceRow, 1, 10, enabled, requestRender, () => [10, 30]);
@@ -186,4 +192,41 @@ test("marker follows rows during bottom auto-scroll; selected tabs drop together
     assert.equal(groupRow.classList.contains("drop-before"), false);
     document.dispatch("dragend", dragEvent(groupHandle));
     assert.equal(deferRenderUntilDragSettles(requestRender), false);
+
+    state.tabs.find((item) => item.id === 10).title = "  Named tab  ";
+    state.tabs.find((item) => item.id === 30).url = "chrome://settings";
+    const folderItem = new FakeElement(["tab-item"], bookmarksList, {
+        bookmarkId: "22", bookmarkFolderId: "22",
+    });
+    const folderRow = new FakeElement(["tree-row"], folderItem);
+    const bookmarkDrag = dragEvent(sourceHandle);
+    sourceHandle.dispatch("dragstart", bookmarkDrag);
+    assert.equal(bookmarkDrag.dataTransfer.effectAllowed, "copyMove");
+    const overFolder = dragEvent(folderRow);
+    document.dispatch("dragover", overFolder);
+    assert.equal(overFolder.dataTransfer.dropEffect, "copy");
+    assert.equal(folderRow.classList.contains("drop-inside"), true);
+    hitTarget = folderRow;
+    document.dispatch("drop", dragEvent(folderRow));
+    await flushDrop();
+    assert.deepEqual(state.bookmarks, [{
+        parentId: "22", title: "Named tab", url: "https://example.test/10",
+    }]);
+    assert.equal(state.tabs.find((item) => item.id === 10).groupId, 7);
+
+    const bookmarkItem = new FakeElement(["tab-item"], bookmarksList, {
+        bookmarkId: "23", bookmarkParentId: "24",
+    });
+    const bookmarkRow = new FakeElement(["tab-row"], bookmarkItem);
+    sourceHandle.dispatch("dragstart", dragEvent(sourceHandle));
+    hitTarget = bookmarkRow;
+    document.dispatch("drop", dragEvent(bookmarkRow));
+    await flushDrop();
+    assert.equal(state.bookmarks.at(-1).parentId, "24");
+
+    sourceHandle.dispatch("dragstart", dragEvent(sourceHandle));
+    hitTarget = bookmarksList;
+    document.dispatch("drop", dragEvent(bookmarksList));
+    await flushDrop();
+    assert.equal(state.bookmarks.at(-1).parentId, "1");
 });

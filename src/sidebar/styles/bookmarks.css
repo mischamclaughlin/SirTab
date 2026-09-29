@@ -6,6 +6,11 @@
     gap: 0.25rem;
 }
 
+#bookmarks-list .tab-row.drop-inside .tab-label,
+#bookmarks-list .tree-row.drop-inside .tree-toggle {
+    box-shadow: inset 0 0 0 2px rgba(var(--blue-colour-RGB), 0.5);
+}
+
 .bookmark-edit-form {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;

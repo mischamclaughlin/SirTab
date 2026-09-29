@@ -66,9 +66,18 @@ body {
 }
 
 #tabs-list:empty:not(:has(~ #groups-list > .group-item)),
-#groups-list:empty,
-#bookmarks-list:empty {
+#groups-list:empty {
   display: none;
+}
+
+#bookmarks-list:empty {
+  min-height: var(--control-height);
+}
+
+#bookmarks-list:empty::after {
+  content: "Drag tabs here to bookmark";
+  color: var(--subsubtext);
+  font-size: 0.75rem;
 }
 
 #tabs-list:has(> .tab-item):has(
@@ -84,13 +93,15 @@ body {
 }
 
 #tabs-list.drop-append,
-#groups-list.drop-append {
+#groups-list.drop-append,
+#bookmarks-list.drop-append {
   --section-divider-colour: rgba(var(--blue-colour-RGB), 0.85);
   border-bottom: 1px solid var(--section-divider-colour);
 }
 
 #tabs-list.drop-append::after,
-#groups-list.drop-append::after {
+#groups-list.drop-append::after,
+#bookmarks-list.drop-append::after {
   content: "";
   display: block;
   min-height: 0.75rem;

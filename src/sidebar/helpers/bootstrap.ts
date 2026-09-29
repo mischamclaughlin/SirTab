@@ -222,9 +222,11 @@ export async function bootstrapSidebar() {
     setupSidebarDropZones(
         elements.tabsList,
         elements.groupsList,
+        elements.bookmarksList,
         currentWindowId,
         () => getSearchQuery().length === 0,
         requestTabGroupRefresh,
+        requestBookmarkRefresh,
     );
 
     elements.settings.appendChild(elements.actionPanelSection);

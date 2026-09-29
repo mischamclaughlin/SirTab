@@ -23,11 +23,11 @@
       return node;
     };
     const cases = [
-      { name: 'empty', children: [null, null, null], lines: [0, 0], visible: [false, false, false] },
-      { name: 'tabs only', children: ['tab-item', null, null], lines: [0, 0], visible: [true, false, false] },
-      { name: 'groups only', children: [null, 'group-item', null], lines: [0, 0], visible: [true, true, false] },
+      { name: 'empty', children: [null, null, null], lines: [0, 0], visible: [false, false, true] },
+      { name: 'tabs only', children: ['tab-item', null, null], lines: [0, 0], visible: [true, false, true] },
+      { name: 'groups only', children: [null, 'group-item', null], lines: [0, 0], visible: [true, true, true] },
       { name: 'bookmarks only', children: [null, null, 'tab-item'], lines: [0, 0], visible: [false, false, true] },
-      { name: 'tabs and groups', children: ['tab-item', 'group-item', null], lines: [1, 0], visible: [true, true, false] },
+      { name: 'tabs and groups', children: ['tab-item', 'group-item', null], lines: [1, 0], visible: [true, true, true] },
       { name: 'tabs and bookmarks', children: ['tab-item', null, 'tab-item'], lines: [1, 0], visible: [true, false, true] },
       { name: 'groups and bookmarks', children: [null, 'group-item', 'tab-item'], lines: [0, 1], visible: [true, true, true] },
       { name: 'all sections', children: ['tab-item', 'group-item', 'tab-item'], lines: [1, 1], visible: [true, true, true] },

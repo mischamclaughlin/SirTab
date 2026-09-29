@@ -2,6 +2,8 @@ import type { BookmarkFolderChoice, TabSelectionView } from "../types.js";
 import { persistCollapse, isCollapsedCheck } from "../helpers/collapseState.js";
 import { matchesNodeQuery } from "../helpers/nodeSearch.js";
 import { DEFAULT_TAB_ICON_URL } from "../config.js";
+import { isAllowedBookmarkUrl } from "./url.js";
+export { isAllowedBookmarkUrl } from "./url.js";
 import {
     createDeleteButton,
     createToggleButton,
@@ -156,17 +158,6 @@ function createBookmarkEditForm(
     return form;
 }
 
-export function isAllowedBookmarkUrl(rawUrl: string) {
-    try {
-        const parsedUrl = new URL(rawUrl);
-        return (
-            parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:"
-        );
-    } catch {
-        return false;
-    }
-}
-
 export function filterBookmarkNodes(
     nodes: chrome.bookmarks.BookmarkTreeNode[],
     query: string,
@@ -225,6 +216,11 @@ export function cycleBookmarks(
         const li = document.createElement("li");
         li.className = "tab-item";
         li.dataset.bookmarkId = node.id;
+        if (node.url) {
+            if (node.parentId) li.dataset.bookmarkParentId = node.parentId;
+        } else {
+            li.dataset.bookmarkFolderId = node.id;
+        }
 
         if (node.url) {
             const btn = document.createElement("button");

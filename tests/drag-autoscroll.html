@@ -63,7 +63,7 @@
       list.append(item);
       makeTabDraggable(button, row, 1, id, () => true, () => {});
     }
-    setupSidebarDropZones(list, document.getElementById('groups-list'), 1, () => true, () => {});
+    setupSidebarDropZones(list, document.getElementById('groups-list'), document.getElementById('bookmarks-list'), 1, () => true, () => {}, () => {});
     const content = document.getElementById('sidebar-content');
     const header = document.getElementById('actions');
     const footer = document.getElementById('settings');

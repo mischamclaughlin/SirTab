@@ -9,6 +9,7 @@ import {
     moveStoredTabsToEnd,
 } from "../../shared/groupOrder.js";
 import type { DropPosition } from "../../shared/groupOrder.js";
+import { isAllowedBookmarkUrl } from "../bookmark/url.js";
 
 type DragPayload =
     | { kind: "tabs"; ids: number[] }
@@ -182,7 +183,7 @@ function writePayload(event: DragEvent, payload: DragPayload, row: HTMLElement) 
     if (!dataTransfer) return;
 
     const serialisedPayload = serialisePayload(payload);
-    dataTransfer.effectAllowed = "move";
+    dataTransfer.effectAllowed = payload.kind === "tabs" ? "copyMove" : "move";
     dataTransfer.setData(DRAG_DATA_MIME, serialisedPayload);
     const bounds = row.getBoundingClientRect();
     dataTransfer.setDragImage(
@@ -315,6 +316,28 @@ async function moveGroupToGroupListEnd(windowId: number, sourceGroupId: number) 
     await moveStoredGroupToEnd(windowId, sourceGroupId);
 }
 
+async function getBookmarksBarId() {
+    const tree = await chrome.bookmarks.getTree();
+    const folders = tree.flatMap((node) => node.children ?? []);
+    const bar = folders.find((node) => !node.url &&
+        (node.folderType === "bookmarks-bar" || node.id === "1"));
+    if (!bar) throw new Error("Bookmarks Bar folder not found");
+    return bar.id;
+}
+
+async function bookmarkTabs(tabIds: number[], parentId?: string) {
+    const destinationId = parentId ?? await getBookmarksBarId();
+    for (const tabId of tabIds) {
+        const tab = await chrome.tabs.get(tabId);
+        if (!tab.url || !isAllowedBookmarkUrl(tab.url)) continue;
+        await chrome.bookmarks.create({
+            parentId: destinationId,
+            title: tab.title?.trim() || tab.url,
+            url: tab.url,
+        });
+    }
+}
+
 async function runDropAction(
     action: () => Promise<void>,
     requestRender: RequestRender,
@@ -324,7 +347,7 @@ async function runDropAction(
     try {
         await action();
     } catch (error) {
-        console.error("Drag and drop move failed:", error);
+        console.error("Drag and drop action failed:", error);
     } finally {
         renderAfterDrag.add(requestRender);
         pendingDropActions -= 1;
@@ -340,6 +363,8 @@ type DropTarget = {
     element: HTMLElement;
     className: string;
     action: () => Promise<void>;
+    effect?: "copy" | "move";
+    requestRender?: RequestRender;
 };
 
 function getDropTarget(
@@ -348,9 +373,28 @@ function getDropTarget(
     payload: DragPayload,
     tabsList: HTMLElement,
     groupsList: HTMLElement,
+    bookmarksList: HTMLElement,
     windowId: number,
+    requestBookmarkRender: RequestRender,
 ): DropTarget | null {
     if (!(target instanceof Element)) return null;
+
+    if (bookmarksList.contains(target) && payload.kind === "tabs") {
+        const item = target.closest<HTMLElement>(".tab-item");
+        const bookmarkItem = item && bookmarksList.contains(item) ? item : null;
+        const folderId = bookmarkItem?.dataset.bookmarkFolderId;
+        const parentId = folderId ?? bookmarkItem?.dataset.bookmarkParentId;
+        const row = bookmarkItem?.querySelector<HTMLElement>(
+            folderId ? ".tree-row" : ".tab-row",
+        );
+        return {
+            element: row ?? bookmarksList,
+            className: row ? "drop-inside" : "drop-append",
+            action: () => bookmarkTabs(payload.ids, parentId),
+            effect: "copy",
+            requestRender: requestBookmarkRender,
+        };
+    }
 
     const tabRow = target.closest<HTMLElement>(".tab-row");
     if (tabRow && (tabsList.contains(tabRow) || groupsList.contains(tabRow))) {
@@ -409,16 +453,19 @@ function getDropTarget(
 export function setupSidebarDropZones(
     tabsList: HTMLElement,
     groupsList: HTMLElement,
+    bookmarksList: HTMLElement,
     windowId: number,
     isDragEnabled: DragEnabledCheck,
     requestRender: RequestRender,
+    requestBookmarkRender: RequestRender,
 ) {
     if (!documentListenersInstalled) {
         documentListenersInstalled = true;
         const hitTest = (x: number, y: number) => document.elementFromPoint(x, y);
         const resolveAt = (target: EventTarget | null, y: number) =>
             activeDragPayload && isDragEnabled()
-                ? getDropTarget(target, y, activeDragPayload, tabsList, groupsList, windowId)
+                ? getDropTarget(target, y, activeDragPayload, tabsList, groupsList,
+                    bookmarksList, windowId, requestBookmarkRender)
                 : null;
         updateDropAtPoint = (x, y) => {
             const dropTarget = resolveAt(hitTest(x, y), y);
@@ -433,7 +480,7 @@ export function setupSidebarDropZones(
             const dropTarget = resolveAt(event.target, event.clientY);
             if (dropTarget) {
                 event.preventDefault();
-                if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+                if (event.dataTransfer) event.dataTransfer.dropEffect = dropTarget.effect ?? "move";
                 setDropIndicator(dropTarget.element, dropTarget.className);
             } else {
                 clearDropIndicator();
@@ -450,7 +497,7 @@ export function setupSidebarDropZones(
                 return;
             }
             event.preventDefault();
-            void runDropAction(dropTarget.action, requestRender);
+            void runDropAction(dropTarget.action, dropTarget.requestRender ?? requestRender);
         });
         document.addEventListener("dragend", clearDragState);
     }
