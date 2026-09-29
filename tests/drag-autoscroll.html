@@ -80,13 +80,16 @@
     const lastAction = actionButtons.at(-1).getBoundingClientRect();
     const controlsRect = footerControls.getBoundingClientRect();
     const settingsRect = settingsButton.getBoundingClientRect();
+    const iconWidth = settingsButton.querySelector('svg').getBoundingClientRect().width;
     const controlsFillSidebar = actionButtons.length === 4 &&
       settingsButton.getAttribute('aria-label') === 'Settings' &&
       settingsButton.querySelector('svg.control-icon') !== null &&
       settingsRect.left === controlsRect.left && lastAction.right === controlsRect.right &&
+      settingsRect.width > iconWidth && settingsRect.width < iconWidth * 2 &&
       actionButtons.every((button) => {
         const rect = button.getBoundingClientRect();
-        return rect.top === settingsRect.top && Math.abs(rect.width - settingsRect.width) < 1;
+        return rect.top === settingsRect.top && rect.width > settingsRect.width &&
+          Math.abs(rect.width - firstAction.width) < 1;
       }) && settingsRect.right < firstAction.left;
     const headerTop = header.getBoundingClientRect().top;
     const searchBottom = header.querySelector('.search-input').getBoundingClientRect().bottom;

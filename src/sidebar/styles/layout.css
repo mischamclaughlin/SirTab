@@ -120,12 +120,12 @@ body {
   width: 100%;
   flex: none;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: 1.75rem minmax(0, 1fr);
   gap: 0.25rem;
 }
 
 .footer-controls > .action-controls {
-  grid-column: span 4;
+  min-width: 0;
 }
 
 #settings > .shortcut-prompt {
