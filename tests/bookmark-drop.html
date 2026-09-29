@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="../dist/sidebar/sidebar.css">
+  <style>body { width: 300px; }</style>
+</head>
+<body>
+  <output id="result">RUNNING</output>
+  <main id="sidebar-content">
+    <ul id="tabs-list"></ul>
+    <ul id="groups-list"></ul>
+    <ul id="bookmarks-list"></ul>
+  </main>
+  <script type="module">
+    try {
+      const created = [];
+      globalThis.chrome = {
+        runtime: { getURL: (path) => path },
+        tabGroups: { TAB_GROUP_ID_NONE: -1 },
+        tabs: { get: async () => ({ id: 10, title: 'Actual tab name', url: 'https://example.com' }) },
+        bookmarks: {
+          getTree: async () => [{ id: '0', children: [{ id: '1', folderType: 'bookmarks-bar' }] }],
+          create: async (entry) => { created.push(entry); },
+        },
+      };
+      const { cycleTabs } = await import('../dist/sidebar/tab/tab.js');
+      const { cycleBookmarks } = await import('../dist/sidebar/bookmark/bookmark.js');
+      const { setupSidebarDropZones } = await import('../dist/sidebar/helpers/dragAndDrop.js');
+      const tabs = document.getElementById('tabs-list');
+      const groups = document.getElementById('groups-list');
+      const bookmarks = document.getElementById('bookmarks-list');
+      cycleTabs(tabs, [{ id: 10, title: 'Actual tab name', url: 'https://example.com' }], {
+        windowId: 1, enableDragDrop: true, requestRender: () => {},
+      });
+      cycleBookmarks(bookmarks, [{ id: '22', title: 'Folder', children: [{
+        id: '23', parentId: '22', title: 'Existing', url: 'https://existing.example',
+      }] }]);
+      setupSidebarDropZones(tabs, groups, bookmarks, 1, () => true, () => {}, () => {});
+      const source = tabs.querySelector('.tab-button');
+      async function dropOn(target) {
+        const sourceBounds = source.getBoundingClientRect();
+        source.dispatchEvent(new DragEvent('dragstart', {
+          bubbles: true, dataTransfer: new DataTransfer(),
+          clientX: sourceBounds.left + 10, clientY: sourceBounds.top + 10,
+        }));
+        const bounds = target.getBoundingClientRect();
+        const x = bounds.left + Math.min(10, bounds.width / 2);
+        const y = bounds.top + bounds.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        hit.dispatchEvent(new DragEvent('dragover', {
+          bubbles: true, dataTransfer: new DataTransfer(), clientX: x, clientY: y,
+        }));
+        hit.dispatchEvent(new DragEvent('drop', {
+          bubbles: true, dataTransfer: new DataTransfer(), clientX: x, clientY: y,
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      await dropOn(bookmarks.querySelector('.tree-toggle'));
+      await dropOn(bookmarks.querySelector('.tab-button'));
+      bookmarks.replaceChildren();
+      await dropOn(bookmarks);
+      const valid = created.length === 3 &&
+        created[0].parentId === '22' && created[1].parentId === '22' &&
+        created[2].parentId === '1' &&
+        created.every((entry) => entry.title === 'Actual tab name');
+      document.getElementById('result').textContent = valid
+        ? 'PASS' : `FAIL: ${JSON.stringify(created)}`;
+    } catch (error) {
+      document.getElementById('result').textContent = `FAIL: ${error.stack}`;
+    }
+  </script>
+</body>
+</html>
