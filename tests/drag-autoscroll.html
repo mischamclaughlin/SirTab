@@ -70,8 +70,16 @@
     const searchHeight = header.querySelector('.search-input').getBoundingClientRect().height;
     const controlsMatchSearch = [...actionControls.querySelectorAll('button'), settingsButton]
       .every((button) => button.getBoundingClientRect().height === searchHeight);
-    const controlsFillSidebar = [...actionControls.querySelectorAll('button')]
-      .every((button) => button.getBoundingClientRect().width === actionControls.getBoundingClientRect().width);
+    const actionButtons = [...actionControls.querySelectorAll('button')];
+    const firstAction = actionButtons[0].getBoundingClientRect();
+    const lastAction = actionButtons.at(-1).getBoundingClientRect();
+    const controlsRect = actionControls.getBoundingClientRect();
+    const controlsFillSidebar = actionButtons.length === 4 &&
+      firstAction.left === controlsRect.left && lastAction.right === controlsRect.right &&
+      actionButtons.every((button) => {
+        const rect = button.getBoundingClientRect();
+        return rect.top === firstAction.top && Math.abs(rect.width - firstAction.width) < 1;
+      });
     const headerTop = header.getBoundingClientRect().top;
     const searchBottom = header.querySelector('.search-input').getBoundingClientRect().bottom;
     const headerBottom = header.getBoundingClientRect().bottom;
