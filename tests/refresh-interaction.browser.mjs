@@ -48,6 +48,7 @@ try {
     });
     const address = server.address();
     const page = process.env.SIRTAB_TEST_PAGE ?? "tests/refresh-interaction.html";
+    const screenshotPath = process.env.SIRTAB_TEST_SCREENSHOT;
     const url = `http://127.0.0.1:${address.port}/${page}`;
     child = spawn(browser, [
         "--headless=new",
@@ -55,6 +56,7 @@ try {
         "--disable-gpu",
         `--user-data-dir=${profile}`,
         "--virtual-time-budget=3000",
+        ...(screenshotPath ? ["--window-size=360,600", `--screenshot=${screenshotPath}`] : []),
         "--dump-dom",
         url,
     ], { stdio: ["ignore", "pipe", "pipe"] });

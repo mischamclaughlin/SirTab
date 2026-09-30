@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="../dist/sidebar/sidebar.css">
+  <style>body { width: 300px; }</style>
+</head>
+<body>
+  <div id="actions"><div class="search-controls"><input class="search-input" placeholder="search tabs and bookmarks"></div></div>
+  <main id="sidebar-content">
+    <ul id="tabs-list"><li class="tab-item">Tab</li></ul>
+    <ul id="groups-list"><li class="group-item">Group</li></ul>
+    <ul id="bookmarks-list"><li class="tab-item">Bookmark</li></ul>
+  </main>
+  <button class="control settings-btn" style="width:1.75rem">Settings</button>
+  <output id="result">RUNNING</output>
+  <script type="module">
+    try {
+      const writes = [];
+      globalThis.chrome = {
+        runtime: { getURL: (path) => path },
+        storage: { local: {
+          get: async () => ({ hiddenSidebarSections: ['groups', 'unknown'] }),
+          set: async (value) => { writes.push(value.hiddenSidebarSections); },
+        } },
+      };
+      const { setupFilterAction } = await import('../dist/sidebar/actions/actionFilter.js');
+      const controls = document.querySelector('.search-controls');
+      const tabs = document.getElementById('tabs-list');
+      const groups = document.getElementById('groups-list');
+      const bookmarks = document.getElementById('bookmarks-list');
+      const hidden = new Set();
+      let renders = 0;
+      await setupFilterAction(controls, { tabs, groups, bookmarks }, hidden, () => { renders++; });
+      const button = controls.querySelector('.filter-button');
+      const panel = controls.querySelector('.filter-panel');
+      const checkboxes = [...panel.querySelectorAll('input')];
+      const search = controls.querySelector('.search-input');
+      const filterBounds = button.getBoundingClientRect();
+      const searchBounds = search.getBoundingClientRect();
+      const settingsBounds = document.querySelector('.settings-btn').getBoundingClientRect();
+      if (button.querySelector('svg.control-icon') === null ||
+          filterBounds.width !== settingsBounds.width ||
+          filterBounds.height !== settingsBounds.height ||
+          filterBounds.top !== searchBounds.top ||
+          filterBounds.left < searchBounds.right ||
+          !groups.hidden || tabs.hidden || bookmarks.hidden ||
+          checkboxes.map((box) => box.checked).join() !== 'false,true,false') {
+        throw new Error('filter did not load or align with search');
+      }
+      const contentTop = document.getElementById('sidebar-content').getBoundingClientRect().top;
+      button.click();
+      if (panel.hidden || button.getAttribute('aria-expanded') !== 'true' ||
+          document.getElementById('sidebar-content').getBoundingClientRect().top !== contentTop) {
+        throw new Error('filter panel did not open as an overlay');
+      }
+      checkboxes[1].click();
+      checkboxes[0].click();
+      checkboxes[2].click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (!tabs.hidden || groups.hidden || !bookmarks.hidden || renders !== 3 ||
+          writes.at(-1)?.join() !== 'tabs,bookmarks') {
+        throw new Error('filter choices did not update sections or storage');
+      }
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      if (!panel.hidden || button.getAttribute('aria-expanded') !== 'false' ||
+          document.activeElement !== button) {
+        throw new Error('Escape did not close and refocus the filter');
+      }
+      button.click();
+      document.getElementById('result').textContent = 'PASS';
+    } catch (error) {
+      document.getElementById('result').textContent = `FAIL: ${error.message}`;
+    }
+  </script>
+</body>
+</html>

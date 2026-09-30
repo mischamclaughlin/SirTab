@@ -5,6 +5,7 @@ import type {
 } from "../types.js";
 
 import { setupSearchAction } from "../actions/actionSearch.js";
+import { setupFilterAction, type SectionName } from "../actions/actionFilter.js";
 import { cycleTabs, buildTabSearchState } from "../tab/tab.js";
 
 import { setupEventListeners } from "./events.js";
@@ -106,6 +107,7 @@ export async function bootstrapSidebar() {
 
     const collapsedGroups = new Set<string>();
     const collapsedBookmarkFolders = new Set<string>();
+    const hiddenSections = new Set<SectionName>();
 
     let getSearchQuery = () => "";
     let requestTabGroupRender: RequestRender = () => {};
@@ -153,8 +155,8 @@ export async function bootstrapSidebar() {
         const [visibleUngroupedTabs, tabsByGroup, isSearching] =
             buildTabSearchState(tabs, searchQuery);
         const visibleTabIds = buildVisibleTabIds(
-            visibleUngroupedTabs,
-            groups,
+            hiddenSections.has("tabs") ? [] : visibleUngroupedTabs,
+            hiddenSections.has("groups") ? [] : groups,
             tabsByGroup,
             collapsedGroups,
             isSearching,
@@ -172,7 +174,7 @@ export async function bootstrapSidebar() {
         });
         const nextGroups = document.createElement("ul");
         buildGroup(
-            visibleUngroupedTabs.length > 0,
+            !hiddenSections.has("tabs") && visibleUngroupedTabs.length > 0,
             groups,
             tabsByGroup,
             collapsedGroups,
@@ -247,7 +249,20 @@ export async function bootstrapSidebar() {
         requestBookmarkRender();
     };
 
-    getSearchQuery = setupSearchAction(elements.actions, requestRender);
+    const searchControls = document.createElement("div");
+    searchControls.className = "search-controls";
+    elements.actions.append(searchControls);
+    getSearchQuery = setupSearchAction(searchControls, requestRender);
+    await setupFilterAction(
+        searchControls,
+        {
+            tabs: elements.tabsList,
+            groups: elements.groupsList,
+            bookmarks: elements.bookmarksList,
+        },
+        hiddenSections,
+        requestRender,
+    );
     setupSidebarDropZones(
         elements.tabsList,
         elements.groupsList,
