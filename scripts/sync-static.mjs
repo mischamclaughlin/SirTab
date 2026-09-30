@@ -6,6 +6,11 @@ export async function syncStatic({ clean = false } = {}) {
     }
 
     await mkdir("dist/sidebar", { recursive: true });
+    // Mirror these directories so removed source files do not linger in dist.
+    await Promise.all([
+        rm("dist/sidebar/styles", { recursive: true, force: true }),
+        rm("dist/sidebar/assets", { recursive: true, force: true }),
+    ]);
 
     await Promise.all([
         cp("manifest.json", "dist/manifest.json"),

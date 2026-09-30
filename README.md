@@ -56,6 +56,14 @@ Run the automated behavioural tests:
 npm test
 ```
 
+Run all browser interaction fixtures in Chrome or Brave:
+
+```bash
+npm run test:browser
+```
+
+Set `SIRTAB_TEST_PAGE=tests/refresh-interaction.html` to run one fixture.
+
 Generate a coverage report for the modules exercised by the tests:
 
 ```bash

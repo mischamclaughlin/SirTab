@@ -1,5 +1,5 @@
-import { readdir } from "node:fs/promises";
 import { watchFile, unwatchFile } from "node:fs";
+import { readdir } from "node:fs/promises";
 import { syncStatic } from "./sync-static.mjs";
 
 const STATIC_WATCH_INTERVAL_MS = 1500;
@@ -9,12 +9,14 @@ const watchTargets = [
     "src/sidebar/sidebar.html",
     "src/sidebar/sidebar.css",
 ];
+const watchDirectories = ["src/sidebar/assets", "src/sidebar/styles"];
+const watchedFiles = new Set();
 
 let syncQueued = false;
 let syncInProgress = false;
 let debounceTimer;
 
-async function runSync(reason, { clean = false } = {}) {
+async function runSync(reason) {
     if (syncInProgress) {
         syncQueued = true;
         return;
@@ -22,7 +24,7 @@ async function runSync(reason, { clean = false } = {}) {
 
     syncInProgress = true;
     try {
-        await syncStatic({ clean });
+        await syncStatic();
         console.log(`[static] synced (${reason})`);
     } catch (error) {
         console.error("[static] sync failed");
@@ -43,25 +45,55 @@ function scheduleSync(reason) {
     }, 50);
 }
 
-await runSync("initial", { clean: true });
-
-const assetFiles = (await readdir("src/sidebar/assets")).map(
-    (file) => `src/sidebar/assets/${file}`,
-);
-const styleFiles = (await readdir("src/sidebar/styles")).map(
-    (file) => `src/sidebar/styles/${file}`,
-);
-const filesToWatch = [...watchTargets, ...styleFiles, ...assetFiles];
-
-for (const target of filesToWatch) {
+function watchTarget(target) {
     watchFile(target, { interval: STATIC_WATCH_INTERVAL_MS }, () => {
         scheduleSync(target);
     });
 }
 
+async function collectFiles(directory) {
+    const entries = await readdir(directory, { withFileTypes: true });
+    const nested = await Promise.all(entries.map(async (entry) => {
+        const target = `${directory}/${entry.name}`;
+        return entry.isDirectory() ? collectFiles(target) : [target];
+    }));
+    return nested.flat();
+}
+
+async function refreshWatchedFiles() {
+    const files = new Set((await Promise.all(watchDirectories.map(collectFiles))).flat());
+    let changed = false;
+    for (const target of watchedFiles) {
+        if (!files.has(target)) {
+            unwatchFile(target);
+            watchedFiles.delete(target);
+            changed = true;
+        }
+    }
+    for (const target of files) {
+        if (!watchedFiles.has(target)) {
+            watchTarget(target);
+            watchedFiles.add(target);
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+for (const target of watchTargets) watchTarget(target);
+await refreshWatchedFiles();
+const inventoryTimer = setInterval(() => {
+    void refreshWatchedFiles()
+        .then((changed) => { if (changed) scheduleSync("file inventory"); })
+        .catch((error) => console.error("[static] inventory failed", error));
+}, STATIC_WATCH_INTERVAL_MS);
+
+await runSync("initial");
+
 function closeWatchers() {
     clearTimeout(debounceTimer);
-    for (const target of filesToWatch) {
+    clearInterval(inventoryTimer);
+    for (const target of [...watchTargets, ...watchedFiles]) {
         unwatchFile(target);
     }
 }
