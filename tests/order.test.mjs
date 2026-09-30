@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createHash } from "node:crypto";
 
 const NO_GROUP_ID = -1;
 const WINDOW_ID = 7;
+const fingerprint = (url) => `sha256:${createHash("sha256").update(url).digest("hex")}`;
 
 const state = {
     tabs: [],
@@ -144,6 +146,7 @@ function resetState({
     state.storage = {
         [TAB_ORDER_STORAGE_KEY]: tabOrderByWindow,
         [GROUP_ORDER_STORAGE_KEY]: groupOrderByWindow,
+        orderFingerprintsSha256Migrated: true,
     };
 }
 
@@ -510,6 +513,15 @@ test("restores tab and group order after browser IDs change", async () => {
     const restored = await loadLogicalTabGroupData(8);
     assert.deepEqual(restored.tabOrder, [104, 101, 102, 103]);
     assert.deepEqual(restored.groupOrder, [120, 110]);
+    await moveStoredTabRelative(8, 101, 104, "before");
+    for (const prefix of [
+        TAB_ORDER_WINDOW_PREFIX,
+        GROUP_ORDER_WINDOW_PREFIX,
+        TAB_ORDER_SNAPSHOT_PREFIX,
+        GROUP_ORDER_SNAPSHOT_PREFIX,
+    ]) {
+        assert.equal(state.storage[`${prefix}7`], undefined);
+    }
 });
 
 test("restores order when Brave reuses the window ID but changes tab IDs", async () => {
@@ -624,6 +636,78 @@ test("ordinary close restores the surviving order; duplicate URLs use physical o
     assert.deepEqual(restored.tabOrder, [101, 104, 103]);
 });
 
+test("stored order fingerprints conceal URL query strings and fragments", async () => {
+    const privateUrl = "https://example.test/report?token=private-token#secret-fragment";
+    resetState({
+        tabs: [
+            { ...tab(1, 0, 10), url: privateUrl },
+            tab(2, 1),
+        ],
+        groups: [group(10)],
+    });
+    await moveStoredTabRelative(7, 2, 1, "before");
+    await moveStoredGroupToEnd(7, 10);
+
+    const records = Object.fromEntries(Object.entries(state.storage).filter(([key]) =>
+        key.startsWith(TAB_ORDER_WINDOW_PREFIX) ||
+        key.startsWith(TAB_ORDER_SNAPSHOT_PREFIX) ||
+        key.startsWith(GROUP_ORDER_WINDOW_PREFIX) ||
+        key.startsWith(GROUP_ORDER_SNAPSHOT_PREFIX)));
+    assert.equal(JSON.stringify(records).includes(privateUrl), false);
+    assert.equal(JSON.stringify(records).includes("private-token"), false);
+    assert.equal(JSON.stringify(records).includes("secret-fragment"), false);
+    assert.equal(records[`${TAB_ORDER_SNAPSHOT_PREFIX}7`].fingerprints[1], fingerprint(privateUrl));
+});
+
+test("legacy URL fingerprints migrate without losing restart order", async () => {
+    const privateUrl = "https://example.test/report?token=old-private-token";
+    resetState({
+        tabs: [
+            { ...tab(101, 0, 110), windowId: 8, url: privateUrl },
+            { ...tab(102, 1), windowId: 8, url: "https://example.test/2" },
+        ],
+        groups: [{ ...group(110), windowId: 8 }],
+    });
+    const oldTabRecord = {
+        order: [2, 1],
+        fingerprints: ["https://example.test/2", privateUrl],
+        inventory: ["https://example.test/2", privateUrl].sort(),
+    };
+    state.storage[`${TAB_ORDER_SNAPSHOT_PREFIX}7`] = oldTabRecord;
+    delete state.storage.orderFingerprintsSha256Migrated;
+    state.storage[`${GROUP_ORDER_SNAPSHOT_PREFIX}7`] = {
+        order: [10],
+        fingerprints: [JSON.stringify(["Group 10", "grey", [privateUrl]])],
+        inventory: [JSON.stringify(["Group 10", "grey", [privateUrl]])],
+        windowInventory: oldTabRecord.inventory,
+    };
+
+    const restored = await loadLogicalTabGroupData(8);
+    assert.deepEqual(restored.tabOrder, [102, 101]);
+    assert.deepEqual(restored.groupOrder, [110]);
+    assert.equal(JSON.stringify(state.storage).includes("old-private-token"), false);
+});
+
+test("invalid legacy order records are removed during URL migration", async () => {
+    resetState({ tabs: [tab(1, 0)] });
+    delete state.storage.orderFingerprintsSha256Migrated;
+    state.storage[`${TAB_ORDER_SNAPSHOT_PREFIX}99`] = {
+        order: "invalid",
+        fingerprints: ["https://example.test/?token=stale-private-token"],
+    };
+    state.storage[`${GROUP_ORDER_SNAPSHOT_PREFIX}99`] = {
+        order: [10],
+        fingerprints: ["https://example.test/?token=malformed-group-secret"],
+        inventory: ["https://example.test/?token=malformed-group-secret"],
+    };
+
+    await loadLogicalTabGroupData(7);
+    assert.equal(state.storage[`${TAB_ORDER_SNAPSHOT_PREFIX}99`], undefined);
+    assert.equal(state.storage[`${GROUP_ORDER_SNAPSHOT_PREFIX}99`], undefined);
+    assert.equal(JSON.stringify(state.storage).includes("stale-private-token"), false);
+    assert.equal(JSON.stringify(state.storage).includes("malformed-group-secret"), false);
+});
+
 test("a new tab after a move joins the durable snapshot before restart", async () => {
     resetState({ tabs: [tab(1, 0), tab(2, 1), tab(3, 2)] });
     await moveStoredTabRelative(7, 3, 1, "before");
@@ -649,11 +733,13 @@ test("URL navigation and group rename refresh their durable identities", async (
     state.groups.find((candidate) => candidate.id === 20).title = "Renamed";
     await loadLogicalTabGroupData(7);
     assert.deepEqual(state.storage[`${TAB_ORDER_SNAPSHOT_PREFIX}7`].fingerprints, [
-        "https://example.test/3", "https://example.test/1", "https://new.test/2",
+        fingerprint("https://example.test/3"),
+        fingerprint("https://example.test/1"),
+        fingerprint("https://new.test/2"),
     ]);
     assert.deepEqual(state.storage[`${GROUP_ORDER_SNAPSHOT_PREFIX}7`].fingerprints, [
-        JSON.stringify(["Renamed", "grey", ["https://new.test/2"]]),
-        JSON.stringify(["Group 10", "grey", ["https://example.test/1"]]),
+        JSON.stringify(["Renamed", "grey", [fingerprint("https://new.test/2")]]),
+        JSON.stringify(["Group 10", "grey", [fingerprint("https://example.test/1")]]),
     ]);
 
     state.tabs = [

@@ -16,7 +16,9 @@ globalThis.chrome = {
     },
     storage: {
         local: {
-            get: async (key) => ({ [key]: state.storage[key] }),
+            get: async (keys) => Object.fromEntries(
+                (Array.isArray(keys) ? keys : [keys]).map((key) => [key, state.storage[key]]),
+            ),
             set: async (updates) => Object.assign(state.storage, updates),
         },
     },
@@ -31,6 +33,7 @@ const {
 const {
     COLLAPSED_BOOKMARK_FOLDERS_STORAGE_KEY,
     COLLAPSED_GROUPS_STORAGE_KEY,
+    COLLAPSED_GROUPS_WINDOW_PREFIX,
 } = await import("../dist/sidebar/config.js");
 
 function reset() {
@@ -43,13 +46,26 @@ test("tab collapse state persists per window without overwriting others", async 
     state.storage[COLLAPSED_GROUPS_STORAGE_KEY] = {
         99: ["90"],
     };
+    state.storage[`${COLLAPSED_GROUPS_WINDOW_PREFIX}99`] = ["91"];
 
     await persistCollapse(new Set(["10", "20"]), "tab");
 
     assert.deepEqual(state.storage[COLLAPSED_GROUPS_STORAGE_KEY], {
-        [WINDOW_ID]: ["10", "20"],
         99: ["90"],
     });
+    assert.deepEqual(state.storage[`${COLLAPSED_GROUPS_WINDOW_PREFIX}${WINDOW_ID}`], ["10", "20"]);
+    assert.deepEqual(state.storage[`${COLLAPSED_GROUPS_WINDOW_PREFIX}99`], ["91"]);
+});
+
+test("tab collapse state prefers the per-window key over legacy data", async () => {
+    reset();
+    state.storage[COLLAPSED_GROUPS_STORAGE_KEY] = { [WINDOW_ID]: ["old"] };
+    state.storage[`${COLLAPSED_GROUPS_WINDOW_PREFIX}${WINDOW_ID}`] = [];
+
+    const ids = new Set(["stale"]);
+    await loadCollapse(ids, "tab");
+
+    assert.deepEqual([...ids], []);
 });
 
 test("bookmark collapse state uses one shared flat list", async () => {
@@ -111,4 +127,5 @@ test("tab persistence safely stops when Chrome has no current window id", async 
     await persistCollapse(new Set(["10"]), "tab");
 
     assert.equal(state.storage[COLLAPSED_GROUPS_STORAGE_KEY], undefined);
+    assert.equal(state.storage[`${COLLAPSED_GROUPS_WINDOW_PREFIX}${WINDOW_ID}`], undefined);
 });

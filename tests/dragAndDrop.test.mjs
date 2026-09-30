@@ -129,7 +129,13 @@ function tab(id, groupId = -1) {
     return { id, groupId, index: id, windowId: 1, url: `https://example.test/${id}` };
 }
 
-const flushDrop = () => new Promise((resolve) => setTimeout(resolve, 0));
+async function waitForDrop(completed) {
+    const deadline = Date.now() + 1000;
+    while (!completed()) {
+        if (Date.now() >= deadline) throw new Error("Drop did not complete");
+        await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+}
 
 test("marker follows rows during bottom auto-scroll; selected tabs drop together into group gap", async () => {
     state.tabs = [tab(10), tab(20), tab(30), tab(40), tab(50, 7)];
@@ -181,7 +187,8 @@ test("marker follows rows during bottom auto-scroll; selected tabs drop together
     assert.equal(lastRow.classList.contains("drop-after"), false);
     hitTarget = groupTabs;
     document.dispatch("drop", dragEvent(groupTabs, 110));
-    await flushDrop();
+    await waitForDrop(() => state.groupCalls.length === 1 &&
+        state.storage["tabOrderByWindow:1"]?.order?.length === 5);
     assert.deepEqual(state.groupCalls, [{ groupId: 7, tabIds: [10, 30] }]);
     assert.deepEqual(state.storage["tabOrderByWindow:1"].order, [20, 40, 50, 10, 30]);
     assert.equal(sourceRow.classList.contains("is-dragging"), false);
@@ -208,7 +215,7 @@ test("marker follows rows during bottom auto-scroll; selected tabs drop together
     assert.equal(folderRow.classList.contains("drop-inside"), true);
     hitTarget = folderRow;
     document.dispatch("drop", dragEvent(folderRow));
-    await flushDrop();
+    await waitForDrop(() => state.bookmarks.length === 1);
     assert.deepEqual(state.bookmarks, [{
         parentId: "22", title: "Named tab", url: "https://example.test/10",
     }]);
@@ -221,12 +228,12 @@ test("marker follows rows during bottom auto-scroll; selected tabs drop together
     sourceHandle.dispatch("dragstart", dragEvent(sourceHandle));
     hitTarget = bookmarkRow;
     document.dispatch("drop", dragEvent(bookmarkRow));
-    await flushDrop();
+    await waitForDrop(() => state.bookmarks.length === 2);
     assert.equal(state.bookmarks.at(-1).parentId, "24");
 
     sourceHandle.dispatch("dragstart", dragEvent(sourceHandle));
     hitTarget = bookmarksList;
     document.dispatch("drop", dragEvent(bookmarksList));
-    await flushDrop();
+    await waitForDrop(() => state.bookmarks.length === 3);
     assert.equal(state.bookmarks.at(-1).parentId, "1");
 });

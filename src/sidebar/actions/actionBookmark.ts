@@ -9,6 +9,7 @@ import { setButtonIcon } from "../helpers/icons.js";
 export async function setupBookmarkAction(
     actionBtnSection: HTMLElement,
     actionPanel: ActionPanelController,
+    currentWindowId: number,
 ): Promise<void> {
     const btnNewBookmark = document.createElement("button");
     btnNewBookmark.className = "control";
@@ -115,7 +116,7 @@ export async function setupBookmarkAction(
                     const bookmarkName = typedName || "new bookmark";
                     const [currentTab] = await chrome.tabs.query({
                         active: true,
-                        lastFocusedWindow: true,
+                        windowId: currentWindowId,
                     });
                     if (!currentTab) return;
                     if (!currentTab.url || !isAllowedBookmarkUrl(currentTab.url)) {

@@ -1,5 +1,6 @@
 import {
     COLLAPSED_GROUPS_STORAGE_KEY,
+    COLLAPSED_GROUPS_WINDOW_PREFIX,
     GROUP_ORDER_STORAGE_KEY,
     GROUP_ORDER_SNAPSHOT_PREFIX,
     GROUP_ORDER_WINDOW_PREFIX,
@@ -221,35 +222,110 @@ function tabUrl(tab: chrome.tabs.Tab) {
     return tab.url || tab.pendingUrl || null;
 }
 
-function itemFingerprints(
+const fingerprintPrefix = "sha256:";
+const fingerprintMigrationKey = "orderFingerprintsSha256Migrated";
+
+function urlFingerprint(url: string): Promise<string> {
+    return crypto.subtle.digest("SHA-256", new TextEncoder().encode(url))
+        .then((bytes) => fingerprintPrefix + Array.from(new Uint8Array(bytes))
+            .map((byte) => byte.toString(16).padStart(2, "0")).join(""));
+}
+
+async function itemFingerprints(
     tabs: chrome.tabs.Tab[],
     groups: chrome.tabGroups.TabGroup[],
 ) {
+    const hashedUrls = new Map<number, string | null>();
+    await Promise.all(tabs.map(async (tab) => {
+        if (tab.id == null) return;
+        const url = tabUrl(tab);
+        hashedUrls.set(tab.id, url == null ? null : await urlFingerprint(url));
+    }));
+    const memberFingerprintsByGroup = new Map<number, Array<string | null>>();
+    for (const tab of tabs) {
+        if (tab.groupId == null || tab.groupId === NO_GROUP_ID) continue;
+        const members = memberFingerprintsByGroup.get(tab.groupId) ?? [];
+        members.push(tab.id == null ? null : hashedUrls.get(tab.id) ?? null);
+        memberFingerprintsByGroup.set(tab.groupId, members);
+    }
     const groupFingerprints = new Map<number, string | null>();
     for (const group of groups) {
         if (group.id == null) continue;
-        const memberUrls = tabs
-            .filter((tab) => tab.groupId === group.id)
-            .map(tabUrl);
+        const memberFingerprints = memberFingerprintsByGroup.get(group.id) ?? [];
         groupFingerprints.set(
             group.id,
-            memberUrls.every((url) => url != null)
+            memberFingerprints.every((fingerprint) => fingerprint != null)
                 ? JSON.stringify([
                       group.title ?? "",
                       group.color ?? "",
-                      [...(memberUrls as string[])].sort(),
+                      [...(memberFingerprints as string[])].sort(),
                   ])
                 : null,
         );
     }
 
-    const tabFingerprints = new Map<number, string | null>();
-    for (const tab of tabs) {
-        if (tab.id == null) continue;
-        const url = tabUrl(tab);
-        tabFingerprints.set(tab.id, url);
+    return { tabFingerprints: hashedUrls, groupFingerprints };
+}
+
+async function migrateLegacyFingerprints(storage: Record<string, unknown>) {
+    if (storage[fingerprintMigrationKey] === true) return;
+    const updates: Record<string, StoredOrder> = {};
+    const invalidKeys: string[] = [];
+    for (const [key, value] of Object.entries(storage)) {
+        const isTab = key.startsWith(TAB_ORDER_WINDOW_PREFIX) ||
+            key.startsWith(TAB_ORDER_SNAPSHOT_PREFIX);
+        const isGroup = key.startsWith(GROUP_ORDER_WINDOW_PREFIX) ||
+            key.startsWith(GROUP_ORDER_SNAPSHOT_PREFIX);
+        if (!isTab && !isGroup) continue;
+        const record = readStoredOrder(value);
+        if (!record) {
+            invalidKeys.push(key);
+            delete storage[key];
+            continue;
+        }
+        const migrateTab = (fingerprint: string) => fingerprint.startsWith(fingerprintPrefix)
+            ? Promise.resolve(fingerprint)
+            : urlFingerprint(fingerprint);
+        const migrateGroup = async (fingerprint: string) => {
+            try {
+                const parsed: unknown = JSON.parse(fingerprint);
+                if (!Array.isArray(parsed) || parsed.length !== 3 ||
+                    typeof parsed[0] !== "string" || typeof parsed[1] !== "string" ||
+                    !Array.isArray(parsed[2]) ||
+                    !parsed[2].every((item) => typeof item === "string")) return null;
+                const members = await Promise.all((parsed[2] as string[]).map(migrateTab));
+                return JSON.stringify([parsed[0], parsed[1], members.sort()]);
+            } catch {
+                return null;
+            }
+        };
+        const migrate = isTab ? migrateTab : migrateGroup;
+        const migratedFingerprints = record.fingerprints == null ? null :
+            await Promise.all(record.fingerprints.map(migrate));
+        const migratedInventory = record.inventory == null ? null :
+            await Promise.all(record.inventory.map(migrate));
+        if (migratedFingerprints?.includes(null) || migratedInventory?.includes(null)) {
+            invalidKeys.push(key);
+            delete storage[key];
+            continue;
+        }
+        const migrated: StoredOrder = {
+            ...record,
+            fingerprints: migratedFingerprints as string[] | null,
+            inventory: migratedInventory == null ? null :
+                (migratedInventory as string[]).sort(),
+            ...(record.windowInventory === undefined ? {} : {
+                windowInventory: record.windowInventory == null ? null :
+                    (await Promise.all(record.windowInventory.map(migrateTab))).sort(),
+            }),
+        };
+        if (JSON.stringify(record) !== JSON.stringify(migrated)) {
+            updates[key] = migrated;
+            storage[key] = migrated;
+        }
     }
-    return { tabFingerprints, groupFingerprints };
+    await chrome.storage.local.set({ ...updates, [fingerprintMigrationKey]: true });
+    if (invalidKeys.length > 0) await chrome.storage.local.remove(invalidKeys);
 }
 
 function makeStoredOrder(
@@ -454,7 +530,7 @@ async function saveWindowOrders(
     groupOrder: number[],
     changed: "tab" | "group",
 ) {
-    const fingerprints = itemFingerprints(data.tabs, data.groups);
+    const fingerprints = await itemFingerprints(data.tabs, data.groups);
     const tabKey = `${TAB_ORDER_WINDOW_PREFIX}${windowId}`;
     const groupKey = `${GROUP_ORDER_WINDOW_PREFIX}${windowId}`;
     const updates: Record<string, StoredOrder> = {};
@@ -479,10 +555,20 @@ async function saveWindowOrders(
     }
     await chrome.storage.local.set(updates);
     if (data.restoredFromWindowId != null && chrome.storage.local.remove) {
-        await chrome.storage.local.remove([
+        const obsoleteKeys = [
             `${TAB_ORDER_SNAPSHOT_PREFIX}${data.restoredFromWindowId}`,
             `${GROUP_ORDER_SNAPSHOT_PREFIX}${data.restoredFromWindowId}`,
-        ]);
+        ];
+        if (chrome.windows?.getAll) {
+            const liveWindows = await chrome.windows.getAll();
+            if (!liveWindows.some((window) => window.id === data.restoredFromWindowId)) {
+                obsoleteKeys.push(
+                    `${TAB_ORDER_WINDOW_PREFIX}${data.restoredFromWindowId}`,
+                    `${GROUP_ORDER_WINDOW_PREFIX}${data.restoredFromWindowId}`,
+                );
+            }
+        }
+        await chrome.storage.local.remove(obsoleteKeys);
     }
 }
 
@@ -494,6 +580,7 @@ export async function loadLogicalTabGroupData(
         chrome.tabGroups.query({ windowId }),
         chrome.storage.local.get(null),
     ]);
+    await migrateLegacyFingerprints(storage);
 
     const tabsById = buildIdMap(liveTabs);
     const groupsById = buildIdMap(liveGroups);
@@ -511,7 +598,7 @@ export async function loadLogicalTabGroupData(
     const groupKey = `${GROUP_ORDER_WINDOW_PREFIX}${windowId}`;
     const rawTabRecord = readStoredOrder(storage[tabKey]);
     const rawGroupRecord = readStoredOrder(storage[groupKey]);
-    const fingerprints = itemFingerprints(liveTabs, liveGroups);
+    const fingerprints = await itemFingerprints(liveTabs, liveGroups);
     const liveTabInventory = makeStoredOrder(
         liveTabOrder,
         fingerprints.tabFingerprints,
@@ -691,13 +778,15 @@ export function buildVisibleLogicalTabIds(
 }
 
 export async function loadCollapsedGroupIds(windowId: number) {
-    const storage = await chrome.storage.local.get(COLLAPSED_GROUPS_STORAGE_KEY);
+    const windowKey = `${COLLAPSED_GROUPS_WINDOW_PREFIX}${windowId}`;
+    const storage = await chrome.storage.local.get([windowKey, COLLAPSED_GROUPS_STORAGE_KEY]);
+    const windowIds = storage[windowKey];
     const rawByWindow = storage[COLLAPSED_GROUPS_STORAGE_KEY];
     const byWindow: WindowCollapsedMap =
         typeof rawByWindow === "object" && rawByWindow != null
             ? (rawByWindow as WindowCollapsedMap)
             : {};
-    const storedGroupIds = byWindow[String(windowId)];
+    const storedGroupIds = Array.isArray(windowIds) ? windowIds : byWindow[String(windowId)];
     const collapsedGroups = new Set<string>();
 
     if (!Array.isArray(storedGroupIds)) return collapsedGroups;

@@ -1,4 +1,7 @@
-export { COLLAPSED_GROUPS_STORAGE_KEY } from "../shared/storageKeys.js";
+export {
+    COLLAPSED_GROUPS_STORAGE_KEY,
+    COLLAPSED_GROUPS_WINDOW_PREFIX,
+} from "../shared/storageKeys.js";
 
 export const DEFAULT_TAB_ICON_URL = chrome.runtime.getURL(
     "sidebar/assets/default-tab-icon.svg",

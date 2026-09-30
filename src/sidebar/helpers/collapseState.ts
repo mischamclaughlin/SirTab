@@ -1,6 +1,7 @@
 import type { ToggleType } from "../types.js";
 import {
     COLLAPSED_GROUPS_STORAGE_KEY,
+    COLLAPSED_GROUPS_WINDOW_PREFIX,
     COLLAPSED_BOOKMARK_FOLDERS_STORAGE_KEY,
 } from "../config.js";
 
@@ -33,17 +34,9 @@ export async function persistCollapse(
     if (type === "tab") {
         const windowId = await getCurrentWindowId();
         if (windowId === null) return;
-
-        const storage = await chrome.storage.local.get(key);
-        const rawByWindow = storage[key];
-        const byWindow: Record<string, string[]> =
-            typeof rawByWindow === "object" && rawByWindow != null
-                ? (rawByWindow as Record<string, string[]>)
-                : {};
-
-        byWindow[String(windowId)] = Array.from(list);
-
-        return await chrome.storage.local.set({ [key]: byWindow });
+        return await chrome.storage.local.set({
+            [`${COLLAPSED_GROUPS_WINDOW_PREFIX}${windowId}`]: Array.from(list),
+        });
     }
 
     return await chrome.storage.local.set({ [key]: Array.from(list) });
@@ -57,20 +50,23 @@ export async function loadCollapse(
         type === "tab"
             ? COLLAPSED_GROUPS_STORAGE_KEY
             : COLLAPSED_BOOKMARK_FOLDERS_STORAGE_KEY;
-    const storage = await chrome.storage.local.get(key);
-
     list.clear();
 
     if (type === "tab") {
         const windowId = await getCurrentWindowId();
         if (windowId === null) return;
 
+        const windowKey = `${COLLAPSED_GROUPS_WINDOW_PREFIX}${windowId}`;
+        const storage = await chrome.storage.local.get([windowKey, key]);
+        const ownWindowIds = storage[windowKey];
         const rawByWindow = storage[key];
         const byWindow: Record<string, unknown> =
             typeof rawByWindow === "object" && rawByWindow != null
                 ? (rawByWindow as Record<string, unknown>)
                 : {};
-        const storedIds = byWindow[String(windowId)];
+        const storedIds = Array.isArray(ownWindowIds)
+            ? ownWindowIds
+            : byWindow[String(windowId)];
         if (!Array.isArray(storedIds)) return;
 
         for (const id of storedIds) {
@@ -82,6 +78,7 @@ export async function loadCollapse(
         return;
     }
 
+    const storage = await chrome.storage.local.get(key);
     const storedIds = storage[key];
     if (!Array.isArray(storedIds)) return;
 

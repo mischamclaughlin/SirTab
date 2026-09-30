@@ -117,6 +117,27 @@ export async function bootstrapSidebar() {
     let tabs: chrome.tabs.Tab[] = [];
     let groups: chrome.tabGroups.TabGroup[] = [];
     let bookmarkTree: chrome.bookmarks.BookmarkTreeNode[] = [];
+    let activationVersion = 0;
+    let activatedTabId: number | null = null;
+
+    function activateTab(tabId: number) {
+        // A newly created tab may activate before its creation refresh finishes.
+        if (!tabs.some((tab) => tab.id === tabId)) {
+            requestTabGroupRefresh();
+            return;
+        }
+
+        activationVersion += 1;
+        activatedTabId = tabId;
+        for (const tab of tabs) tab.active = tab.id === tabId;
+
+        for (const list of [elements.tabsList, elements.groupsList]) {
+            for (const row of list.querySelectorAll<HTMLElement>(".tab-item")) {
+                const isCurrent = row.dataset.tabId === String(tabId);
+                row.querySelector(".tab-label")?.classList.toggle("is-current", isCurrent);
+            }
+        }
+    }
     const tabSelection = createTabSelectionController(() => {
         requestTabGroupRender();
         requestBookmarkRender();
@@ -200,7 +221,13 @@ export async function bootstrapSidebar() {
     requestTabGroupRender = createRenderScheduler(renderTabGroups);
     requestBookmarkRender = createRenderScheduler(renderBookmarks);
     requestTabGroupRefresh = createRenderScheduler(async (isStale) => {
-        [tabs, groups] = await loadTabAndGroupData(currentWindowId);
+        const versionBeforeLoad = activationVersion;
+        const [loadedTabs, loadedGroups] = await loadTabAndGroupData(currentWindowId);
+        if (versionBeforeLoad !== activationVersion && activatedTabId != null) {
+            for (const tab of loadedTabs) tab.active = tab.id === activatedTabId;
+        }
+        tabs = loadedTabs;
+        groups = loadedGroups;
         tabSelection.prune(
             tabs
                 .map((tab) => tab.id)
@@ -241,6 +268,7 @@ export async function bootstrapSidebar() {
     await setupBookmarkAction(
         elements.actionBtnSection,
         actionPanelController,
+        currentWindowId,
     );
     await setupTabAction(elements.actionBtnSection);
     updateSelectAction = setupSelectAction(
@@ -273,6 +301,7 @@ export async function bootstrapSidebar() {
     setupEventListeners(currentWindowId, {
         requestTabGroupRefresh,
         requestBookmarkRefresh,
+        activateTab,
     });
 
     document.addEventListener("keydown", (event) => {

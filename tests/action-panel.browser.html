@@ -20,9 +20,20 @@
     result.textContent = `FAIL: ${event.reason}`;
   });
 
+  const tabQueries = [];
+  const createdBookmarks = [];
   globalThis.chrome = {
     runtime: { getURL: (path) => path },
-    bookmarks: { getTree: async () => [{ id: '1', title: 'Bookmarks Bar', children: [] }] },
+    tabs: {
+      query: async (query) => {
+        tabQueries.push(query);
+        return [{ url: 'https://example.test/current' }];
+      },
+    },
+    bookmarks: {
+      getTree: async () => [{ id: '1', title: 'Bookmarks Bar', children: [] }],
+      create: async (bookmark) => { createdBookmarks.push(bookmark); },
+    },
   };
 
   const { createActionPanelController } = await import('../dist/sidebar/helpers/actionPanel.js');
@@ -33,7 +44,7 @@
   const controls = document.querySelector('.action-controls');
   const controller = createActionPanelController(panel);
   await setupGroupAction(controls, controller);
-  await setupBookmarkAction(controls, controller);
+  await setupBookmarkAction(controls, controller, 1);
 
   function assert(condition, message) {
     if (!condition) throw new Error(message);
@@ -62,6 +73,18 @@
   assert(!controller.isOpen('bookmark') && panel.childElementCount === 0, 'Escape did not close bookmark form');
   assert(document.activeElement === bookmarkButton && !bookmarkButton.classList.contains('is-selected'),
     'bookmark button did not regain focus and reset');
+
+  bookmarkButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  panel.querySelector('.action-toggle').click();
+  panel.querySelector('#bookmark-folder-select').value = '1';
+  panel.querySelector('button[aria-label="Confirm bookmark creation"]').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert(tabQueries.length === 1 && tabQueries[0].active === true &&
+    tabQueries[0].windowId === 1 && !('lastFocusedWindow' in tabQueries[0]),
+    'bookmark action did not query its own window');
+  assert(createdBookmarks[0]?.url === 'https://example.test/current',
+    'bookmark action did not create the current tab bookmark');
 
   result.textContent = 'PASS';
 </script>

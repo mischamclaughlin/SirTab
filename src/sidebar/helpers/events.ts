@@ -9,6 +9,7 @@ import {
 type SidebarEventHandlers = {
     requestTabGroupRefresh: RequestRender;
     requestBookmarkRefresh: RequestRender;
+    activateTab: (tabId: number) => void;
 };
 
 const TAB_UPDATE_KEYS_TO_RENDER: (keyof chrome.tabs.OnUpdatedInfo)[] = [
@@ -27,6 +28,7 @@ export function setupEventListeners(
     {
         requestTabGroupRefresh,
         requestBookmarkRefresh,
+        activateTab,
     }: SidebarEventHandlers,
 ): () => void {
     const handleTabCreated = (tab: chrome.tabs.Tab) => {
@@ -80,7 +82,7 @@ export function setupEventListeners(
 
     const handleTabActivated = (activeInfo: chrome.tabs.OnActivatedInfo) => {
         if (activeInfo.windowId !== currentWindowId) return;
-        requestTabGroupRefresh();
+        activateTab(activeInfo.tabId);
     };
 
     const handleTabReplaced = async (addedTabId: number) => {
