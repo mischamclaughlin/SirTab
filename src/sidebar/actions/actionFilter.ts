@@ -39,11 +39,14 @@ export async function setupFilterAction(
     heading.textContent = "hide";
     panel.append(heading);
 
+    const updateButton = () => {
+        button.classList.toggle("is-selected", hiddenSections.size > 0 || !panel.hidden);
+    };
     const applyVisibility = () => {
         for (const name of SECTION_NAMES) {
             sections[name].hidden = hiddenSections.has(name);
         }
-        button.classList.toggle("is-selected", hiddenSections.size > 0);
+        updateButton();
     };
     let pendingSave: Promise<unknown> = Promise.resolve();
 
@@ -79,14 +82,13 @@ export async function setupFilterAction(
     const close = () => {
         panel.hidden = true;
         button.setAttribute("aria-expanded", "false");
+        updateButton();
     };
     button.addEventListener("click", () => {
         const isOpen = panel.hidden;
         panel.hidden = !isOpen;
         button.setAttribute("aria-expanded", String(isOpen));
-    });
-    document.addEventListener("pointerdown", (event) => {
-        if (!searchControls.contains(event.target as Node)) close();
+        updateButton();
     });
     document.addEventListener("keydown", (event) => {
         if (event.key !== "Escape" || panel.hidden) return;
@@ -95,6 +97,7 @@ export async function setupFilterAction(
         event.preventDefault();
     });
 
-    searchControls.append(button, panel);
+    searchControls.append(button);
+    searchControls.after(panel);
     applyVisibility();
 }

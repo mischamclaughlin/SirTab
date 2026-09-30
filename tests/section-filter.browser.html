@@ -33,7 +33,7 @@
       let renders = 0;
       await setupFilterAction(controls, { tabs, groups, bookmarks }, hidden, () => { renders++; });
       const button = controls.querySelector('.filter-button');
-      const panel = controls.querySelector('.filter-panel');
+      const panel = document.querySelector('#actions > .filter-panel');
       const checkboxes = [...panel.querySelectorAll('input')];
       const search = controls.querySelector('.search-input');
       const filterBounds = button.getBoundingClientRect();
@@ -51,9 +51,16 @@
       const contentTop = document.getElementById('sidebar-content').getBoundingClientRect().top;
       button.click();
       if (panel.hidden || button.getAttribute('aria-expanded') !== 'true' ||
-          document.getElementById('sidebar-content').getBoundingClientRect().top !== contentTop) {
-        throw new Error('filter panel did not open as an overlay');
+          panel.getBoundingClientRect().width !== document.getElementById('actions').getBoundingClientRect().width ||
+          panel.getBoundingClientRect().top <= searchBounds.bottom ||
+          document.getElementById('sidebar-content').getBoundingClientRect().top <= contentTop) {
+        throw new Error('filter panel did not expand below search');
       }
+      button.click();
+      if (!panel.hidden || document.getElementById('sidebar-content').getBoundingClientRect().top !== contentTop) {
+        throw new Error('second filter click did not collapse the panel');
+      }
+      button.click();
       checkboxes[1].click();
       checkboxes[0].click();
       checkboxes[2].click();
@@ -64,7 +71,8 @@
       }
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       if (!panel.hidden || button.getAttribute('aria-expanded') !== 'false' ||
-          document.activeElement !== button) {
+          document.activeElement !== button ||
+          document.getElementById('sidebar-content').getBoundingClientRect().top !== contentTop) {
         throw new Error('Escape did not close and refocus the filter');
       }
       button.click();
