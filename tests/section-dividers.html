@@ -55,11 +55,11 @@
         for (let index = 1; index < populated.length; index++) {
           const gap = populated[index].firstElementChild.getBoundingClientRect().top -
             populated[index - 1].lastElementChild.getBoundingClientRect().bottom;
-          if (gap !== 0) throw new Error(`${scenario.name}: section gap is ${gap}px`);
+          if (gap !== 8) throw new Error(`${scenario.name}: section gap is ${gap}px`);
         }
         if (scenario.name === 'tabs and bookmarks') {
           const gap = lists[2].getBoundingClientRect().top - lists[0].getBoundingClientRect().bottom;
-          if (gap !== 0) throw new Error(`empty groups left a ${gap}px gap`);
+          if (gap !== 8) throw new Error(`empty groups left a ${gap}px gap`);
         }
         if (scenario.name === 'groups only') {
           const draggedTab = document.createElement('div');

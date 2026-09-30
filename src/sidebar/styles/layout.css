@@ -29,7 +29,7 @@ body {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 0.5rem;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
