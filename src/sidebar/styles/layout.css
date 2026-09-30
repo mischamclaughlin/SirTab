@@ -44,7 +44,7 @@ body {
 #sidebar-content.is-scrolling,
 #settings > .action-panel.is-scrolling,
 .setting-info-section.is-scrolling {
-  scrollbar-color: rgba(var(--subsubtext-colour-RGB), 0.65) transparent;
+  scrollbar-color: rgba(var(--subsubtext-colour-RGB), 0.3) transparent;
 }
 
 #sidebar-content::-webkit-scrollbar,
@@ -69,7 +69,7 @@ body {
 #sidebar-content.is-scrolling::-webkit-scrollbar-thumb,
 #settings > .action-panel.is-scrolling::-webkit-scrollbar-thumb,
 .setting-info-section.is-scrolling::-webkit-scrollbar-thumb {
-  background: rgba(var(--subsubtext-colour-RGB), 0.65);
+  background: rgba(var(--subsubtext-colour-RGB), 0.3);
 }
 
 #actions {
