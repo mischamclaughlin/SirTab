@@ -172,6 +172,10 @@
     position: relative;
 }
 
+.group-tabs .tab-button {
+    margin-right: 0.25rem;
+}
+
 .group-tabs[data-group-color="blue"] {
     --group-fill: var(--group-blue);
 }

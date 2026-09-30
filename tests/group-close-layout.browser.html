@@ -32,6 +32,7 @@
       const groupedClose = document.querySelector('.group-tabs .row-delete-btn');
       const groupTabs = document.querySelector('.group-tabs');
       const groupedRow = groupTabs.querySelector('.tab-row');
+      const groupedLabel = groupedRow.querySelector('.tab-label');
       const plusButton = document.querySelector('.row-add-btn');
       const plus = document.querySelector('.row-add-btn svg');
       const closeIcons = [looseClose, groupClose, groupedClose].map((button) =>
@@ -50,6 +51,7 @@
           expectedFillEnd >= groupedClose.getBoundingClientRect().left ||
           colouredArea.right !== '28px' ||
           colouredArea.borderTopRightRadius !== '4px' ||
+          Math.abs(expectedFillEnd - groupedLabel.getBoundingClientRect().right - 4) > 0.5 ||
           Math.abs(fillWidth - (expectedFillEnd - groupTabs.getBoundingClientRect().left)) > 0.5 ||
           getComputedStyle(groupedClose).color !== getComputedStyle(looseClose).color ||
           getComputedStyle(plusButton).color !== getComputedStyle(groupClose).color ||
@@ -65,7 +67,9 @@
       const sidebar = document.getElementById('sidebar-content');
       const narrowClose = groupedClose.getBoundingClientRect();
       const narrowGroup = groupTabs.getBoundingClientRect();
+      const narrowFillEnd = narrowGroup.right - 28;
       if (sidebar.scrollHeight <= sidebar.clientHeight ||
+          Math.abs(narrowFillEnd - groupedLabel.getBoundingClientRect().right - 4) > 0.5 ||
           narrowClose.width !== looseClose.getBoundingClientRect().width ||
           narrowClose.width !== 24 ||
           narrowClose.right > groupList.getBoundingClientRect().right + 0.5 ||
