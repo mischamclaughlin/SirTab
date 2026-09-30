@@ -12,7 +12,7 @@ export function setupSelectAction(
     const btnSelect = document.createElement("button");
     btnSelect.type = "button";
     btnSelect.className = "control";
-    setButtonIcon(btnSelect, "select", "Select tabs");
+    setButtonIcon(btnSelect, "edit", "Select tabs");
     actionBtnSection.appendChild(btnSelect);
 
     const selectPanel = document.createElement("div");
@@ -87,7 +87,7 @@ export function setupSelectAction(
         const isSelecting = tabSelection.isSelectionMode() || count > 0;
         setButtonIcon(
             btnSelect,
-            "select",
+            "edit",
             isSelecting
                 ? `Finish selecting ${count} tab${count === 1 ? "" : "s"}`
                 : "Select tabs and edit. Shift-click a tab to select a range.",
