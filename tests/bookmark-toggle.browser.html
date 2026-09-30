@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="../dist/sidebar/sidebar.css">
+</head>
+<body>
+  <output id="result">RUNNING</output>
+  <script type="module">
+    try {
+      globalThis.chrome = {
+        runtime: { getURL: (path) => path },
+        storage: { local: { get: async () => ({}), set: async () => {} } },
+      };
+      const { createToggleButton } = await import('../dist/sidebar/helpers/domFactory.js');
+      const folder = { id: 'folder', title: 'Reading' };
+      const collapsed = new Set(['folder']);
+      const closed = createToggleButton(true, folder, collapsed, { type: 'bookmark' });
+      const open = createToggleButton(false, folder, collapsed, { type: 'bookmark' });
+      document.body.append(closed, open);
+
+      const closedIcon = closed.querySelector('.tree-toggle-icon svg');
+      const openIcon = open.querySelector('.tree-toggle-icon svg');
+      if (!closedIcon || !openIcon ||
+          !closedIcon.querySelector('path')?.getAttribute('d') ||
+          closed.querySelector('.tree-toggle-icon').textContent.trim() ||
+          closed.getAttribute('aria-expanded') !== 'false' ||
+          open.getAttribute('aria-expanded') !== 'true' ||
+          getComputedStyle(closedIcon).transform !== 'none' ||
+          getComputedStyle(openIcon).transform !== 'matrix(0, 1, -1, 0, 0, 0)') {
+        throw new Error('bookmark folder icon or rotation is incorrect');
+      }
+
+      closed.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (collapsed.has('folder')) throw new Error('folder did not expand');
+      document.getElementById('result').textContent = 'PASS';
+    } catch (error) {
+      document.getElementById('result').textContent = `FAIL: ${error.message}`;
+    }
+  </script>
+</body>
+</html>

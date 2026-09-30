@@ -32,7 +32,7 @@ export function setButtonIcon(
     button.setAttribute("aria-label", label);
 }
 
-function createIcon(iconName: IconName) {
+export function createIcon(iconName: IconName) {
     const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     icon.setAttribute("class", "control-icon");
     icon.setAttribute("viewBox", iconName === "settings" ? "0 -960 960 960" : "0 0 24 24");

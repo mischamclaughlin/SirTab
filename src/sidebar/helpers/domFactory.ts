@@ -1,5 +1,6 @@
 import type { ToggleNode, ToggleViewOptions } from "../types.js";
 import { toggleInList } from "./collapseState.js";
+import { createIcon } from "./icons.js";
 
 export async function runButtonAction(
     button: HTMLButtonElement,
@@ -59,7 +60,8 @@ export function createToggleButton(
 
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "tree-toggle";
+    btn.className =
+        type === "bookmark" ? "tree-toggle tree-toggle--bookmark" : "tree-toggle";
     if (colour) {
         btn.dataset.colour = colour;
     }
@@ -73,8 +75,11 @@ export function createToggleButton(
     const icon = document.createElement("span");
     icon.className = "tree-toggle-icon";
     icon.setAttribute("aria-hidden", "true");
-    const toggleIcon = hasChildren ? (isCollapsed ? "▸" : "▾") : " ";
-    icon.textContent = toggleIcon;
+    if (type === "bookmark") {
+        icon.append(createIcon("bookmark"));
+    } else {
+        icon.textContent = hasChildren ? (isCollapsed ? "▸" : "▾") : " ";
+    }
 
     const title = document.createElement("span");
     title.className = "tree-toggle-title";
