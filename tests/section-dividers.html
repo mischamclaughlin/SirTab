@@ -39,9 +39,11 @@
         lists.forEach((list, index) => list.replaceChildren(
           ...(scenario.children[index] ? [item(scenario.children[index])] : []),
         ));
-        const actual = lists.slice(0, 2).map((list) =>
-          Number.parseFloat(getComputedStyle(list).borderBottomWidth),
-        );
+        const actual = lists.slice(0, 2).map((list) => {
+          const style = getComputedStyle(list);
+          return Number(style.borderBottomWidth !== '0px' &&
+            style.borderBottomColor !== 'rgba(0, 0, 0, 0)');
+        });
         if (actual.some((width, index) => width !== scenario.lines[index])) {
           throw new Error(`${scenario.name}: expected ${scenario.lines}, got ${actual}`);
         }
@@ -58,10 +60,47 @@
         }
       }
       lists.forEach((list) => list.replaceChildren());
-      lists[0].classList.add('drop-append');
-      if (Number.parseFloat(getComputedStyle(lists[0]).borderBottomWidth) !== 1) {
-        throw new Error('drag append marker lost its bottom line');
+      const tabRow = (label) => {
+        const li = item('tab-item');
+        const row = document.createElement('div');
+        row.className = 'tab-row';
+        row.style.height = '24px';
+        row.textContent = label;
+        li.append(row);
+        return { li, row };
+      };
+      const first = tabRow('First tab');
+      const second = tabRow('Second tab');
+      const third = tabRow('Third tab');
+      lists[0].append(first.li, second.li, third.li);
+      const group = item('group-item');
+      const groupRow = document.createElement('div');
+      groupRow.className = 'tree-row';
+      groupRow.style.height = '24px';
+      groupRow.textContent = 'Group';
+      group.append(groupRow);
+      lists[1].append(group);
+      const groupTop = lists[1].getBoundingClientRect().top;
+      const originalGap = second.li.getBoundingClientRect().top - first.li.getBoundingClientRect().bottom;
+      first.row.classList.add('drop-after');
+      const openGap = second.li.getBoundingClientRect().top - first.li.getBoundingClientRect().bottom;
+      if (openGap <= originalGap || lists[1].getBoundingClientRect().top !== groupTop) {
+        throw new Error('tab insertion gap moved the group section');
       }
+      first.row.classList.remove('drop-after');
+      second.row.classList.add('drop-before');
+      if (second.li.getBoundingClientRect().top - first.li.getBoundingClientRect().bottom <= originalGap ||
+          lists[1].getBoundingClientRect().top !== groupTop) {
+        throw new Error('before-tab gap did not open without moving groups');
+      }
+      second.row.classList.remove('drop-before');
+      lists[0].classList.add('drop-append');
+      if (lists[1].getBoundingClientRect().top !== groupTop ||
+          getComputedStyle(lists[0], '::after').content === 'none') {
+        throw new Error('drag append marker moved the group section');
+      }
+      lists[0].classList.remove('drop-append');
+      second.row.classList.add('drop-before');
       document.getElementById('result').textContent = 'PASS';
     } catch (error) {
       document.getElementById('result').textContent = `FAIL: ${error.message}`;

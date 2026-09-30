@@ -94,7 +94,8 @@ body {
 
 #tabs-list,
 #groups-list {
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid transparent;
   --section-divider-colour: var(--border);
 }
 
@@ -112,6 +113,10 @@ body {
   min-height: var(--control-height);
 }
 
+#bookmarks-list {
+  border-bottom: 1px solid transparent;
+}
+
 #bookmarks-list:empty::after {
   content: "Drag tabs here to bookmark";
   color: var(--subsubtext);
@@ -123,7 +128,7 @@ body {
     ~ #bookmarks-list > .tab-item
   ),
 #groups-list:has(> .group-item):has(~ #bookmarks-list > .tab-item) {
-  border-bottom: 1px solid var(--section-divider-colour);
+  border-bottom-color: var(--section-divider-colour);
 }
 
 #actions {
@@ -134,17 +139,22 @@ body {
 #groups-list.drop-append,
 #bookmarks-list.drop-append {
   --section-divider-colour: rgba(var(--blue-colour-RGB), 0.85);
-  border-bottom: 1px solid var(--section-divider-colour);
+  border-bottom-color: var(--section-divider-colour);
+  position: relative;
 }
 
 #tabs-list.drop-append::after,
 #groups-list.drop-append::after,
 #bookmarks-list.drop-append::after {
   content: "";
-  display: block;
-  min-height: 0.75rem;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.5rem;
   border: 1px dashed rgba(var(--blue-colour-RGB), 0.6);
   border-radius: 0.25rem;
+  pointer-events: none;
 }
 
 #settings {

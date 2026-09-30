@@ -47,10 +47,17 @@ class FakeElement {
         }
         return null;
     }
-    getBoundingClientRect() { return this.bounds; }
+    getBoundingClientRect() {
+        return {
+            ...this.bounds,
+            bottom: this.bounds.top + this.bounds.height,
+            right: this.bounds.left + this.bounds.width,
+        };
+    }
 }
 
 globalThis.Element = FakeElement;
+globalThis.HTMLElement = FakeElement;
 globalThis.document = new FakeElement();
 document.getElementById = () => null;
 document.scrollingElement = { scrollTop: 0, scrollHeight: 1000, clientHeight: 500 };
@@ -169,10 +176,20 @@ test("marker follows rows during bottom auto-scroll; selected tabs drop together
     sourceHandle.dispatch("dragstart", dragEvent(sourceHandle));
     assert.equal(sourceRow.classList.contains("is-dragging"), true);
     assert.equal(deferRenderUntilDragSettles(requestRender), true);
+    const directlyOverGap = dragEvent(tabsList, 98);
+    document.dispatch("dragover", directlyOverGap);
+    assert.equal(directlyOverGap.defaultPrevented, true);
+    assert.equal(secondRow.classList.contains("drop-before"), true);
     const overSecond = dragEvent(secondRow, 105);
     document.dispatch("dragover", overSecond);
     assert.equal(overSecond.defaultPrevented, true);
     assert.equal(secondRow.classList.contains("drop-before"), true);
+
+    const overOpenGap = dragEvent(tabsList, 98);
+    document.dispatch("dragover", overOpenGap);
+    assert.equal(overOpenGap.defaultPrevented, true);
+    assert.equal(secondRow.classList.contains("drop-before"), true);
+    assert.equal(tabsList.classList.contains("drop-append"), false);
 
     hitTarget = lastRow;
     document.dispatch("dragover", dragEvent(secondRow, 490));

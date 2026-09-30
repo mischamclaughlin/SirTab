@@ -21,9 +21,10 @@ const DRAG_DATA_MIME = "application/x-sirtab-drag";
 const NO_GROUP_ID = chrome.tabGroups.TAB_GROUP_ID_NONE;
 const AUTO_SCROLL_EDGE_PX = 72;
 const AUTO_SCROLL_MAX_STEP_PX = 18;
+const DROP_GAP_HIT_MARGIN_PX = 10;
 
 let activeDropIndicator:
-    | { element: HTMLElement; className: string }
+    | DropTarget
     | null = null;
 let activeDragElement: HTMLElement | null = null;
 let activeDragPayload: DragPayload | null = null;
@@ -138,17 +139,17 @@ function clearDropIndicator() {
     activeDropIndicator = null;
 }
 
-function setDropIndicator(element: HTMLElement, className: string) {
+function setDropIndicator(target: DropTarget) {
     if (
-        activeDropIndicator?.element === element &&
-        activeDropIndicator.className === className
+        activeDropIndicator?.element === target.element &&
+        activeDropIndicator.className === target.className
     ) {
         return;
     }
 
     clearDropIndicator();
-    element.classList.add(className);
-    activeDropIndicator = { element, className };
+    target.element.classList.add(target.className);
+    activeDropIndicator = target;
 }
 
 function clearDragElement() {
@@ -367,6 +368,22 @@ type DropTarget = {
     requestRender?: RequestRender;
 };
 
+function tabInsertionTarget(
+    tabRow: HTMLElement,
+    position: DropPosition,
+    payload: DragPayload,
+    windowId: number,
+): DropTarget | null {
+    if (payload.kind !== "tabs") return null;
+    const tabId = Number(tabRow.closest<HTMLElement>(".tab-item")?.dataset.tabId);
+    if (!Number.isInteger(tabId) || payload.ids.includes(tabId)) return null;
+    return {
+        element: tabRow,
+        className: position === "before" ? "drop-before" : "drop-after",
+        action: () => moveTabsRelativeToTab(windowId, payload.ids, tabId, position),
+    };
+}
+
 function getDropTarget(
     target: EventTarget | null,
     clientY: number,
@@ -398,15 +415,27 @@ function getDropTarget(
 
     const tabRow = target.closest<HTMLElement>(".tab-row");
     if (tabRow && (tabsList.contains(tabRow) || groupsList.contains(tabRow))) {
-        const tabId = Number(tabRow.closest<HTMLElement>(".tab-item")?.dataset.tabId);
-        if (payload.kind !== "tabs" || !Number.isInteger(tabId) ||
-            payload.ids.includes(tabId)) return null;
         const position = getDropPosition({ clientY } as DragEvent, tabRow);
-        return {
-            element: tabRow,
-            className: position === "before" ? "drop-before" : "drop-after",
-            action: () => moveTabsRelativeToTab(windowId, payload.ids, tabId, position),
-        };
+        return tabInsertionTarget(tabRow, position, payload, windowId);
+    }
+
+    // A pointer directly in the space between rows hits the list, not a row.
+    // Resolve it to the next visible tab so every inter-tab gap accepts a drop.
+    if (payload.kind === "tabs") {
+        const nestedList = target.closest<HTMLElement>(".group-tabs");
+        const list = nestedList && groupsList.contains(nestedList)
+            ? nestedList : tabsList.contains(target) ? tabsList : null;
+        if (list) {
+            for (const item of Array.from(list.children)) {
+                if (!(item instanceof HTMLElement) ||
+                    !item.classList.contains("tab-item")) continue;
+                const row = item.querySelector<HTMLElement>(".tab-row");
+                if (row && clientY < row.getBoundingClientRect().top) {
+                    const insertion = tabInsertionTarget(row, "before", payload, windowId);
+                    if (insertion) return insertion;
+                }
+            }
+        }
     }
 
     if (groupsList.contains(target)) {
@@ -462,15 +491,32 @@ export function setupSidebarDropZones(
     if (!documentListenersInstalled) {
         documentListenersInstalled = true;
         const hitTest = (x: number, y: number) => document.elementFromPoint(x, y);
-        const resolveAt = (target: EventTarget | null, y: number) =>
-            activeDragPayload && isDragEnabled()
-                ? getDropTarget(target, y, activeDragPayload, tabsList, groupsList,
-                    bookmarksList, windowId, requestBookmarkRender)
-                : null;
+        const resolveAt = (target: EventTarget | null, y: number) => {
+            if (!activeDragPayload || !isDragEnabled()) return null;
+            // The open visual gap belongs to its current insertion target even
+            // when hit testing lands on the list background between rows.
+            if (target instanceof Element &&
+                (tabsList.contains(target) || groupsList.contains(target)) &&
+                !target.closest(".tab-row") &&
+                !target.closest(".tree-row") &&
+                activeDropIndicator &&
+                (activeDropIndicator.className === "drop-before" ||
+                    activeDropIndicator.className === "drop-after") &&
+                activeDropIndicator.element.classList.contains("tab-row")) {
+                const bounds = activeDropIndicator.element.getBoundingClientRect();
+                const boundary = activeDropIndicator.className === "drop-before"
+                    ? bounds.top : bounds.bottom;
+                if (Math.abs(y - boundary) <= DROP_GAP_HIT_MARGIN_PX) {
+                    return activeDropIndicator;
+                }
+            }
+            return getDropTarget(target, y, activeDragPayload, tabsList,
+                groupsList, bookmarksList, windowId, requestBookmarkRender);
+        };
         updateDropAtPoint = (x, y) => {
             const dropTarget = resolveAt(hitTest(x, y), y);
             if (dropTarget) {
-                setDropIndicator(dropTarget.element, dropTarget.className);
+                setDropIndicator(dropTarget);
             } else {
                 clearDropIndicator();
             }
@@ -481,7 +527,7 @@ export function setupSidebarDropZones(
             if (dropTarget) {
                 event.preventDefault();
                 if (event.dataTransfer) event.dataTransfer.dropEffect = dropTarget.effect ?? "move";
-                setDropIndicator(dropTarget.element, dropTarget.className);
+                setDropIndicator(dropTarget);
             } else {
                 clearDropIndicator();
             }

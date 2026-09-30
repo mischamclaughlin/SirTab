@@ -47,6 +47,7 @@
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 0.25rem;
     align-items: center;
+    position: relative;
 }
 
 .tab-row--with-edit {
@@ -57,12 +58,33 @@
     opacity: 0.45;
 }
 
-.tab-row.drop-before {
-    box-shadow: inset 0 2px rgba(var(--blue-colour-RGB), 0.85);
+.tab-row.drop-before::before,
+.tab-row.drop-after::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 0.5rem;
+    border: 1px dashed rgba(var(--blue-colour-RGB), 0.85);
+    border-radius: 0.25rem;
+    pointer-events: none;
 }
 
-.tab-row.drop-after {
-    box-shadow: inset 0 -2px rgba(var(--blue-colour-RGB), 0.85);
+.tab-row.drop-before::before {
+    bottom: 100%;
+}
+
+.tab-row.drop-after::after {
+    top: 100%;
+}
+
+#tabs-list > .tab-item:has(> .tab-row.drop-before),
+#tabs-list > .tab-item:has(> .tab-row.drop-before) ~ .tab-item,
+#tabs-list > .tab-item:has(> .tab-row.drop-after) ~ .tab-item,
+.group-tabs > .tab-item:has(> .tab-row.drop-before),
+.group-tabs > .tab-item:has(> .tab-row.drop-before) ~ .tab-item,
+.group-tabs > .tab-item:has(> .tab-row.drop-after) ~ .tab-item {
+    transform: translateY(0.25rem);
 }
 
 .tab-icon {
