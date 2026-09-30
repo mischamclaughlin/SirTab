@@ -224,6 +224,17 @@ function tabUrl(tab: chrome.tabs.Tab) {
 
 const fingerprintPrefix = "sha256:";
 const fingerprintMigrationKey = "orderFingerprintsSha256Migrated";
+const failedRestartMatches = new Map<number, { identity: string; revision: number }>();
+let storageRevision = 0;
+const watchRestartChanges = typeof chrome.storage?.onChanged?.addListener === "function" &&
+    typeof chrome.windows?.onRemoved?.addListener === "function";
+chrome.storage?.onChanged?.addListener((_changes, areaName) => {
+    if (areaName === "local") storageRevision++;
+});
+chrome.windows?.onRemoved?.addListener((windowId) => {
+    storageRevision++;
+    failedRestartMatches.delete(windowId);
+});
 
 function urlFingerprint(url: string): Promise<string> {
     return crypto.subtle.digest("SHA-256", new TextEncoder().encode(url))
@@ -575,12 +586,31 @@ async function saveWindowOrders(
 export async function loadLogicalTabGroupData(
     windowId: number,
 ): Promise<LogicalTabGroupData> {
-    const [liveTabs, liveGroups, storage] = await Promise.all([
+    const tabKey = `${TAB_ORDER_WINDOW_PREFIX}${windowId}`;
+    const groupKey = `${GROUP_ORDER_WINDOW_PREFIX}${windowId}`;
+    const tabSnapshotKey = `${TAB_ORDER_SNAPSHOT_PREFIX}${windowId}`;
+    const groupSnapshotKey = `${GROUP_ORDER_SNAPSHOT_PREFIX}${windowId}`;
+    const windowKeys = [
+        fingerprintMigrationKey,
+        tabKey,
+        groupKey,
+        tabSnapshotKey,
+        groupSnapshotKey,
+        TAB_ORDER_STORAGE_KEY,
+        GROUP_ORDER_STORAGE_KEY,
+    ];
+    let [liveTabs, liveGroups, storage] = await Promise.all([
         chrome.tabs.query({ windowId }),
         chrome.tabGroups.query({ windowId }),
-        chrome.storage.local.get(null),
+        chrome.storage.local.get(windowKeys),
     ]);
-    await migrateLegacyFingerprints(storage);
+    // Migration must inspect every historical window record, but it runs once.
+    // Ordinary refreshes only need this window's records and the legacy maps.
+    const migrated = storage[fingerprintMigrationKey] !== true;
+    if (migrated) {
+        storage = await chrome.storage.local.get(null);
+        await migrateLegacyFingerprints(storage);
+    }
 
     const tabsById = buildIdMap(liveTabs);
     const groupsById = buildIdMap(liveGroups);
@@ -594,8 +624,6 @@ export async function loadLogicalTabGroupData(
         .map((group) => group.id)
         .filter((id): id is number => id != null);
 
-    const tabKey = `${TAB_ORDER_WINDOW_PREFIX}${windowId}`;
-    const groupKey = `${GROUP_ORDER_WINDOW_PREFIX}${windowId}`;
     const rawTabRecord = readStoredOrder(storage[tabKey]);
     const rawGroupRecord = readStoredOrder(storage[groupKey]);
     const fingerprints = await itemFingerprints(liveTabs, liveGroups);
@@ -634,9 +662,25 @@ export async function loadLogicalTabGroupData(
         tabsById.has(id) &&
         directTabRecord.fingerprints?.[index] === fingerprints.tabFingerprints.get(id),
     ).length ?? 0;
-    const restart = !directTabRecord || matchingDirectIds < liveTabOrder.length
-        ? await findRestartRecord(windowId, storage, liveTabInventory)
-        : null;
+    let restart = null;
+    const needsRestartMatch = !directTabRecord || matchingDirectIds < liveTabOrder.length;
+    const restartIdentity = JSON.stringify([liveTabOrder, liveTabInventory]);
+    const failedMatch = failedRestartMatches.get(windowId);
+    if (needsRestartMatch && liveTabInventory != null &&
+        (!watchRestartChanges || failedMatch?.identity !== restartIdentity ||
+            failedMatch.revision !== storageRevision)) {
+        // Restart matching needs the snapshot records from other windows.
+        // Keep the full read on this recovery path rather than on every refresh.
+        if (!migrated) storage = await chrome.storage.local.get(null);
+        const checkedRevision = storageRevision;
+        restart = await findRestartRecord(windowId, storage, liveTabInventory);
+        if (!restart && checkedRevision === storageRevision) {
+            failedRestartMatches.set(windowId, {
+                identity: restartIdentity,
+                revision: checkedRevision,
+            });
+        }
+    }
     const restoredGroupRecord = restart?.groupRecord ?? null;
 
     const tabOrder = restart
@@ -697,8 +741,6 @@ export async function loadLogicalTabGroupData(
             rawTabRecord.order.length > 0 &&
             rawTabRecord.order.every((id) => tabsById.has(id)) &&
             matchingExistingTabs >= Math.ceil(rawTabRecord.order.length / 2);
-        const tabSnapshotKey = `${TAB_ORDER_SNAPSHOT_PREFIX}${windowId}`;
-        const groupSnapshotKey = `${GROUP_ORDER_SNAPSHOT_PREFIX}${windowId}`;
         const tabSnapshot = readStoredOrder(storage[tabSnapshotKey]);
         const groupSnapshot = readStoredOrder(storage[groupSnapshotKey]);
         if (tabSnapshot && tabIdsContinuing &&
@@ -711,8 +753,28 @@ export async function loadLogicalTabGroupData(
             JSON.stringify(groupSnapshot) !== JSON.stringify(nextGroupRecord)) {
             updates[groupSnapshotKey] = nextGroupRecord;
         }
+        if (restart && restart.previousWindowId !== windowId) {
+            // Move the durable snapshots with the restored window before removing
+            // the old keys. Keep their full inventory during a partial restore.
+            if (restart.tabRecord) updates[tabSnapshotKey] = restart.tabRecord;
+            if (restart.groupRecord) updates[groupSnapshotKey] = restart.groupRecord;
+        }
         if (Object.keys(updates).length > 0) {
             await chrome.storage.local.set(updates);
+        }
+        if (restart && restart.previousWindowId !== windowId &&
+            chrome.storage.local.remove && chrome.windows?.getAll) {
+            const liveWindowIds = new Set(
+                (await chrome.windows.getAll()).map((window) => window.id),
+            );
+            if (!liveWindowIds.has(restart.previousWindowId)) {
+                await chrome.storage.local.remove([
+                    `${TAB_ORDER_WINDOW_PREFIX}${restart.previousWindowId}`,
+                    `${GROUP_ORDER_WINDOW_PREFIX}${restart.previousWindowId}`,
+                    `${TAB_ORDER_SNAPSHOT_PREFIX}${restart.previousWindowId}`,
+                    `${GROUP_ORDER_SNAPSHOT_PREFIX}${restart.previousWindowId}`,
+                ]);
+            }
         }
     }
 

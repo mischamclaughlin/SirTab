@@ -14,10 +14,16 @@ const state = {
     ungrouped: [],
     setBarrier: null,
     setCount: 0,
+    getRequests: [],
+    storageListeners: new Set(),
+    windowRemovedListeners: new Set(),
 };
 
 globalThis.chrome = {
     windows: {
+        onRemoved: {
+            addListener: (listener) => state.windowRemovedListeners.add(listener),
+        },
         getAll: async () => [...new Set(state.tabs.map((tab) => tab.windowId))]
             .map((id) => ({ id })),
     },
@@ -51,8 +57,12 @@ globalThis.chrome = {
         },
     },
     storage: {
+        onChanged: {
+            addListener: (listener) => state.storageListeners.add(listener),
+        },
         local: {
             get: async (keys) => {
+                state.getRequests.push(keys);
                 let result;
                 if (Array.isArray(keys)) {
                     result = Object.fromEntries(
@@ -69,11 +79,13 @@ globalThis.chrome = {
                 if (state.setBarrier) await state.setBarrier();
                 state.setCount += 1;
                 Object.assign(state.storage, structuredClone(updates));
+                for (const listener of state.storageListeners) listener({}, "local");
             },
             remove: async (keys) => {
                 for (const key of Array.isArray(keys) ? keys : [keys]) {
                     delete state.storage[key];
                 }
+                for (const listener of state.storageListeners) listener({}, "local");
             },
         },
     },
@@ -143,12 +155,80 @@ function resetState({
     state.ungrouped = [];
     state.setBarrier = null;
     state.setCount = 0;
+    state.getRequests = [];
     state.storage = {
         [TAB_ORDER_STORAGE_KEY]: tabOrderByWindow,
         [GROUP_ORDER_STORAGE_KEY]: groupOrderByWindow,
         orderFingerprintsSha256Migrated: true,
     };
+    for (const listener of state.storageListeners) listener({}, "local");
 }
+
+test("ordinary order refresh reads only its window's storage records", async () => {
+    resetState({ tabs: [tab(1, 0), tab(2, 1)] });
+    await moveStoredTabRelative(WINDOW_ID, 2, 1, "before");
+    state.getRequests = [];
+
+    const data = await loadLogicalTabGroupData(WINDOW_ID);
+
+    assert.deepEqual(data.tabOrder, [2, 1]);
+    assert.equal(state.getRequests.length, 1);
+    assert.deepEqual(state.getRequests[0], [
+        "orderFingerprintsSha256Migrated",
+        `${TAB_ORDER_WINDOW_PREFIX}${WINDOW_ID}`,
+        `${GROUP_ORDER_WINDOW_PREFIX}${WINDOW_ID}`,
+        `${TAB_ORDER_SNAPSHOT_PREFIX}${WINDOW_ID}`,
+        `${GROUP_ORDER_SNAPSHOT_PREFIX}${WINDOW_ID}`,
+        TAB_ORDER_STORAGE_KEY,
+        GROUP_ORDER_STORAGE_KEY,
+    ]);
+});
+
+test("a window without saved order reuses a failed restart scan until storage changes", async () => {
+    resetState({ tabs: [tab(1, 0), tab(2, 1)] });
+    await loadLogicalTabGroupData(WINDOW_ID);
+    assert.equal(state.getRequests.filter((keys) => keys === null).length, 1);
+
+    state.getRequests = [];
+    await loadLogicalTabGroupData(WINDOW_ID);
+    assert.equal(state.getRequests.length, 1);
+    assert.ok(Array.isArray(state.getRequests[0]));
+
+    await chrome.storage.local.set({ unrelated: true });
+    state.getRequests = [];
+    await loadLogicalTabGroupData(WINDOW_ID);
+    assert.equal(state.getRequests.filter((keys) => keys === null).length, 1);
+});
+
+test("a new snapshot invalidates failed restart matching", async () => {
+    resetState({
+        tabs: [
+            { ...tab(101, 0), windowId: 8, url: "https://example.test/1" },
+            { ...tab(102, 1), windowId: 8, url: "https://example.test/2" },
+        ],
+    });
+    assert.deepEqual((await loadLogicalTabGroupData(8)).tabOrder, [101, 102]);
+
+    state.tabs.push(tab(1, 0), tab(2, 1));
+    await moveStoredTabRelative(WINDOW_ID, 2, 1, "before");
+    state.tabs = state.tabs.filter((item) => item.windowId === 8);
+
+    assert.deepEqual((await loadLogicalTabGroupData(8)).tabOrder, [102, 101]);
+});
+
+test("closing the snapshot's source window retries restart matching", async () => {
+    resetState({ tabs: [tab(1, 0), tab(2, 1)] });
+    await moveStoredTabRelative(WINDOW_ID, 2, 1, "before");
+    state.tabs.push(
+        { ...tab(101, 0), windowId: 8, url: "https://example.test/1" },
+        { ...tab(102, 1), windowId: 8, url: "https://example.test/2" },
+    );
+    assert.deepEqual((await loadLogicalTabGroupData(8)).tabOrder, [101, 102]);
+
+    state.tabs = state.tabs.filter((item) => item.windowId === 8);
+    for (const listener of state.windowRemovedListeners) listener(WINDOW_ID);
+    assert.deepEqual((await loadLogicalTabGroupData(8)).tabOrder, [102, 101]);
+});
 
 test("loadLogicalTabGroupData cleans closed ids and appends new live ids", async () => {
     resetState({
@@ -513,6 +593,9 @@ test("restores tab and group order after browser IDs change", async () => {
     const restored = await loadLogicalTabGroupData(8);
     assert.deepEqual(restored.tabOrder, [104, 101, 102, 103]);
     assert.deepEqual(restored.groupOrder, [120, 110]);
+    assert.deepEqual(state.storage[`${TAB_ORDER_SNAPSHOT_PREFIX}8`].order, [4, 1, 2, 3]);
+    assert.equal(state.storage[`${TAB_ORDER_SNAPSHOT_PREFIX}7`], undefined);
+    assert.equal(state.storage[`${GROUP_ORDER_SNAPSHOT_PREFIX}7`], undefined);
     await moveStoredTabRelative(8, 101, 104, "before");
     for (const prefix of [
         TAB_ORDER_WINDOW_PREFIX,
@@ -595,6 +678,8 @@ test("shutdown tab removals cannot erase the durable order snapshot", async () =
     }));
     const restored = await loadLogicalTabGroupData(8);
     assert.deepEqual(restored.tabOrder, [104, 101, 102, 103]);
+    assert.deepEqual(state.storage[`${TAB_ORDER_SNAPSHOT_PREFIX}8`], snapshot);
+    assert.equal(state.storage[`${TAB_ORDER_SNAPSHOT_PREFIX}7`], undefined);
 });
 
 test("a reused tab ID cannot make shutdown-truncated active order win", async () => {
@@ -685,6 +770,7 @@ test("legacy URL fingerprints migrate without losing restart order", async () =>
     const restored = await loadLogicalTabGroupData(8);
     assert.deepEqual(restored.tabOrder, [102, 101]);
     assert.deepEqual(restored.groupOrder, [110]);
+    assert.equal(state.getRequests.filter((keys) => keys === null).length, 1);
     assert.equal(JSON.stringify(state.storage).includes("old-private-token"), false);
 });
 
