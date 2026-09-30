@@ -7,6 +7,7 @@ import {
     moveStoredTabRelative,
     setTabGroup,
 } from "../shared/groupOrder.js";
+import { HIDDEN_SECTIONS_STORAGE_KEY } from "../shared/storageKeys.js";
 
 chrome.sidePanel
     .setPanelBehavior({ openPanelOnActionClick: true })
@@ -19,15 +20,28 @@ async function getVisibleTabStateForCurrentWindow() {
     if (currentWindow.id == null) return null;
     const windowId = currentWindow.id;
 
-    const [logicalData, collapsedGroups] = await Promise.all([
+    const [logicalData, collapsedGroups, filterStorage] = await Promise.all([
         loadLogicalTabGroupData(windowId),
         loadCollapsedGroupIds(windowId),
+        chrome.storage.local.get(HIDDEN_SECTIONS_STORAGE_KEY),
     ]);
+    const storedHiddenSections = filterStorage[HIDDEN_SECTIONS_STORAGE_KEY];
+    const hiddenSections = new Set(
+        Array.isArray(storedHiddenSections) ? storedHiddenSections : [],
+    );
+    const visibleData = {
+        tabs: hiddenSections.has("tabs")
+            ? logicalData.tabs.filter((tab) =>
+                  getTabGroupId(tab) !== chrome.tabGroups.TAB_GROUP_ID_NONE,
+              )
+            : logicalData.tabs,
+        groups: hiddenSections.has("groups") ? [] : logicalData.groups,
+    };
 
     return {
         windowId,
         logicalData,
-        orderedTabIds: buildVisibleLogicalTabIds(logicalData, collapsedGroups),
+        orderedTabIds: buildVisibleLogicalTabIds(visibleData, collapsedGroups),
     };
 }
 

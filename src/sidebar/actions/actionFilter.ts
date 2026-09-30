@@ -44,6 +44,7 @@ export async function setupFilterAction(
         updateButton();
     };
     let pendingSave: Promise<unknown> = Promise.resolve();
+    const checkboxes = new Map<SectionName, HTMLInputElement>();
 
     for (const name of SECTION_NAMES) {
         const label = document.createElement("label");
@@ -51,6 +52,7 @@ export async function setupFilterAction(
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.checked = hiddenSections.has(name);
+        checkboxes.set(name, checkbox);
         checkbox.setAttribute("aria-label", `Hide ${name}`);
         const text = document.createElement("span");
         text.textContent = name;
@@ -73,6 +75,37 @@ export async function setupFilterAction(
             });
         });
     }
+
+    const handleStorageChange = (
+        changes: Record<string, chrome.storage.StorageChange>,
+        areaName: string,
+    ) => {
+        if (areaName !== "local" || !(HIDDEN_SECTIONS_STORAGE_KEY in changes)) return;
+        const stored = changes[HIDDEN_SECTIONS_STORAGE_KEY].newValue;
+        const nextHidden = new Set<SectionName>();
+        if (Array.isArray(stored)) {
+            for (const name of stored) {
+                if (SECTION_NAMES.some((section) => section === name)) {
+                    nextHidden.add(name as SectionName);
+                }
+            }
+        }
+        if (SECTION_NAMES.every((name) => hiddenSections.has(name) === nextHidden.has(name))) {
+            return;
+        }
+        hiddenSections.clear();
+        for (const name of nextHidden) hiddenSections.add(name);
+        for (const name of SECTION_NAMES) {
+            const checkbox = checkboxes.get(name);
+            if (checkbox) checkbox.checked = hiddenSections.has(name);
+        }
+        applyVisibility();
+        requestRender();
+    };
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    window.addEventListener("pagehide", () => {
+        chrome.storage.onChanged.removeListener(handleStorageChange);
+    }, { once: true });
 
     const close = () => {
         panel.hidden = true;

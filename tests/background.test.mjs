@@ -96,6 +96,7 @@ globalThis.chrome = {
 const {
     COLLAPSED_GROUPS_STORAGE_KEY,
     GROUP_ORDER_STORAGE_KEY,
+    HIDDEN_SECTIONS_STORAGE_KEY,
     TAB_ORDER_STORAGE_KEY,
     TAB_ORDER_WINDOW_PREFIX,
 } = await import("../dist/shared/storageKeys.js");
@@ -185,6 +186,50 @@ test("cycle commands skip collapsed groups and wrap at the ends", async () => {
         tabId: 3,
         changes: { active: true },
     });
+});
+
+test("keyboard cycling skips sections hidden in the side panel", async () => {
+    reset({
+        tabs: [
+            tab(1, 0, NO_GROUP_ID, true),
+            tab(2, 1, 10),
+            tab(3, 2, 20),
+        ],
+        groups: [group(10), group(20)],
+        tabOrder: [1, 2, 3],
+        groupOrder: [10, 20],
+    });
+    state.storage[HIDDEN_SECTIONS_STORAGE_KEY] = ["tabs"];
+
+    await dispatchCommand("cycle_next_visible_tab");
+    assert.deepEqual(state.tabUpdates.at(-1), {
+        tabId: 2,
+        changes: { active: true },
+    });
+
+    state.storage[HIDDEN_SECTIONS_STORAGE_KEY] = ["groups"];
+    state.tabUpdates = [];
+    await dispatchCommand("cycle_next_visible_tab");
+    assert.deepEqual(state.tabUpdates, [{
+        tabId: 1,
+        changes: { active: true },
+    }]);
+});
+
+test("keyboard moves do not target tabs in hidden sections", async () => {
+    reset({
+        tabs: [tab(1, 0, NO_GROUP_ID, true), tab(2, 1, 10)],
+        groups: [group(10)],
+        tabOrder: [1, 2],
+        groupOrder: [10],
+    });
+    state.storage[HIDDEN_SECTIONS_STORAGE_KEY] = ["groups"];
+
+    await dispatchCommand("move_active_tab_next");
+
+    assert.deepEqual(state.grouped, []);
+    assert.deepEqual(state.ungrouped, []);
+    assert.deepEqual(state.tabUpdates, []);
 });
 
 test("moving within a group updates logical order and preserves active tab", async () => {

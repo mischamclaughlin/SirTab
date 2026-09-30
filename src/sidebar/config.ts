@@ -1,6 +1,7 @@
 export {
     COLLAPSED_GROUPS_STORAGE_KEY,
     COLLAPSED_GROUPS_WINDOW_PREFIX,
+    HIDDEN_SECTIONS_STORAGE_KEY,
 } from "../shared/storageKeys.js";
 
 export const DEFAULT_TAB_ICON_URL = chrome.runtime.getURL(
@@ -8,7 +9,6 @@ export const DEFAULT_TAB_ICON_URL = chrome.runtime.getURL(
 );
 
 export const THEME_STORAGE_KEY = "sidebarTheme";
-export const HIDDEN_SECTIONS_STORAGE_KEY = "hiddenSidebarSections";
 export const SHORTCUT_PROMPT_DISMISSED_STORAGE_KEY =
     "shortcutPromptDismissed";
 export const THEMES = [

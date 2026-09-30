@@ -17,12 +17,19 @@
   <script type="module">
     try {
       const writes = [];
+      let storageChangeListener;
       globalThis.chrome = {
         runtime: { getURL: (path) => path },
-        storage: { local: {
-          get: async () => ({ hiddenSidebarSections: ['groups', 'unknown'] }),
-          set: async (value) => { writes.push(value.hiddenSidebarSections); },
-        } },
+        storage: {
+          local: {
+            get: async () => ({ hiddenSidebarSections: ['groups', 'unknown'] }),
+            set: async (value) => { writes.push(value.hiddenSidebarSections); },
+          },
+          onChanged: {
+            addListener: (listener) => { storageChangeListener = listener; },
+            removeListener: () => {},
+          },
+        },
       };
       const { setupFilterAction } = await import('../dist/sidebar/actions/actionFilter.js');
       const controls = document.querySelector('.search-controls');
@@ -69,6 +76,13 @@
       if (!tabs.hidden || groups.hidden || !bookmarks.hidden || renders !== 3 ||
           writes.at(-1)?.join() !== 'tabs,bookmarks') {
         throw new Error('filter choices did not update sections or storage');
+      }
+      storageChangeListener({
+        hiddenSidebarSections: { newValue: ['groups'] },
+      }, 'local');
+      if (tabs.hidden || !groups.hidden || bookmarks.hidden || renders !== 4 ||
+          checkboxes.map((box) => box.checked).join() !== 'false,true,false') {
+        throw new Error('filter did not follow another window');
       }
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       if (!panel.hidden || button.getAttribute('aria-expanded') !== 'false' ||
