@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="../dist/sidebar/sidebar.css">
+  <style>body { width: 300px; }</style>
+</head>
+<body>
+  <ul id="groups-list"></ul>
+  <div class="action-controls"></div>
+  <output id="result">RUNNING</output>
+  <script type="module">
+    try {
+      const calls = { created: [], grouped: [], stored: [], renders: 0 };
+      globalThis.chrome = {
+        runtime: { getURL: (path) => path },
+        tabGroups: { TAB_GROUP_ID_NONE: -1 },
+        windows: { getCurrent: async () => ({ id: 1 }) },
+        storage: { local: {
+          get: async () => ({}),
+          set: async (value) => { calls.stored.push(value); },
+        } },
+        tabs: {
+          create: async (details) => {
+            calls.created.push(details);
+            return { id: 42 };
+          },
+          group: async (details) => { calls.grouped.push(details); },
+        },
+      };
+      const { buildGroup } = await import('../dist/sidebar/group/group.js');
+      const { setupTabAction } = await import('../dist/sidebar/actions/actionTab.js');
+      const host = document.getElementById('groups-list');
+      const collapsed = new Set(['21']);
+      const group = { id: 21, title: 'Projects', color: 'blue', windowId: 1 };
+      buildGroup(false, [group], new Map([[21, []]]), collapsed,
+        false, '', host, 1, () => { calls.renders++; }, false);
+      const row = host.querySelector('.tree-row');
+      const [name, add, close] = row.children;
+      if (!name.classList.contains('tree-toggle') ||
+          !add.classList.contains('row-add-btn') ||
+          !close.classList.contains('row-delete-btn') ||
+          !add.getAttribute('aria-label').includes('Projects') ||
+          getComputedStyle(row).gridTemplateColumns.split(' ').length !== 3) {
+        throw new Error('group add button is not between title and close');
+      }
+      add.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (calls.created.length !== 1 || calls.created[0].windowId !== 1 ||
+          calls.grouped[0]?.groupId !== 21 || collapsed.has('21') ||
+          calls.stored.length !== 1 || calls.renders !== 1) {
+        throw new Error(`group add failed: ${JSON.stringify(calls)}`);
+      }
+
+      const controls = document.querySelector('.action-controls');
+      await setupTabAction(controls);
+      const newTab = controls.querySelector('button');
+      if (newTab.querySelector('path')?.getAttribute('d') !==
+          add.querySelector('path')?.getAttribute('d')) {
+        throw new Error('new tab buttons use different icons');
+      }
+      newTab.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (calls.created.length !== 2 || 'windowId' in calls.created[1]) {
+        throw new Error('global new tab action changed behaviour');
+      }
+      document.getElementById('result').textContent = 'PASS';
+    } catch (error) {
+      document.getElementById('result').textContent = `FAIL: ${error.message}`;
+    }
+  </script>
+</body>
+</html>

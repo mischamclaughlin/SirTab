@@ -14,6 +14,7 @@ import {
 import { createEmptySearchState } from "../helpers/domFactory.js";
 import { groupColorMap, GroupColorChoice } from "../config.js";
 import { setButtonIcon } from "../helpers/icons.js";
+import { createNewTabInGroup } from "../tab/createTab.js";
 import {
     createEditSession,
     finishEditSession,
@@ -153,9 +154,26 @@ export function buildGroup(
         });
 
         const groupRow = document.createElement("div");
-        groupRow.className = "tree-row";
+        groupRow.className = "tree-row tree-row--with-add";
         const isSelectionMode = tabSelection?.isSelectionMode() ?? false;
         if (isSelectionMode) groupRow.classList.add("tree-row--with-edit");
+        const addTabBtn = document.createElement("button");
+        addTabBtn.type = "button";
+        addTabBtn.className = "row-add-btn";
+        setButtonIcon(addTabBtn, "plus", `Add tab to group ${groupTitle}`);
+        addTabBtn.addEventListener("click", () => {
+            void runButtonAction(addTabBtn, async () => {
+                await createNewTabInGroup(groupId, windowId);
+                if (collapsedGroups.delete(String(groupId))) {
+                    try {
+                        await persistCollapse(collapsedGroups, "tab");
+                    } catch (error) {
+                        console.error("Failed to save expanded group:", error);
+                    }
+                }
+                requestRender();
+            }, "Add tab to group failed:");
+        });
         const deleteGroupBtn = createDeleteButton("Close group", async () => {
             const tabIds = (tabsByGroup.get(groupId) ?? [])
                 .map((tab) => tab.id)
@@ -185,9 +203,9 @@ export function buildGroup(
                 "edit",
                 `Edit group ${groupTitle}. Available in select mode.`,
             );
-            groupRow.append(btn, editGroupBtn, deleteGroupBtn);
+            groupRow.append(btn, editGroupBtn, addTabBtn, deleteGroupBtn);
         } else {
-            groupRow.append(btn, deleteGroupBtn);
+            groupRow.append(btn, addTabBtn, deleteGroupBtn);
         }
         if (enableDragDrop) {
             makeGroupDraggable(
