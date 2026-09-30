@@ -118,10 +118,20 @@
 }
 
 .tree-toggle-icon {
-    width: 1ch;
-    text-align: center;
+    width: 1rem;
+    height: 1rem;
+    display: grid;
+    place-items: center;
     color: var(--text);
     flex-shrink: 0;
+}
+
+.tree-toggle-icon svg {
+    transition: transform 150ms ease;
+}
+
+.tree-toggle[aria-expanded="true"] .tree-toggle-icon svg {
+    transform: rotate(90deg);
 }
 
 .tree-toggle-title {

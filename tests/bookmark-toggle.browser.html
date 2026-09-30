@@ -10,6 +10,7 @@
     try {
       globalThis.chrome = {
         runtime: { getURL: (path) => path },
+        windows: { getCurrent: async () => ({ id: 1 }) },
         storage: { local: { get: async () => ({}), set: async () => {} } },
       };
       const { createToggleButton } = await import('../dist/sidebar/helpers/domFactory.js');
@@ -34,6 +35,25 @@
       closed.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
       if (collapsed.has('folder')) throw new Error('folder did not expand');
+
+      const group = { id: 21, title: 'Projects' };
+      const collapsedGroups = new Set(['21']);
+      const closedGroup = createToggleButton(true, group, collapsedGroups, { type: 'tab' });
+      const openGroup = createToggleButton(false, group, collapsedGroups, { type: 'tab' });
+      document.body.append(closedGroup, openGroup);
+      const closedGroupIcon = closedGroup.querySelector('.tree-toggle-icon svg');
+      const openGroupIcon = openGroup.querySelector('.tree-toggle-icon svg');
+      if (!closedGroupIcon?.querySelector('path')?.getAttribute('d') ||
+          closedGroupIcon.querySelector('path').getAttribute('d') ===
+            closedIcon.querySelector('path').getAttribute('d') ||
+          closedGroup.querySelector('.tree-toggle-icon').textContent.trim() ||
+          getComputedStyle(closedGroupIcon).transform !== 'none' ||
+          getComputedStyle(openGroupIcon).transform !== 'matrix(0, 1, -1, 0, 0, 0)') {
+        throw new Error('group icon or rotation is incorrect');
+      }
+      closedGroup.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (collapsedGroups.has('21')) throw new Error('group did not expand');
       document.getElementById('result').textContent = 'PASS';
     } catch (error) {
       document.getElementById('result').textContent = `FAIL: ${error.message}`;

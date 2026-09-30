@@ -6,23 +6,6 @@
     gap: 0.25rem;
 }
 
-.tree-toggle--bookmark .tree-toggle-icon {
-    width: 1rem;
-    height: 1rem;
-    display: grid;
-    place-items: center;
-}
-
-.tree-toggle--bookmark .tree-toggle-icon svg {
-    width: 1rem;
-    height: 1rem;
-    transition: transform 150ms ease;
-}
-
-.tree-toggle--bookmark[aria-expanded="true"] .tree-toggle-icon svg {
-    transform: rotate(90deg);
-}
-
 #bookmarks-list .tab-row.drop-inside .tab-label,
 #bookmarks-list .tree-row.drop-inside .tree-toggle {
     box-shadow: inset 0 0 0 2px rgba(var(--blue-colour-RGB), 0.5);

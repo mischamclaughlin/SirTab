@@ -60,8 +60,7 @@ export function createToggleButton(
 
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className =
-        type === "bookmark" ? "tree-toggle tree-toggle--bookmark" : "tree-toggle";
+    btn.className = "tree-toggle";
     if (colour) {
         btn.dataset.colour = colour;
     }
@@ -75,11 +74,7 @@ export function createToggleButton(
     const icon = document.createElement("span");
     icon.className = "tree-toggle-icon";
     icon.setAttribute("aria-hidden", "true");
-    if (type === "bookmark") {
-        icon.append(createIcon("bookmark"));
-    } else {
-        icon.textContent = hasChildren ? (isCollapsed ? "▸" : "▾") : " ";
-    }
+    icon.append(createIcon(type === "bookmark" ? "bookmark" : "group"));
 
     const title = document.createElement("span");
     title.className = "tree-toggle-title";
