@@ -97,7 +97,7 @@ textarea.control {
   border: 1px solid var(--border-faded);
   border-radius: 0.25rem;
   background: transparent;
-  color: var(--subtext);
+  color: var(--subsubtext);
   cursor: pointer;
   display: grid;
   place-items: center;

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="../dist/sidebar/sidebar.css">
+  <style>body { width: 300px; }</style>
+</head>
+<body>
+  <main id="sidebar-content">
+    <ul id="tabs-list"></ul>
+    <ul id="groups-list"></ul>
+    <ul id="bookmarks-list"></ul>
+  </main>
+  <output id="result">RUNNING</output>
+  <script type="module">
+    try {
+      globalThis.chrome = {
+        runtime: { getURL: (path) => path },
+        tabGroups: { TAB_GROUP_ID_NONE: -1 },
+      };
+      const { cycleTabs } = await import('../dist/sidebar/tab/tab.js');
+      const { buildGroup } = await import('../dist/sidebar/group/group.js');
+      const ungrouped = { id: 1, title: 'Ungrouped tab', url: 'https://example.com' };
+      const grouped = { id: 2, groupId: 21, title: 'Grouped tab', url: 'https://example.com' };
+      cycleTabs(document.getElementById('tabs-list'), [ungrouped]);
+      buildGroup(true, [{ id: 21, title: 'Projects', color: 'blue' }],
+        new Map([[21, [grouped]]]), new Set(), false, '',
+        document.getElementById('groups-list'), 1, () => {}, false);
+
+      const looseClose = document.querySelector('#tabs-list .row-delete-btn');
+      const groupClose = document.querySelector('.tree-row .row-delete-btn');
+      const groupedClose = document.querySelector('.group-tabs .row-delete-btn');
+      const groupTabs = document.querySelector('.group-tabs');
+      const groupedRow = groupTabs.querySelector('.tab-row');
+      const ends = [looseClose, groupClose, groupedClose].map((button) =>
+        button.getBoundingClientRect().right);
+      const expectedFillEnd = groupTabs.getBoundingClientRect().right -
+        groupedClose.getBoundingClientRect().width -
+        parseFloat(getComputedStyle(groupedRow).columnGap);
+      const fillWidth = groupTabs.getBoundingClientRect().width -
+        groupedClose.getBoundingClientRect().width -
+        parseFloat(getComputedStyle(groupedRow).columnGap);
+      if (ends.some((end) => Math.abs(end - ends[0]) > 0.5) ||
+          expectedFillEnd >= groupedClose.getBoundingClientRect().left ||
+          getComputedStyle(groupTabs).backgroundSize !== `calc(100% - 28px) 100%` ||
+          Math.abs(fillWidth - (expectedFillEnd - groupTabs.getBoundingClientRect().left)) > 0.5 ||
+          getComputedStyle(groupedClose).color !== getComputedStyle(looseClose).color) {
+        throw new Error('group close buttons are misaligned or inside the coloured area');
+      }
+      document.getElementById('result').textContent = 'PASS';
+    } catch (error) {
+      document.getElementById('result').textContent = `FAIL: ${error.message}`;
+    }
+  </script>
+</body>
+</html>

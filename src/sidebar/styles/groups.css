@@ -148,43 +148,45 @@
 
 .group-tabs {
     list-style: none;
-    padding: 0.25rem;
+    padding: 0.25rem 0 0.25rem 0.25rem;
     border-radius: 0.25rem;
     display: grid;
     gap: 0.25rem;
-    background: transparent;
+    background-image: linear-gradient(var(--group-fill, transparent), var(--group-fill, transparent));
+    background-size: calc(100% - var(--control-height) - 0.25rem) 100%;
+    background-repeat: no-repeat;
 }
 
 .group-tabs[data-group-color="blue"] {
-    background: var(--group-blue);
+    --group-fill: var(--group-blue);
 }
 
 .group-tabs[data-group-color="red"] {
-    background: var(--group-red);
+    --group-fill: var(--group-red);
 }
 
 .group-tabs[data-group-color="yellow"] {
-    background: var(--group-yellow);
+    --group-fill: var(--group-yellow);
 }
 
 .group-tabs[data-group-color="green"] {
-    background: var(--group-green);
+    --group-fill: var(--group-green);
 }
 
 .group-tabs[data-group-color="pink"] {
-    background: var(--group-pink);
+    --group-fill: var(--group-pink);
 }
 
 .group-tabs[data-group-color="purple"] {
-    background: var(--group-lavender);
+    --group-fill: var(--group-lavender);
 }
 
 .group-tabs[data-group-color="cyan"] {
-    background: var(--group-sky);
+    --group-fill: var(--group-sky);
 }
 
 .group-tabs[data-group-color="orange"] {
-    background: var(--group-peach);
+    --group-fill: var(--group-peach);
 }
 
 @media (max-width: 320px) {
