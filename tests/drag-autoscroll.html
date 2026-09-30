@@ -101,8 +101,7 @@
       actionControls.getBoundingClientRect().top > content.getBoundingClientRect().bottom &&
       actionControls.getBoundingClientRect().bottom === settingsButton.getBoundingClientRect().bottom &&
       innerHeight - footerBottom >= 7 &&
-      innerHeight - settingsButtonBottom >= 11 &&
-      innerHeight - settingsButtonBottom <= 14;
+      innerHeight - settingsButtonBottom === headerTop;
     const source = list.querySelector('.tab-button');
     source.dispatchEvent(new DragEvent('dragstart', {
       bubbles: true, dataTransfer: new DataTransfer(), clientX: 60,

@@ -154,7 +154,7 @@ body:has(.tab-row.is-dragging) #tabs-list:empty:not([hidden]) {
   min-height: 0;
   max-height: 60dvh;
   padding-top: 0.5rem;
-  padding-bottom: 0.25rem;
+  padding-bottom: 0;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
