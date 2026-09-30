@@ -39,12 +39,14 @@ export async function setupGroupAction(
         textInput.id = "group-name-input";
         textInput.name = "group-name";
         textInput.placeholder = "group name";
+        textInput.setAttribute("aria-label", "Group name");
         textInput.className = "control";
 
         const colourSelect = document.createElement("select");
         colourSelect.id = "group-colour-select";
         colourSelect.name = "group-colour";
         colourSelect.className = "control";
+        colourSelect.setAttribute("aria-label", "Group colour");
 
         const colourChoices = Object.keys(groupColorMap) as GroupColorChoice[];
         for (const choice of colourChoices) {

@@ -102,6 +102,13 @@
   display: none;
 }
 
+.action-feedback {
+  grid-column: 1 / -1;
+  color: rgb(var(--red-colour-RGB));
+  font-size: 0.75rem;
+  margin: 0;
+}
+
 .selection-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;

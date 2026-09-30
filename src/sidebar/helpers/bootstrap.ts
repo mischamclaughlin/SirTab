@@ -137,6 +137,9 @@ export async function bootstrapSidebar() {
             for (const row of list.querySelectorAll<HTMLElement>(".tab-item")) {
                 const isCurrent = row.dataset.tabId === String(tabId);
                 row.querySelector(".tab-label")?.classList.toggle("is-current", isCurrent);
+                const button = row.querySelector(".tab-button");
+                if (isCurrent) button?.setAttribute("aria-current", "page");
+                else button?.removeAttribute("aria-current");
             }
         }
     }

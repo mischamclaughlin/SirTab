@@ -174,7 +174,7 @@ export function buildGroup(
                 requestRender();
             }, "Add tab to group failed:");
         });
-        const deleteGroupBtn = createDeleteButton("Close group", async () => {
+        const deleteGroupBtn = createDeleteButton(`Close group ${groupTitle}`, async () => {
             const tabIds = (tabsByGroup.get(groupId) ?? [])
                 .map((tab) => tab.id)
                 .filter((tabId): tabId is number => tabId != null);
@@ -250,6 +250,7 @@ export function buildGroup(
             const nestedList = document.createElement("ul");
             nestedList.className = "group-tabs";
             nestedList.id = nestedListId;
+            nestedList.setAttribute("aria-label", `Tabs in group ${groupTitle}`);
             nestedList.hidden = isCollapsed;
             nestedList.dataset.groupColor = groupColour ?? "grey";
             groupItem.appendChild(nestedList);

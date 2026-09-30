@@ -50,14 +50,16 @@ export async function setupBookmarkAction(
             setButtonIcon(
                 addCurrentTab,
                 "addTab",
-                isAddCurrentTab
-                    ? "Create bookmark from current tab"
-                    : "Create folder instead of current tab bookmark",
+                "Bookmark current tab",
             );
             addCurrentTab.setAttribute("aria-pressed", String(isAddCurrentTab));
             textInput.placeholder = isAddCurrentTab
                 ? "bookmark name"
                 : "folder name";
+            textInput.setAttribute(
+                "aria-label",
+                isAddCurrentTab ? "Bookmark name" : "Folder name",
+            );
         };
 
         const bookmarkInfoDropdown = document.createElement("div");
@@ -85,6 +87,7 @@ export async function setupBookmarkAction(
         bookmarkSelect.id = "bookmark-folder-select";
         bookmarkSelect.name = "bookmark-folder";
         bookmarkSelect.className = "control";
+        bookmarkSelect.setAttribute("aria-label", "Destination folder");
 
         for (const folder of folderChoices) {
             const option = document.createElement("option");
@@ -96,9 +99,14 @@ export async function setupBookmarkAction(
         const confirmBtn = document.createElement("button");
         confirmBtn.type = "button";
         confirmBtn.className = "control";
-        setButtonIcon(confirmBtn, "confirm", "Confirm bookmark creation");
+        setButtonIcon(confirmBtn, "confirm", "Create bookmark or folder");
 
-        bookmarkInfoDropdown.append(textInput, bookmarkSelect, confirmBtn);
+        const feedback = document.createElement("p");
+        feedback.className = "action-feedback";
+        feedback.setAttribute("role", "alert");
+        feedback.hidden = true;
+
+        bookmarkInfoDropdown.append(textInput, bookmarkSelect, confirmBtn, feedback);
         textInput.focus();
 
         textInput.addEventListener("keydown", (e) => {
@@ -110,6 +118,9 @@ export async function setupBookmarkAction(
                 const selectedFolderId = bookmarkSelect.value;
                 if (!selectedFolderId) return;
 
+                feedback.hidden = true;
+                feedback.textContent = "";
+
                 const typedName = textInput.value.trim();
 
                 if (isAddCurrentTab) {
@@ -118,12 +129,14 @@ export async function setupBookmarkAction(
                         active: true,
                         windowId: currentWindowId,
                     });
-                    if (!currentTab) return;
+                    if (!currentTab) {
+                        feedback.textContent = "There is no active tab to bookmark.";
+                        feedback.hidden = false;
+                        return;
+                    }
                     if (!currentTab.url || !isAllowedBookmarkUrl(currentTab.url)) {
-                        console.warn(
-                            "Blocked bookmark creation for unsupported tab URL:",
-                            currentTab.url,
-                        );
+                        feedback.textContent = "This tab's address cannot be bookmarked.";
+                        feedback.hidden = false;
                         return;
                     }
 

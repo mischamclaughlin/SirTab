@@ -226,12 +226,13 @@ export function cycleBookmarks(
             const btn = document.createElement("button");
             btn.className = "tab-button";
             btn.type = "button";
+            const feedback = document.createElement("p");
+            feedback.className = "action-feedback";
+            feedback.setAttribute("role", "alert");
             btn.addEventListener("click", async () => {
                 if (!isAllowedBookmarkUrl(node.url!)) {
-                    console.warn(
-                        "Blocked bookmark URL with unsupported scheme:",
-                        node.url,
-                    );
+                    feedback.textContent = "This bookmark's address cannot be opened.";
+                    li.append(feedback);
                     return;
                 }
                 await chrome.tabs.create({ url: node.url });
@@ -242,6 +243,7 @@ export function cycleBookmarks(
             icon.src = DEFAULT_TAB_ICON_URL;
             icon.height = 16;
             icon.width = 16;
+            icon.alt = "";
 
             const label = document.createElement("span");
             label.className = "tab-label";
@@ -254,7 +256,7 @@ export function cycleBookmarks(
             if (isSelectionMode) row.classList.add("tab-row--with-edit");
 
             const deleteBookmarkBtn = createDeleteButton(
-                "Delete bookmark",
+                `Delete bookmark ${nodeTitle || node.url || "(untitled)"}`,
                 async () => {
                     await chrome.bookmarks.remove(node.id);
                 },
@@ -325,7 +327,7 @@ export function cycleBookmarks(
         row.className = "tree-row";
         if (isSelectionMode) row.classList.add("tree-row--with-edit");
         const deleteFolderBtn = createDeleteButton(
-            "Delete folder",
+            `Delete folder ${nodeTitle || "(untitled)"}`,
             async () => {
                 if (hasChildren) {
                     const folderName = nodeTitle || "(untitled)";
@@ -389,6 +391,7 @@ export function cycleBookmarks(
             const nestedList = document.createElement("ul");
             nestedList.className = "bookmark-nested-list";
             nestedList.id = nestedListId;
+            nestedList.setAttribute("aria-label", `Bookmarks in folder ${nodeTitle || "(untitled)"}`);
             nestedList.hidden = isCollapsed;
             li.appendChild(nestedList);
 

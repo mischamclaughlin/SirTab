@@ -59,7 +59,9 @@
   groupButton.click();
   const groupInput = panel.querySelector('#group-name-input');
   assert(groupInput && getComputedStyle(groupInput).cursor === 'text', 'group input needs a text cursor');
+  assert(groupInput.getAttribute('aria-label') === 'Group name', 'group input needs an accessible name');
   assert(getComputedStyle(panel.querySelector('select')).cursor === 'pointer', 'select needs a pointer cursor');
+  assert(panel.querySelector('select').getAttribute('aria-label') === 'Group colour', 'group colour needs an accessible name');
   escapeFrom(groupInput);
   assert(!controller.isOpen('group') && panel.childElementCount === 0, 'Escape did not close group form');
   assert(document.activeElement === groupButton && !groupButton.classList.contains('is-selected'),
@@ -69,6 +71,8 @@
   await new Promise((resolve) => setTimeout(resolve, 0));
   const bookmarkInput = panel.querySelector('#bookmark-name-input');
   assert(bookmarkInput && getComputedStyle(bookmarkInput).cursor === 'text', 'bookmark input needs a text cursor');
+  assert(bookmarkInput.getAttribute('aria-label') === 'Folder name', 'folder input needs an accessible name');
+  assert(panel.querySelector('#bookmark-folder-select').getAttribute('aria-label') === 'Destination folder', 'destination folder needs an accessible name');
   escapeFrom(panel.querySelector('select'));
   assert(!controller.isOpen('bookmark') && panel.childElementCount === 0, 'Escape did not close bookmark form');
   assert(document.activeElement === bookmarkButton && !bookmarkButton.classList.contains('is-selected'),
@@ -77,8 +81,9 @@
   bookmarkButton.click();
   await new Promise((resolve) => setTimeout(resolve, 0));
   panel.querySelector('.action-toggle').click();
+  assert(panel.querySelector('#bookmark-name-input').getAttribute('aria-label') === 'Bookmark name', 'bookmark input needs an accessible name');
   panel.querySelector('#bookmark-folder-select').value = '1';
-  panel.querySelector('button[aria-label="Confirm bookmark creation"]').click();
+  panel.querySelector('button[aria-label="Create bookmark or folder"]').click();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert(tabQueries.length === 1 && tabQueries[0].active === true &&
     tabQueries[0].windowId === 1 && !('lastFocusedWindow' in tabQueries[0]),

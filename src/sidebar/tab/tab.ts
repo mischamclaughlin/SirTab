@@ -41,6 +41,7 @@ export function cycleTabs(
         const isSelected = tabSelection?.isSelected(tab.id) ?? false;
         const isSelectionMode = tabSelection?.isSelectionMode() ?? false;
         btn.setAttribute("aria-pressed", String(isSelected));
+        if (tab.active) btn.setAttribute("aria-current", "page");
         if (isSelectionMode) btn.classList.add("is-selecting");
         if (isSelected) btn.classList.add("is-selected");
 
@@ -92,7 +93,7 @@ export function cycleTabs(
         const row = document.createElement("div");
         row.className = "tab-row";
 
-        const deleteBtn = createDeleteButton("Close tab", async () => {
+        const deleteBtn = createDeleteButton(`Close tab ${text}`, async () => {
             await chrome.tabs.remove(tab.id!);
         });
 
