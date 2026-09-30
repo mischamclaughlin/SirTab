@@ -23,7 +23,8 @@ body {
 }
 
 #sidebar-content {
-  width: 100%;
+  width: calc(100% + var(--sidebar-scrollbar-gutter, 0px));
+  margin-right: calc(-1 * var(--sidebar-scrollbar-gutter, 0px));
   min-height: 0;
   flex: 1 1 auto;
   display: flex;
@@ -31,6 +32,7 @@ body {
   gap: 0.5rem;
   overflow-x: hidden;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
 }
 

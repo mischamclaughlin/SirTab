@@ -15,6 +15,28 @@
     try {
       const { setupAutoHideScrollbars } = await import('../dist/sidebar/helpers/scrollbar.js');
       setupAutoHideScrollbars();
+      const sidebar = document.getElementById('sidebar-content');
+      const tabs = document.createElement('ul');
+      tabs.id = 'tabs-list';
+      const row = document.createElement('li');
+      row.className = 'tab-item';
+      const tabRow = document.createElement('div');
+      tabRow.className = 'tab-row';
+      tabRow.style.height = '24px';
+      row.append(tabRow);
+      tabs.append(row);
+      sidebar.append(tabs);
+      const widthWithoutScrollbar = tabRow.getBoundingClientRect().width;
+      for (let index = 0; index < 80; index++) {
+        tabs.append(row.cloneNode(true));
+      }
+      if (sidebar.scrollHeight <= sidebar.clientHeight) {
+        throw new Error('tab list did not overflow');
+      }
+      const widthWithScrollbar = tabRow.getBoundingClientRect().width;
+      if (Math.abs(widthWithoutScrollbar - widthWithScrollbar) > 0.5) {
+        throw new Error(`scrollbar changed tab width: ${widthWithoutScrollbar} to ${widthWithScrollbar}`);
+      }
       const areas = [
         document.getElementById('sidebar-content'),
         document.querySelector('#settings > .action-panel'),
