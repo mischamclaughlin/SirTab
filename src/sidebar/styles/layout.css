@@ -96,9 +96,7 @@ body {
 
 #tabs-list,
 #groups-list {
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid transparent;
-  --section-divider-colour: var(--border);
+  padding-bottom: calc(0.75rem + 1px);
 }
 
 #tabs-list:empty {
@@ -115,22 +113,10 @@ body {
   min-height: var(--control-height);
 }
 
-#bookmarks-list {
-  border-bottom: 1px solid transparent;
-}
-
 #bookmarks-list:empty::after {
   content: "Drag tabs here to bookmark";
   color: var(--subsubtext);
   font-size: 0.75rem;
-}
-
-#tabs-list:has(> .tab-item):has(
-    ~ #groups-list > .group-item,
-    ~ #bookmarks-list > .tab-item
-  ),
-#groups-list:has(> .group-item):has(~ #bookmarks-list > .tab-item) {
-  border-bottom-color: var(--section-divider-colour);
 }
 
 #actions {
@@ -140,8 +126,6 @@ body {
 #tabs-list.drop-append,
 #groups-list.drop-append,
 #bookmarks-list.drop-append {
-  --section-divider-colour: rgba(var(--blue-colour-RGB), 0.85);
-  border-bottom-color: var(--section-divider-colour);
   position: relative;
 }
 

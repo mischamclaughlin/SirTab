@@ -27,29 +27,35 @@
       { name: 'tabs only', children: ['tab-item', null, null], lines: [0, 0], visible: [true, false, true] },
       { name: 'groups only', children: [null, 'group-item', null], lines: [0, 0], visible: [true, true, true] },
       { name: 'bookmarks only', children: [null, null, 'tab-item'], lines: [0, 0], visible: [false, false, true] },
-      { name: 'tabs and groups', children: ['tab-item', 'group-item', null], lines: [1, 0], visible: [true, true, true] },
-      { name: 'tabs and bookmarks', children: ['tab-item', null, 'tab-item'], lines: [1, 0], visible: [true, false, true] },
-      { name: 'groups and bookmarks', children: [null, 'group-item', 'tab-item'], lines: [0, 1], visible: [true, true, true] },
-      { name: 'all sections', children: ['tab-item', 'group-item', 'tab-item'], lines: [1, 1], visible: [true, true, true] },
-      { name: 'empty group result', children: ['tab-item', 'empty-search-state-message', 'tab-item'], lines: [1, 0], visible: [true, true, true] },
+      { name: 'tabs and groups', children: ['tab-item', 'group-item', null], lines: [0, 0], visible: [true, true, true] },
+      { name: 'tabs and bookmarks', children: ['tab-item', null, 'tab-item'], lines: [0, 0], visible: [true, false, true] },
+      { name: 'groups and bookmarks', children: [null, 'group-item', 'tab-item'], lines: [0, 0], visible: [true, true, true] },
+      { name: 'all sections', children: ['tab-item', 'group-item', 'tab-item'], lines: [0, 0], visible: [true, true, true] },
+      { name: 'empty group result', children: ['tab-item', 'empty-search-state-message', 'tab-item'], lines: [0, 0], visible: [true, true, true] },
       { name: 'empty bookmark result', children: ['tab-item', null, 'empty-search-state-message'], lines: [0, 0], visible: [true, false, true] },
     ];
     try {
       for (const scenario of cases) {
-        lists.forEach((list, index) => list.replaceChildren(
-          ...(scenario.children[index] ? [item(scenario.children[index])] : []),
-        ));
-        const actual = lists.slice(0, 2).map((list) => {
-          const style = getComputedStyle(list);
-          return Number(style.borderBottomWidth !== '0px' &&
-            style.borderBottomColor !== 'rgba(0, 0, 0, 0)');
+        lists.forEach((list, index) => {
+          const child = scenario.children[index] ? item(scenario.children[index]) : null;
+          if (child) child.style.height = '24px';
+          list.replaceChildren(...(child ? [child] : []));
         });
+        const actual = lists.slice(0, 2).map((list) =>
+          Number(getComputedStyle(list).borderBottomWidth !== '0px'));
         if (actual.some((width, index) => width !== scenario.lines[index])) {
           throw new Error(`${scenario.name}: expected ${scenario.lines}, got ${actual}`);
         }
         const visible = lists.map((list) => getComputedStyle(list).display !== 'none');
         if (visible.some((value, index) => value !== scenario.visible[index])) {
           throw new Error(`${scenario.name}: expected visible ${scenario.visible}, got ${visible}`);
+        }
+        const populated = lists.filter((list) => list.firstElementChild &&
+          getComputedStyle(list).display !== 'none');
+        for (let index = 1; index < populated.length; index++) {
+          const gap = populated[index].firstElementChild.getBoundingClientRect().top -
+            populated[index - 1].lastElementChild.getBoundingClientRect().bottom;
+          if (gap !== 21) throw new Error(`${scenario.name}: section gap is ${gap}px`);
         }
         if (scenario.name === 'tabs and bookmarks') {
           const gap = lists[2].getBoundingClientRect().top - lists[0].getBoundingClientRect().bottom;
