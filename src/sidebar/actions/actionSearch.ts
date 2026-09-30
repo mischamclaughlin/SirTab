@@ -15,16 +15,25 @@ export function setupSearchAction(
     actionSection.appendChild(searchInput);
 
     let searchQuery = "";
+    let pendingRenderFrame: number | null = null;
+    const queueRender = () => {
+        if (pendingRenderFrame !== null) return;
+        pendingRenderFrame = window.requestAnimationFrame(() => {
+            pendingRenderFrame = null;
+            requestRender();
+        });
+    };
+
     searchInput.addEventListener("input", () => {
         searchQuery = searchInput.value.trim().toLowerCase();
-        requestRender();
+        queueRender();
     });
 
     searchInput.addEventListener("keydown", (event) => {
         if (event.key !== "Escape" || searchInput.value.length === 0) return;
         searchInput.value = "";
         searchQuery = "";
-        requestRender();
+        queueRender();
     });
 
     const handleSidePanelOpened = () => {
@@ -45,6 +54,10 @@ export function setupSearchAction(
     document.addEventListener("keydown", handleDocumentKeydown);
 
     const cleanup = () => {
+        if (pendingRenderFrame !== null) {
+            window.cancelAnimationFrame(pendingRenderFrame);
+            pendingRenderFrame = null;
+        }
         chrome.sidePanel.onOpened.removeListener(handleSidePanelOpened);
         document.removeEventListener("keydown", handleDocumentKeydown);
     };
