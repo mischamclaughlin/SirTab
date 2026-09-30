@@ -33,7 +33,7 @@ export function createDeleteButton(
     deleteBtn.className = "row-delete-btn";
     deleteBtn.title = title;
     deleteBtn.setAttribute("aria-label", title);
-    deleteBtn.textContent = "x";
+    deleteBtn.append(createIcon("clear"));
     deleteBtn.addEventListener("click", async (event) => {
         event.preventDefault();
         event.stopPropagation();

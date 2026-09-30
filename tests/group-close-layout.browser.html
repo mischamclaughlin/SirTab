@@ -21,7 +21,7 @@
       const { cycleTabs } = await import('../dist/sidebar/tab/tab.js');
       const { buildGroup } = await import('../dist/sidebar/group/group.js');
       const ungrouped = { id: 1, title: 'Ungrouped tab', url: 'https://example.com' };
-      const grouped = { id: 2, groupId: 21, title: 'Grouped tab', url: 'https://example.com' };
+      const grouped = { id: 2, groupId: 21, title: 'A grouped tab with a very long title', url: 'https://example.com' };
       cycleTabs(document.getElementById('tabs-list'), [ungrouped]);
       buildGroup(true, [{ id: 21, title: 'Projects', color: 'blue' }],
         new Map([[21, [grouped]]]), new Set(), false, '',
@@ -32,6 +32,11 @@
       const groupedClose = document.querySelector('.group-tabs .row-delete-btn');
       const groupTabs = document.querySelector('.group-tabs');
       const groupedRow = groupTabs.querySelector('.tab-row');
+      const plusButton = document.querySelector('.row-add-btn');
+      const plus = document.querySelector('.row-add-btn svg');
+      const closeIcons = [looseClose, groupClose, groupedClose].map((button) =>
+        button.querySelector('svg.control-icon'));
+      const colouredArea = getComputedStyle(groupTabs, '::before');
       const ends = [looseClose, groupClose, groupedClose].map((button) =>
         button.getBoundingClientRect().right);
       const expectedFillEnd = groupTabs.getBoundingClientRect().right -
@@ -41,11 +46,34 @@
         groupedClose.getBoundingClientRect().width -
         parseFloat(getComputedStyle(groupedRow).columnGap);
       if (ends.some((end) => Math.abs(end - ends[0]) > 0.5) ||
+          closeIcons.some((icon) => !icon || icon.getBoundingClientRect().width !== plus.getBoundingClientRect().width) ||
           expectedFillEnd >= groupedClose.getBoundingClientRect().left ||
-          getComputedStyle(groupTabs).backgroundSize !== `calc(100% - 28px) 100%` ||
+          colouredArea.right !== '28px' ||
+          colouredArea.borderTopRightRadius !== '4px' ||
           Math.abs(fillWidth - (expectedFillEnd - groupTabs.getBoundingClientRect().left)) > 0.5 ||
-          getComputedStyle(groupedClose).color !== getComputedStyle(looseClose).color) {
+          getComputedStyle(groupedClose).color !== getComputedStyle(looseClose).color ||
+          getComputedStyle(plusButton).color !== getComputedStyle(groupClose).color ||
+          getComputedStyle(plusButton).borderColor !== getComputedStyle(groupClose).borderColor) {
         throw new Error('group close buttons are misaligned or inside the coloured area');
+      }
+      document.body.style.width = '180px';
+      document.body.style.height = '180px';
+      for (let index = 0; index < 40; index++) {
+        groupTabs.append(groupTabs.firstElementChild.cloneNode(true));
+      }
+      const groupList = document.getElementById('groups-list');
+      const sidebar = document.getElementById('sidebar-content');
+      const narrowClose = groupedClose.getBoundingClientRect();
+      const narrowGroup = groupTabs.getBoundingClientRect();
+      if (sidebar.scrollHeight <= sidebar.clientHeight ||
+          narrowClose.width !== looseClose.getBoundingClientRect().width ||
+          narrowClose.width !== 24 ||
+          narrowClose.right > groupList.getBoundingClientRect().right + 0.5 ||
+          narrowGroup.right > groupList.getBoundingClientRect().right + 0.5) {
+        throw new Error(`narrow open group clipped: ${JSON.stringify({
+          close: narrowClose.toJSON(), group: narrowGroup.toJSON(),
+          list: groupList.getBoundingClientRect().toJSON(),
+        })}`);
       }
       document.getElementById('result').textContent = 'PASS';
     } catch (error) {

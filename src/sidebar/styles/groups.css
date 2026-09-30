@@ -53,6 +53,11 @@
     height: var(--control-height);
 }
 
+.row-add-btn {
+    border-color: rgba(var(--border-faded-colour-RGB), 0.35);
+    color: rgba(var(--subsubtext-colour-RGB), 0.6);
+}
+
 .row-icon-btn:hover,
 .row-icon-btn.is-selected,
 .row-add-btn:hover {
@@ -149,12 +154,22 @@
 .group-tabs {
     list-style: none;
     padding: 0.25rem 0 0.25rem 0.25rem;
-    border-radius: 0.25rem;
+    position: relative;
     display: grid;
     gap: 0.25rem;
-    background-image: linear-gradient(var(--group-fill, transparent), var(--group-fill, transparent));
-    background-size: calc(100% - var(--control-height) - 0.25rem) 100%;
-    background-repeat: no-repeat;
+}
+
+.group-tabs::before {
+    content: "";
+    position: absolute;
+    inset: 0 calc(var(--control-height) + 0.25rem) 0 0;
+    border-radius: 0.25rem;
+    background: var(--group-fill, transparent);
+    pointer-events: none;
+}
+
+.group-tabs > .tab-item {
+    position: relative;
 }
 
 .group-tabs[data-group-color="blue"] {

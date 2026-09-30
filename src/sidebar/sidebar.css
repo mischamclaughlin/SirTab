@@ -94,18 +94,18 @@ textarea.control {
 }
 
 .row-delete-btn {
-  border: 1px solid var(--border-faded);
+  border: 1px solid rgba(var(--border-faded-colour-RGB), 0.35);
   border-radius: 0.25rem;
   background: transparent;
-  color: var(--subsubtext);
+  color: rgba(var(--subsubtext-colour-RGB), 0.6);
   cursor: pointer;
   display: grid;
   place-items: center;
   padding: 0;
   width: var(--control-height);
   height: var(--control-height);
-  font-size: 0.85rem;
-  font-weight: 600;
+  min-width: var(--control-height);
+  min-height: var(--control-height);
 }
 
 .row-delete-btn:hover {
