@@ -34,11 +34,6 @@ export async function setupFilterAction(
     panel.hidden = true;
     button.setAttribute("aria-controls", panel.id);
 
-    const heading = document.createElement("span");
-    heading.className = "filter-heading";
-    heading.textContent = "hide";
-    panel.append(heading);
-
     const updateButton = () => {
         button.classList.toggle("is-selected", hiddenSections.size > 0 || !panel.hidden);
     };

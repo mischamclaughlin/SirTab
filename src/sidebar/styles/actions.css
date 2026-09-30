@@ -32,11 +32,6 @@
   gap: 0.25rem;
 }
 
-.filter-heading {
-  color: var(--subsubtext);
-  font-size: 0.75rem;
-}
-
 .filter-option {
   display: flex;
   align-items: center;

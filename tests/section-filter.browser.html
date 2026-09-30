@@ -50,7 +50,8 @@
       }
       const contentTop = document.getElementById('sidebar-content').getBoundingClientRect().top;
       button.click();
-      if (panel.hidden || button.getAttribute('aria-expanded') !== 'true' ||
+      if (panel.hidden || panel.children.length !== 3 || panel.querySelector('.filter-heading') ||
+          button.getAttribute('aria-expanded') !== 'true' ||
           panel.getBoundingClientRect().width !== document.getElementById('actions').getBoundingClientRect().width ||
           panel.getBoundingClientRect().top <= searchBounds.bottom ||
           document.getElementById('sidebar-content').getBoundingClientRect().top <= contentTop) {
