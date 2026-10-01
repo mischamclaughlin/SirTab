@@ -21,6 +21,7 @@
         tabs: { get: async () => ({ id: 10, title: 'Actual tab name', url: 'https://example.com' }) },
         bookmarks: {
           getTree: async () => [{ id: '0', children: [{ id: '1', folderType: 'bookmarks-bar' }] }],
+          get: async (id) => [{ id, parentId: '22', index: 0 }],
           create: async (entry) => { created.push(entry); },
         },
       };
@@ -35,10 +36,12 @@
       });
       cycleBookmarks(bookmarks, [{ id: '22', title: 'Folder', children: [{
         id: '23', parentId: '22', title: 'Existing', url: 'https://existing.example',
-      }] }]);
+      }] }, { id: '24', title: 'Empty folder' }]);
       setupSidebarDropZones(tabs, groups, bookmarks, 1, () => true, () => {}, () => {});
       const source = tabs.querySelector('.tab-button');
-      async function dropOn(target) {
+      async function dropOn(target, edge = 'middle', expectedClass) {
+        const nested = target.closest('.tab-item')?.querySelector('.bookmark-nested-list');
+        const wasHidden = nested?.hidden;
         const sourceBounds = source.getBoundingClientRect();
         source.dispatchEvent(new DragEvent('dragstart', {
           bubbles: true, dataTransfer: new DataTransfer(),
@@ -46,24 +49,78 @@
         }));
         const bounds = target.getBoundingClientRect();
         const x = bounds.left + Math.min(10, bounds.width / 2);
-        const y = bounds.top + bounds.height / 2;
+        const y = edge === 'before' ? bounds.top + 2 :
+          edge === 'after' ? bounds.bottom - 2 : bounds.top + bounds.height / 2;
         const hit = document.elementFromPoint(x, y);
         hit.dispatchEvent(new DragEvent('dragover', {
           bubbles: true, dataTransfer: new DataTransfer(), clientX: x, clientY: y,
         }));
+        if (expectedClass) {
+          const marker = target.closest('.tab-item')?.querySelector('.tab-row, .tree-row') ?? target;
+          if (!marker.classList.contains(expectedClass)) {
+            throw new Error(`Expected ${expectedClass} on bookmark destination`);
+          }
+          if (expectedClass === 'drop-before' || expectedClass === 'drop-after') {
+            const item = marker.closest('.tab-item');
+            const margin = expectedClass === 'drop-before' ? 'marginTop' : 'marginBottom';
+            if (parseFloat(getComputedStyle(item)[margin]) < 10) {
+              throw new Error('bookmark insertion outline has no layout space');
+            }
+          }
+          if (expectedClass === 'drop-inside' && nested &&
+              (nested.hidden || !nested.classList.contains('drop-tab-preview'))) {
+            throw new Error('bookmark folder did not expand for the incoming tab');
+          }
+        }
         hit.dispatchEvent(new DragEvent('drop', {
           bubbles: true, dataTransfer: new DataTransfer(), clientX: x, clientY: y,
         }));
         await new Promise((resolve) => setTimeout(resolve, 0));
+        if (nested && nested.hidden !== wasHidden) {
+          throw new Error('bookmark folder preview did not settle after drop');
+        }
       }
-      await dropOn(bookmarks.querySelector('.tree-toggle'));
-      await dropOn(bookmarks.querySelector('.tab-button'));
+      await dropOn(bookmarks.querySelector('.tree-toggle'), 'middle', 'drop-inside');
+      await dropOn(bookmarks.querySelectorAll('.tree-toggle')[1], 'middle', 'drop-inside');
+      const existing = bookmarks.querySelector('.tab-button');
+      const nextItem = existing.closest('.tab-item');
+      const initialHeight = bookmarks.getBoundingClientRect().height;
+      await dropOn(existing, 'before', 'drop-before');
+      if (bookmarks.getBoundingClientRect().height !== initialHeight) {
+        throw new Error('bookmark insertion space was not removed after drop');
+      }
+      await dropOn(existing, 'after', 'drop-after');
+      if (getComputedStyle(nextItem).marginBottom !== '0px') {
+        throw new Error('bookmark insertion margin remained after drop');
+      }
+      await dropOn(bookmarks, 'after', 'drop-append');
       bookmarks.replaceChildren();
       await dropOn(bookmarks);
-      const valid = created.length === 3 &&
-        created[0].parentId === '22' && created[1].parentId === '22' &&
-        created[2].parentId === '1' &&
+      const valid = created.length === 6 &&
+        created[0].parentId === '22' && created[0].index == null &&
+        created[1].parentId === '24' && created[1].index == null &&
+        created[2].parentId === '22' && created[2].index === 0 &&
+        created[3].parentId === '22' && created[3].index === 1 &&
+        created[4].parentId === '1' && created[4].index == null &&
+        created[5].parentId === '1' && created[5].index == null &&
         created.every((entry) => entry.title === 'Actual tab name');
+      if (valid && location.search.includes('show-preview')) {
+        const folderPreview = location.search.includes('folder-preview');
+        cycleBookmarks(bookmarks, folderPreview
+          ? [{ id: '31', title: 'Empty folder' }]
+          : [{ id: '30', parentId: '1', title: 'Existing',
+            url: 'https://existing.example' }]);
+        const preview = bookmarks.querySelector(folderPreview ? '.tree-row' : '.tab-row');
+        const bounds = preview.getBoundingClientRect();
+        source.dispatchEvent(new DragEvent('dragstart', {
+          bubbles: true, dataTransfer: new DataTransfer(),
+          clientX: 20, clientY: source.getBoundingClientRect().top + 10,
+        }));
+        preview.dispatchEvent(new DragEvent('dragover', {
+          bubbles: true, dataTransfer: new DataTransfer(),
+          clientX: bounds.left + 10, clientY: bounds.bottom - 2,
+        }));
+      }
       document.getElementById('result').textContent = valid
         ? 'PASS' : `FAIL: ${JSON.stringify(created)}`;
     } catch (error) {

@@ -101,6 +101,7 @@ globalThis.chrome = {
     windows: { getAll: async () => [{ id: 1 }] },
     bookmarks: {
         getTree: async () => [{ id: "0", children: [{ id: "1", folderType: "bookmarks-bar" }] }],
+        get: async (id) => [{ id, parentId: "24", index: 2 }],
         create: async (details) => { state.bookmarks.push(details); },
     },
 };
@@ -303,6 +304,7 @@ test("marker follows rows during bottom auto-scroll; selected tabs drop together
     document.dispatch("drop", dragEvent(bookmarkRow));
     await waitForDrop(() => state.bookmarks.length === 2);
     assert.equal(state.bookmarks.at(-1).parentId, "24");
+    assert.equal(state.bookmarks.at(-1).index, 2);
 
     sourceHandle.dispatch("dragstart", dragEvent(sourceHandle));
     hitTarget = bookmarksList;

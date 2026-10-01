@@ -140,6 +140,10 @@ body:has(.tab-row.is-dragging) #tabs-list:empty:not([hidden]) {
   padding-bottom: calc(var(--drop-slot-height) + 0.25rem);
 }
 
+body:has(.tab-row.is-dragging) #bookmarks-list:not(:empty) {
+  padding-bottom: calc(var(--control-height) + 0.5rem);
+}
+
 body:has(.group-item.is-dragging) #groups-list {
   padding-bottom: calc(var(--control-height) + 0.5rem);
 }

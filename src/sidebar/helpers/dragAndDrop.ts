@@ -26,7 +26,7 @@ const DROP_GAP_HIT_MARGIN_PX = 10;
 let activeDropIndicator:
     | DropTarget
     | null = null;
-let activeGroupPreview: { element: HTMLElement; wasHidden: HTMLElement["hidden"] } | null = null;
+let activeListPreview: { element: HTMLElement; wasHidden: HTMLElement["hidden"] } | null = null;
 let activeDragElement: HTMLElement | null = null;
 let activeDragPayload: DragPayload | null = null;
 let activeDragVersion = 0;
@@ -138,11 +138,11 @@ function clearDropIndicator() {
     if (!activeDropIndicator) return;
     activeDropIndicator.element.classList.remove(activeDropIndicator.className);
     activeDropIndicator = null;
-    if (activeGroupPreview) {
-        activeGroupPreview.element.classList.remove("drop-tab-preview");
-        activeGroupPreview.element.style.removeProperty("--drop-preview-count");
-        activeGroupPreview.element.hidden = activeGroupPreview.wasHidden;
-        activeGroupPreview = null;
+    if (activeListPreview) {
+        activeListPreview.element.classList.remove("drop-tab-preview");
+        activeListPreview.element.style.removeProperty("--drop-preview-count");
+        activeListPreview.element.hidden = activeListPreview.wasHidden;
+        activeListPreview = null;
     }
 }
 
@@ -158,7 +158,7 @@ function setDropIndicator(target: DropTarget) {
     target.element.classList.add(target.className);
     if (target.preview) {
         const { element, count } = target.preview;
-        activeGroupPreview = { element, wasHidden: element.hidden };
+        activeListPreview = { element, wasHidden: element.hidden };
         element.hidden = false;
         element.style.setProperty("--drop-preview-count", String(count));
         element.classList.add("drop-tab-preview");
@@ -340,17 +340,31 @@ async function getBookmarksBarId() {
     return bar.id;
 }
 
-async function bookmarkTabs(tabIds: number[], parentId?: string) {
+async function bookmarkTabs(tabIds: number[], parentId?: string, index?: number) {
     const destinationId = parentId ?? await getBookmarksBarId();
+    let nextIndex = index;
     for (const tabId of tabIds) {
         const tab = await chrome.tabs.get(tabId);
         if (!tab.url || !isAllowedBookmarkUrl(tab.url)) continue;
         await chrome.bookmarks.create({
             parentId: destinationId,
+            ...(nextIndex == null ? {} : { index: nextIndex++ }),
             title: tab.title?.trim() || tab.url,
             url: tab.url,
         });
     }
+}
+
+async function bookmarkTabsRelativeToBookmark(
+    tabIds: number[], bookmarkId: string, position: DropPosition,
+) {
+    const [bookmark] = await chrome.bookmarks.get(bookmarkId);
+    if (!bookmark?.parentId || bookmark.index == null) return;
+    await bookmarkTabs(
+        tabIds,
+        bookmark.parentId,
+        bookmark.index + (position === "after" ? 1 : 0),
+    );
 }
 
 async function runDropAction(
@@ -415,13 +429,58 @@ function getDropTarget(
         const item = target.closest<HTMLElement>(".tab-item");
         const bookmarkItem = item && bookmarksList.contains(item) ? item : null;
         const folderId = bookmarkItem?.dataset.bookmarkFolderId;
-        const parentId = folderId ?? bookmarkItem?.dataset.bookmarkParentId;
-        const row = bookmarkItem?.querySelector<HTMLElement>(
-            folderId ? ".tree-row" : ".tab-row",
-        );
+        const bookmarkId = bookmarkItem?.dataset.bookmarkId;
+        if (folderId) {
+            const row = bookmarkItem?.querySelector<HTMLElement>(".tree-row");
+            const nestedList = bookmarkItem?.querySelector<HTMLElement>(".bookmark-nested-list");
+            if (row) return {
+                element: row,
+                className: "drop-inside",
+                action: () => bookmarkTabs(payload.ids, folderId),
+                effect: "copy",
+                requestRender: requestBookmarkRender,
+                ...(nestedList
+                    ? { preview: { element: nestedList, count: payload.ids.length } }
+                    : {}),
+            };
+        }
+        if (bookmarkId && bookmarkItem) {
+            const row = bookmarkItem.querySelector<HTMLElement>(".tab-row");
+            if (row) {
+                const position = getDropPosition({ clientY } as DragEvent, row);
+                return {
+                    element: row,
+                    className: position === "before" ? "drop-before" : "drop-after",
+                    action: () => bookmarkTabsRelativeToBookmark(payload.ids, bookmarkId, position),
+                    effect: "copy",
+                    requestRender: requestBookmarkRender,
+                };
+            }
+        }
+        const nestedList = target.closest<HTMLElement>(".bookmark-nested-list");
+        const list = nestedList && bookmarksList.contains(nestedList)
+            ? nestedList : bookmarksList;
+        const parentId = list === bookmarksList
+            ? undefined : list.closest<HTMLElement>(".tab-item")?.dataset.bookmarkFolderId;
+        for (const child of Array.from(list.children)) {
+            if (!(child instanceof HTMLElement) ||
+                !child.classList.contains("tab-item") ||
+                clientY >= child.getBoundingClientRect().top) continue;
+            const nextBookmarkId = child.dataset.bookmarkId;
+            const nextRow = child.querySelector<HTMLElement>(".tab-row");
+            if (nextBookmarkId && nextRow) return {
+                element: nextRow,
+                className: "drop-before",
+                action: () => bookmarkTabsRelativeToBookmark(
+                    payload.ids, nextBookmarkId, "before"),
+                effect: "copy",
+                requestRender: requestBookmarkRender,
+            };
+            break;
+        }
         return {
-            element: row ?? bookmarksList,
-            className: row ? "drop-inside" : "drop-append",
+            element: list,
+            className: "drop-append",
             action: () => bookmarkTabs(payload.ids, parentId),
             effect: "copy",
             requestRender: requestBookmarkRender,
@@ -525,14 +584,23 @@ export function setupSidebarDropZones(
         const hitTest = (x: number, y: number) => document.elementFromPoint(x, y);
         const resolveAt = (target: EventTarget | null, y: number) => {
             if (!activeDragPayload || !isDragEnabled()) return null;
+            const bookmarkGap = target instanceof Element &&
+                activeDropIndicator != null &&
+                bookmarksList.contains(target) &&
+                bookmarksList.contains(activeDropIndicator.element);
             // The open visual gap belongs to its current insertion target even
             // when hit testing lands on the list background between rows.
             if (target instanceof Element &&
-                (tabsList.contains(target) || groupsList.contains(target)) &&
-                !target.closest(".tab-row") &&
-                !target.closest(".tree-row") &&
-                (activeDragPayload.kind === "tabs" || !target.closest(".group-item")) &&
                 activeDropIndicator &&
+                (tabsList.contains(target) || groupsList.contains(target) ||
+                    bookmarksList.contains(target)) &&
+                ((tabsList.contains(target) && tabsList.contains(activeDropIndicator.element)) ||
+                    (groupsList.contains(target) && groupsList.contains(activeDropIndicator.element)) ||
+                    (bookmarksList.contains(target) &&
+                        bookmarksList.contains(activeDropIndicator.element))) &&
+                (bookmarkGap || (!target.closest(".tab-row") &&
+                    !target.closest(".tree-row"))) &&
+                (activeDragPayload.kind === "tabs" || !target.closest(".group-item")) &&
                 (activeDropIndicator.className === "drop-before" ||
                     activeDropIndicator.className === "drop-after") &&
                 (activeDropIndicator.element.classList.contains("tab-row") ||
@@ -540,7 +608,12 @@ export function setupSidebarDropZones(
                 const bounds = activeDropIndicator.element.getBoundingClientRect();
                 const boundary = activeDropIndicator.className === "drop-before"
                     ? bounds.top : bounds.bottom;
-                if (Math.abs(y - boundary) <= DROP_GAP_HIT_MARGIN_PX) {
+                const inBookmarkSlot = bookmarkGap &&
+                    (activeDropIndicator.className === "drop-before"
+                        ? y >= boundary - bounds.height && y < boundary
+                        : y > boundary && y <= boundary + bounds.height);
+                if (inBookmarkSlot || (!bookmarkGap &&
+                    Math.abs(y - boundary) <= DROP_GAP_HIT_MARGIN_PX)) {
                     return activeDropIndicator;
                 }
             }

@@ -6,6 +6,35 @@
     gap: 0.25rem;
 }
 
+.bookmark-nested-list[hidden] {
+    display: none;
+}
+
+.bookmark-nested-list.drop-tab-preview::after {
+    content: "";
+    height: calc(var(--control-height) * var(--drop-preview-count, 1) - 0.375rem);
+    margin-left: 1.5rem;
+    margin-right: calc(var(--control-height) + 0.5rem);
+    border: 1px dashed rgba(var(--blue-colour-RGB), 0.85);
+    border-radius: 0.25rem;
+    pointer-events: none;
+}
+
+#bookmarks-list > .tab-item:has(> .tab-row.drop-before),
+.bookmark-nested-list > .tab-item:has(> .tab-row.drop-before) {
+    margin-top: var(--drop-slot-height);
+}
+
+#bookmarks-list > .tab-item:has(> .tab-row.drop-after),
+.bookmark-nested-list > .tab-item:has(> .tab-row.drop-after) {
+    margin-bottom: calc(var(--drop-slot-height) + 0.25rem);
+}
+
+.bookmark-nested-list > .tab-item > .tab-row.drop-before::before,
+.bookmark-nested-list > .tab-item > .tab-row.drop-after::after {
+    right: calc(var(--control-height) + 0.5rem);
+}
+
 #bookmarks-list .tab-row.drop-inside .tab-label,
 #bookmarks-list .tree-row.drop-inside .tree-toggle {
     box-shadow: inset 0 0 0 2px rgba(var(--blue-colour-RGB), 0.5);

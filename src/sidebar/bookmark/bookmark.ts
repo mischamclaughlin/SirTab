@@ -387,24 +387,22 @@ export function cycleBookmarks(
             row.after(editForm);
         });
 
-        if (hasChildren) {
-            const nestedList = document.createElement("ul");
-            nestedList.className = "bookmark-nested-list";
-            nestedList.id = nestedListId;
-            nestedList.setAttribute("aria-label", `Bookmarks in folder ${nodeTitle || "(untitled)"}`);
-            nestedList.hidden = isCollapsed;
-            li.appendChild(nestedList);
+        const nestedList = document.createElement("ul");
+        nestedList.className = "bookmark-nested-list";
+        nestedList.id = nestedListId;
+        nestedList.setAttribute("aria-label", `Bookmarks in folder ${nodeTitle || "(untitled)"}`);
+        nestedList.hidden = isCollapsed || !hasChildren;
+        li.appendChild(nestedList);
 
-            if (!isCollapsed) {
-                cycleBookmarks(
-                    nestedList,
-                    node.children!,
-                    forceExpandFolders,
-                    collapsedBookmarkFoldersSet,
-                    onToggle,
-                    tabSelection,
-                );
-            }
+        if (hasChildren && !isCollapsed) {
+            cycleBookmarks(
+                nestedList,
+                node.children!,
+                forceExpandFolders,
+                collapsedBookmarkFoldersSet,
+                onToggle,
+                tabSelection,
+            );
         }
 
         parentElement.appendChild(li);
