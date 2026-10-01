@@ -2,6 +2,37 @@
     list-style: none;
     display: grid;
     gap: 0.5rem;
+    position: relative;
+}
+
+.group-item.is-dragging {
+    opacity: 0.45;
+}
+
+.group-item.drop-before::before,
+.group-item.drop-after::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 0.5rem;
+    border: 1px dashed rgba(var(--blue-colour-RGB), 0.85);
+    border-radius: 0.25rem;
+    pointer-events: none;
+}
+
+.group-item.drop-before::before {
+    bottom: 100%;
+}
+
+.group-item.drop-after::after {
+    top: 100%;
+}
+
+#groups-list > .group-item.drop-before,
+#groups-list > .group-item.drop-before ~ .group-item,
+#groups-list > .group-item.drop-after ~ .group-item {
+    transform: translateY(0.25rem);
 }
 
 .tree-row {
@@ -21,18 +52,6 @@
 
 .tree-row--with-add.tree-row--with-edit {
     grid-template-columns: minmax(0, 1fr) auto auto auto;
-}
-
-.tree-row.is-dragging {
-    opacity: 0.45;
-}
-
-.tree-row.drop-before {
-    box-shadow: inset 0 2px rgba(var(--blue-colour-RGB), 0.85);
-}
-
-.tree-row.drop-after {
-    box-shadow: inset 0 -2px rgba(var(--blue-colour-RGB), 0.85);
 }
 
 .tree-row.drop-inside .tree-toggle {

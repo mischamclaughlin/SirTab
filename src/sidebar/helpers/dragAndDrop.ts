@@ -414,7 +414,8 @@ function getDropTarget(
     }
 
     const tabRow = target.closest<HTMLElement>(".tab-row");
-    if (tabRow && (tabsList.contains(tabRow) || groupsList.contains(tabRow))) {
+    if (payload.kind === "tabs" && tabRow &&
+        (tabsList.contains(tabRow) || groupsList.contains(tabRow))) {
         const position = getDropPosition({ clientY } as DragEvent, tabRow);
         return tabInsertionTarget(tabRow, position, payload, windowId);
     }
@@ -450,10 +451,12 @@ function getDropTarget(
                     action: () => moveTabsToGroup(windowId, payload.ids, groupId),
                 };
             }
-            if (groupRow.contains(target) && payload.id !== groupId) {
-                const position = getDropPosition({ clientY } as DragEvent, groupRow);
+            if (payload.id !== groupId) {
+                const position = groupRow.contains(target)
+                    ? getDropPosition({ clientY } as DragEvent, groupRow)
+                    : "after";
                 return {
-                    element: groupRow,
+                    element: groupItem,
                     className: position === "before" ? "drop-before" : "drop-after",
                     action: () => moveGroupRelativeToGroup(windowId, payload.id, groupId, position),
                 };
@@ -461,6 +464,18 @@ function getDropTarget(
             return null;
         }
         if (payload.kind === "group") {
+            for (const item of Array.from(groupsList.children)) {
+                if (!(item instanceof HTMLElement) ||
+                    !item.classList.contains("group-item") ||
+                    clientY >= item.getBoundingClientRect().top) continue;
+                const targetId = Number(item.dataset.groupId);
+                if (!Number.isInteger(targetId) || targetId === payload.id) return null;
+                return {
+                    element: item,
+                    className: "drop-before",
+                    action: () => moveGroupRelativeToGroup(windowId, payload.id, targetId, "before"),
+                };
+            }
             return {
                 element: groupsList,
                 className: "drop-append",
@@ -502,7 +517,8 @@ export function setupSidebarDropZones(
                 activeDropIndicator &&
                 (activeDropIndicator.className === "drop-before" ||
                     activeDropIndicator.className === "drop-after") &&
-                activeDropIndicator.element.classList.contains("tab-row")) {
+                (activeDropIndicator.element.classList.contains("tab-row") ||
+                    activeDropIndicator.element.classList.contains("group-item"))) {
                 const bounds = activeDropIndicator.element.getBoundingClientRect();
                 const boundary = activeDropIndicator.className === "drop-before"
                     ? bounds.top : bounds.bottom;
@@ -598,7 +614,7 @@ export function makeGroupDraggable(
         }
 
         writePayload(event, { kind: "group", id: groupId }, row);
-        setDragElement(row);
+        setDragElement(row.closest<HTMLElement>(".group-item") ?? row);
     });
 
     handle.addEventListener("dragend", () => {

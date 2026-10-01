@@ -213,9 +213,38 @@ test("marker follows rows during bottom auto-scroll; selected tabs drop together
 
     groupHandle.dispatch("dragstart", dragEvent(groupHandle));
     document.dispatch("dragover", dragEvent(groupRow, 105));
-    assert.equal(groupRow.classList.contains("drop-before"), false);
+    assert.equal(groupItem.classList.contains("drop-before"), false);
     document.dispatch("dragend", dragEvent(groupHandle));
     assert.equal(deferRenderUntilDragSettles(requestRender), false);
+
+    state.tabs.push(tab(60, 8), tab(70, 9));
+    state.groups.push(
+        { id: 8, windowId: 1, title: "Second", color: "green" },
+        { id: 9, windowId: 1, title: "Third", color: "red" },
+    );
+    const secondGroup = new FakeElement(["group-item"], groupsList, { groupId: "8" });
+    secondGroup.bounds.top = 160;
+    new FakeElement(["tree-row"], secondGroup).bounds.top = 160;
+    const thirdGroup = new FakeElement(["group-item"], groupsList, { groupId: "9" });
+    thirdGroup.bounds.top = 220;
+    const thirdRow = new FakeElement(["tree-row"], thirdGroup);
+    thirdRow.bounds.top = 220;
+    const thirdTabs = new FakeElement(["group-tabs"], thirdGroup);
+    const thirdTabRow = new FakeElement(["tab-row"], thirdTabs);
+    thirdTabRow.bounds.top = 270;
+
+    groupHandle.dispatch("dragstart", dragEvent(groupHandle));
+    assert.equal(groupItem.classList.contains("is-dragging"), true);
+    document.dispatch("dragover", dragEvent(groupsList, 210));
+    assert.equal(thirdGroup.classList.contains("drop-before"), true);
+    document.dispatch("dragover", dragEvent(thirdTabRow, 280));
+    assert.equal(thirdGroup.classList.contains("drop-after"), true);
+    assert.equal(thirdGroup.classList.contains("drop-before"), false);
+    hitTarget = thirdTabRow;
+    document.dispatch("drop", dragEvent(thirdTabRow, 280));
+    await waitForDrop(() => state.storage["groupOrderByWindow:1"]?.order?.[2] === 7);
+    assert.deepEqual(state.storage["groupOrderByWindow:1"].order, [8, 9, 7]);
+    assert.equal(groupItem.classList.contains("is-dragging"), false);
 
     state.tabs.find((item) => item.id === 10).title = "  Named tab  ";
     state.tabs.find((item) => item.id === 30).url = "chrome://settings";

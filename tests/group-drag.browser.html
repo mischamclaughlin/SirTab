@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../dist/sidebar/sidebar.css">
+  <style>
+    body { width: 340px; }
+    #groups-list { gap: 24px; }
+    .tree-toggle { width: 100%; }
+    .group-tabs .tab-row { height: 24px; border: 1px solid #777; }
+    #result { position: fixed; top: 0; right: 0; z-index: 20; background: white; color: black; }
+  </style>
+</head>
+<body>
+  <output id="result">RUNNING</output>
+  <div id="actions"></div>
+  <main id="sidebar-content">
+    <ul id="tabs-list"></ul>
+    <ul id="groups-list">
+      <li class="group-item" data-group-id="1">
+        <div class="tree-row"><button class="tree-toggle" type="button">First group</button></div>
+      </li>
+      <li class="group-item" data-group-id="2">
+        <div class="tree-row"><button class="tree-toggle" type="button">Expanded group</button></div>
+        <ul class="group-tabs"><li class="tab-item"><div class="tab-row">Tab A</div></li><li class="tab-item"><div class="tab-row">Tab B</div></li></ul>
+      </li>
+      <li class="group-item" data-group-id="3">
+        <div class="tree-row"><button class="tree-toggle" type="button">Third group</button></div>
+      </li>
+    </ul>
+    <ul id="bookmarks-list"></ul>
+  </main>
+  <div id="settings"></div>
+  <script type="module">
+    try {
+      globalThis.chrome = { tabGroups: { TAB_GROUP_ID_NONE: -1 } };
+      const { makeGroupDraggable, setupSidebarDropZones } = await import('../dist/sidebar/helpers/dragAndDrop.js');
+      const groups = document.getElementById('groups-list');
+      const [source, expanded, last] = groups.children;
+      const sourceRow = source.querySelector('.tree-row');
+      const handle = sourceRow.querySelector('.tree-toggle');
+      makeGroupDraggable(handle, sourceRow, 1, 1, () => true, () => {});
+      setupSidebarDropZones(document.getElementById('tabs-list'), groups,
+        document.getElementById('bookmarks-list'), 1, () => true, () => {}, () => {});
+      const drag = (target, y, type) => target.dispatchEvent(new DragEvent(type, {
+        bubbles: true, dataTransfer: new DataTransfer(), clientX: 100, clientY: y,
+      }));
+      drag(handle, handle.getBoundingClientRect().top + 8, 'dragstart');
+      if (!source.classList.contains('is-dragging')) throw new Error('the whole source group is not marked');
+
+      const oldLastTop = last.getBoundingClientRect().top;
+      const gapY = last.getBoundingClientRect().top - 4;
+      drag(groups, gapY, 'dragover');
+      if (!last.classList.contains('drop-before')) throw new Error('gap before the next group has no insertion marker');
+
+      const nestedRow = expanded.querySelector('.tab-row');
+      drag(nestedRow, nestedRow.getBoundingClientRect().top + 8, 'dragover');
+      if (!expanded.classList.contains('drop-after') || last.classList.contains('drop-before')) {
+        throw new Error('expanded group contents do not target the whole group');
+      }
+      if (last.getBoundingClientRect().top <= oldLastTop) {
+        throw new Error('the following group did not make space for the marker');
+      }
+      document.getElementById('result').textContent = 'PASS';
+    } catch (error) {
+      document.getElementById('result').textContent = `FAIL: ${error.message}`;
+    }
+  </script>
+</body>
+</html>
