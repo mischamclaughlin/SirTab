@@ -56,8 +56,15 @@
 
       const nestedRow = expanded.querySelector('.tab-row');
       drag(nestedRow, nestedRow.getBoundingClientRect().top + 8, 'dragover');
-      if (!expanded.classList.contains('drop-after') || last.classList.contains('drop-before')) {
-        throw new Error('expanded group contents do not target the whole group');
+      if (expanded.classList.contains('drop-after') || last.classList.contains('drop-before') ||
+          last.classList.contains('drop-after')) {
+        throw new Error('group drag offered a drop target inside another group');
+      }
+
+      const expandedRow = expanded.querySelector('.tree-row');
+      drag(expandedRow, expandedRow.getBoundingClientRect().bottom - 4, 'dragover');
+      if (!expanded.classList.contains('drop-after')) {
+        throw new Error('group header did not offer an insertion target');
       }
       if (last.getBoundingClientRect().top <= oldLastTop) {
         throw new Error('the following group did not make space for the marker');

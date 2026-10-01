@@ -59,6 +59,12 @@
         throw new Error('expanded group did not grow for a tab');
       }
       const previewHeight = expandedTabs.getBoundingClientRect().height;
+      const colourRightInset = parseFloat(getComputedStyle(expandedTabs, '::before').right);
+      const previewRightInset = parseFloat(getComputedStyle(expandedTabs, '::after').marginRight);
+      if (previewRightInset - colourRightInset < 3 ||
+          parseFloat(getComputedStyle(expandedTabs, '::after').marginBottom) < 3) {
+        throw new Error('header preview touches the coloured section edge');
+      }
 
       const collapsedRow = collapsed.querySelector('.tree-row');
       drag(collapsedRow, collapsedRow.getBoundingClientRect().top + 8, 'dragover');
@@ -82,10 +88,20 @@
       if (!(markerHeight > tabHeight / 2 && markerHeight < tabHeight)) {
         throw new Error(`marker is not slightly smaller than a tab: ${markerHeight} vs ${tabHeight}`);
       }
+      const markerRight = targetTab.getBoundingClientRect().right -
+        parseFloat(getComputedStyle(targetTab, '::after').right);
+      const colourRight = expandedTabs.getBoundingClientRect().right - colourRightInset;
+      const markerBottom = targetTab.getBoundingClientRect().bottom + markerHeight;
+      if (colourRight - markerRight < 3 ||
+          expandedTabs.getBoundingClientRect().bottom - markerBottom < 6) {
+        throw new Error('in-group tab slot touches the coloured section edge');
+      }
 
-      drag(expandedRow, expandedRow.getBoundingClientRect().top + 8, 'dragover');
-      if (expandedTabs.getBoundingClientRect().height !== previewHeight) {
-        throw new Error('header preview did not return to its expanded size');
+      if (!location.search.includes('show-insertion')) {
+        drag(expandedRow, expandedRow.getBoundingClientRect().top + 8, 'dragover');
+        if (expandedTabs.getBoundingClientRect().height !== previewHeight) {
+          throw new Error('header preview did not return to its expanded size');
+        }
       }
       document.getElementById('result').textContent = 'PASS';
     } catch (error) {

@@ -85,11 +85,16 @@
 }
 
 .group-tabs > .tab-item:has(> .tab-row.drop-before) {
-    margin-top: calc(var(--drop-slot-height) - 0.25rem);
+    margin-top: var(--drop-slot-height);
 }
 
 .group-tabs > .tab-item:has(> .tab-row.drop-after) {
-    margin-bottom: calc(var(--drop-slot-height) - 0.25rem);
+    margin-bottom: calc(var(--drop-slot-height) + 0.25rem);
+}
+
+.group-tabs .tab-row.drop-before::before,
+.group-tabs .tab-row.drop-after::after {
+    right: calc(var(--control-height) + 0.5rem);
 }
 
 .tab-icon {

@@ -470,10 +470,8 @@ function getDropTarget(
                         : {}),
                 };
             }
-            if (payload.id !== groupId) {
-                const position = groupRow.contains(target)
-                    ? getDropPosition({ clientY } as DragEvent, groupRow)
-                    : "after";
+            if (payload.id !== groupId && groupRow.contains(target)) {
+                const position = getDropPosition({ clientY } as DragEvent, groupRow);
                 return {
                     element: groupItem,
                     className: position === "before" ? "drop-before" : "drop-after",
@@ -533,6 +531,7 @@ export function setupSidebarDropZones(
                 (tabsList.contains(target) || groupsList.contains(target)) &&
                 !target.closest(".tab-row") &&
                 !target.closest(".tree-row") &&
+                (activeDragPayload.kind === "tabs" || !target.closest(".group-item")) &&
                 activeDropIndicator &&
                 (activeDropIndicator.className === "drop-before" ||
                     activeDropIndicator.className === "drop-after") &&

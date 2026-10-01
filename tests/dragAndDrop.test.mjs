@@ -244,11 +244,20 @@ test("marker follows rows during bottom auto-scroll; selected tabs drop together
     assert.equal(groupItem.classList.contains("is-dragging"), true);
     document.dispatch("dragover", dragEvent(groupsList, 210));
     assert.equal(thirdGroup.classList.contains("drop-before"), true);
-    document.dispatch("dragover", dragEvent(thirdTabRow, 280));
-    assert.equal(thirdGroup.classList.contains("drop-after"), true);
+    const overAnotherGroupsTab = dragEvent(thirdTabRow, 280);
+    document.dispatch("dragover", overAnotherGroupsTab);
+    assert.equal(overAnotherGroupsTab.defaultPrevented, false);
     assert.equal(thirdGroup.classList.contains("drop-before"), false);
+    assert.equal(thirdGroup.classList.contains("drop-after"), false);
     hitTarget = thirdTabRow;
     document.dispatch("drop", dragEvent(thirdTabRow, 280));
+    assert.equal(state.storage["groupOrderByWindow:1"], undefined);
+
+    groupHandle.dispatch("dragstart", dragEvent(groupHandle));
+    document.dispatch("dragover", dragEvent(thirdRow, 250));
+    assert.equal(thirdGroup.classList.contains("drop-after"), true);
+    hitTarget = thirdRow;
+    document.dispatch("drop", dragEvent(thirdRow, 250));
     await waitForDrop(() => state.storage["groupOrderByWindow:1"]?.order?.[2] === 7);
     assert.deepEqual(state.storage["groupOrderByWindow:1"].order, [8, 9, 7]);
     assert.equal(groupItem.classList.contains("is-dragging"), false);
