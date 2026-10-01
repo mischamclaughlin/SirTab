@@ -634,6 +634,10 @@ export async function loadLogicalTabGroupData(
     const groupIdsContinuing = rawGroupRecord?.order.every((id) => groupsById.has(id)) ?? false;
     const groupTabInventoryContinuing = groupIdsContinuing &&
         isSameInventory(rawGroupRecord?.windowInventory, liveTabInventory);
+    const groupSnapshot = readStoredOrder(storage[groupSnapshotKey]);
+    const groupRecordIncomplete = groupSnapshot != null &&
+        liveGroupOrder.length < groupSnapshot.order.length &&
+        isSameInventory(groupSnapshot.windowInventory, liveTabInventory);
     const directTabRecord = hasMatchingLiveIdentity(
         rawTabRecord,
         new Set(tabsById.keys()),
@@ -663,8 +667,14 @@ export async function loadLogicalTabGroupData(
         directTabRecord.fingerprints?.[index] === fingerprints.tabFingerprints.get(id),
     ).length ?? 0;
     let restart = null;
-    const needsRestartMatch = !directTabRecord || matchingDirectIds < liveTabOrder.length;
-    const restartIdentity = JSON.stringify([liveTabOrder, liveTabInventory]);
+    const needsTabRestartMatch = !directTabRecord || matchingDirectIds < liveTabOrder.length;
+    const needsGroupRestartMatch = liveGroupOrder.length > 0 && groupSnapshot != null &&
+        (!groupIdsContinuing || (rawGroupRecord?.order.length ?? 0) < groupSnapshot.order.length);
+    const needsRestartMatch = needsTabRestartMatch || needsGroupRestartMatch;
+    const restartIdentity = JSON.stringify([
+        liveTabOrder, liveTabInventory, liveGroupOrder,
+        liveGroupOrder.map((id) => fingerprints.groupFingerprints.get(id)),
+    ]);
     const failedMatch = failedRestartMatches.get(windowId);
     if (needsRestartMatch && liveTabInventory != null &&
         (!watchRestartChanges || failedMatch?.identity !== restartIdentity ||
@@ -681,9 +691,11 @@ export async function loadLogicalTabGroupData(
             });
         }
     }
-    const restoredGroupRecord = restart?.groupRecord ?? null;
+    const restoredGroupRecord = restart && (!directGroupRecord || needsGroupRestartMatch)
+        ? restart.groupRecord
+        : null;
 
-    const tabOrder = restart
+    const tabOrder = restart && needsTabRestartMatch
         ? restoreOrder(restart.tabRecord, liveTabOrder, fingerprints.tabFingerprints)
         : directTabRecord
           ? normaliseStoredOrder(directTabRecord.order, liveTabOrder)
@@ -691,7 +703,7 @@ export async function loadLogicalTabGroupData(
                 useLegacyTab ? legacyTabOrder : [],
                 liveTabOrder,
             );
-    const groupOrder = restart
+    const groupOrder = restoredGroupRecord
           ? restoreGroupOrder(
                 restoredGroupRecord,
                 liveGroupOrder,
@@ -725,7 +737,8 @@ export async function loadLogicalTabGroupData(
         if (JSON.stringify(rawTabRecord) !== JSON.stringify(activeTabRecord)) {
             updates[tabKey] = activeTabRecord;
         }
-        if (JSON.stringify(rawGroupRecord) !== JSON.stringify(nextGroupRecord)) {
+        if (!groupRecordIncomplete &&
+            JSON.stringify(rawGroupRecord) !== JSON.stringify(nextGroupRecord)) {
             updates[groupKey] = nextGroupRecord;
         }
         if ((useLegacyTab || useLegacyGroup) &&
@@ -742,13 +755,13 @@ export async function loadLogicalTabGroupData(
             rawTabRecord.order.every((id) => tabsById.has(id)) &&
             matchingExistingTabs >= Math.ceil(rawTabRecord.order.length / 2);
         const tabSnapshot = readStoredOrder(storage[tabSnapshotKey]);
-        const groupSnapshot = readStoredOrder(storage[groupSnapshotKey]);
         if (tabSnapshot && tabIdsContinuing &&
             liveTabOrder.length >= tabSnapshot.order.length &&
             JSON.stringify(tabSnapshot) !== JSON.stringify(nextTabRecord)) {
             updates[tabSnapshotKey] = nextTabRecord;
         }
-        if (groupSnapshot && (groupTabInventoryContinuing || tabIdsContinuing) &&
+        if (groupSnapshot && !groupRecordIncomplete &&
+            (groupTabInventoryContinuing || tabIdsContinuing) &&
             liveTabOrder.length >= (groupSnapshot.windowInventory?.length ?? Infinity) &&
             JSON.stringify(groupSnapshot) !== JSON.stringify(nextGroupRecord)) {
             updates[groupSnapshotKey] = nextGroupRecord;

@@ -620,6 +620,79 @@ test("restores order when Brave reuses the window ID but changes tab IDs", async
     assert.deepEqual(state.storage[`${TAB_ORDER_SNAPSHOT_PREFIX}7`].order, [3, 1, 2]);
 });
 
+test("restores group order when tab IDs survive but group IDs change", async () => {
+    resetState({
+        tabs: [tab(1, 0, 10), tab(2, 1, 20), tab(3, 2, 30)],
+        groups: [group(10), group(20), group(30)],
+    });
+    await moveStoredTabRelative(7, 3, 1, "before");
+    await moveStoredGroupRelative(7, 30, 10, "before");
+
+    state.tabs = [tab(1, 0, 110), tab(2, 1, 120), tab(3, 2, 130)];
+    state.groups = [group(110), group(120), group(130)].map((item, index) => ({
+        ...item,
+        title: `Group ${[10, 20, 30][index]}`,
+    }));
+
+    const restored = await loadLogicalTabGroupData(7);
+    assert.deepEqual(restored.tabOrder, [3, 1, 2]);
+    assert.deepEqual(restored.groupOrder, [130, 110, 120]);
+});
+
+test("restores group order when only some group IDs change", async () => {
+    resetState({
+        tabs: [tab(1, 0, 10), tab(2, 1, 20), tab(3, 2, 30)],
+        groups: [group(10), group(20), group(30)],
+    });
+    await moveStoredGroupRelative(7, 30, 10, "before");
+    state.tabs = [tab(1, 0, 10), tab(2, 1, 120), tab(3, 2, 130)];
+    state.groups = [group(10), group(120), group(130)];
+    state.groups[1].title = "Group 20";
+    state.groups[2].title = "Group 30";
+
+    assert.deepEqual((await loadLogicalTabGroupData(7)).groupOrder, [130, 10, 120]);
+});
+
+test("group disappearance during shutdown does not erase its order snapshot", async () => {
+    resetState({
+        tabs: [tab(1, 0, 10), tab(2, 1, 20), tab(3, 2, 30)],
+        groups: [group(10), group(20), group(30)],
+    });
+    await moveStoredGroupRelative(7, 30, 10, "before");
+    const snapshot = structuredClone(state.storage[`${GROUP_ORDER_SNAPSHOT_PREFIX}7`]);
+
+    state.groups = [];
+    state.tabs = state.tabs.map((item) => ({ ...item, groupId: NO_GROUP_ID }));
+    await loadLogicalTabGroupData(7);
+    assert.deepEqual(state.storage[`${GROUP_ORDER_SNAPSHOT_PREFIX}7`], snapshot);
+
+    state.tabs = [tab(1, 0, 110), tab(2, 1, 120), tab(3, 2, 130)];
+    state.groups = [group(110), group(120), group(130)].map((item, index) => ({
+        ...item,
+        title: `Group ${[10, 20, 30][index]}`,
+    }));
+    assert.deepEqual((await loadLogicalTabGroupData(7)).groupOrder, [130, 110, 120]);
+});
+
+test("restores a saved group order after an older refresh truncated the active record", async () => {
+    resetState({
+        tabs: [tab(1, 0, 10), tab(2, 1, 20), tab(3, 2, 30)],
+        groups: [group(10), group(20), group(30)],
+    });
+    await moveStoredGroupRelative(7, 30, 10, "before");
+    state.storage[`${GROUP_ORDER_WINDOW_PREFIX}7`] = {
+        order: [], fingerprints: [], inventory: [],
+        windowInventory: state.storage[`${GROUP_ORDER_SNAPSHOT_PREFIX}7`].windowInventory,
+    };
+    state.tabs = [tab(1, 0, 110), tab(2, 1, 120), tab(3, 2, 130)];
+    state.groups = [group(110), group(120), group(130)].map((item, index) => ({
+        ...item,
+        title: `Group ${[10, 20, 30][index]}`,
+    }));
+
+    assert.deepEqual((await loadLogicalTabGroupData(7)).groupOrder, [130, 110, 120]);
+});
+
 test("reused numeric tab and group IDs do not revive unrelated order", async () => {
     resetState({
         tabs: [tab(1, 0, 10), tab(2, 1, 20), tab(3, 2)],
