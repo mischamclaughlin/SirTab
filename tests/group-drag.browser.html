@@ -27,6 +27,7 @@
       </li>
       <li class="group-item" data-group-id="3">
         <div class="tree-row"><button class="tree-toggle" type="button">Third group</button></div>
+        <ul class="group-tabs"><li class="tab-item"><div class="tab-row">Tab C</div></li><li class="tab-item"><div class="tab-row">Tab D</div></li></ul>
       </li>
     </ul>
     <ul id="bookmarks-list"></ul>
@@ -66,8 +67,25 @@
       if (!expanded.classList.contains('drop-after')) {
         throw new Error('group header did not offer an insertion target');
       }
+      const groupOutline = getComputedStyle(expanded, '::after');
+      if (groupOutline.left !== '0px' || groupOutline.right !== '0px') {
+        throw new Error('group insertion outline is indented like a tab');
+      }
       if (last.getBoundingClientRect().top <= oldLastTop) {
         throw new Error('the following group did not make space for the marker');
+      }
+      const tailY = groups.getBoundingClientRect().bottom - 8;
+      const tail = document.elementFromPoint(100, tailY);
+      if (tail !== groups || groups.getBoundingClientRect().bottom - last.getBoundingClientRect().bottom < 24) {
+        throw new Error('no reachable drop area after the final expanded group');
+      }
+      drag(tail, tailY, 'dragover');
+      if (!groups.classList.contains('drop-append') || expanded.classList.contains('drop-after')) {
+        throw new Error('dragging below the final group did not target the end');
+      }
+      const endOutline = getComputedStyle(groups, '::after');
+      if (endOutline.left !== '0px' || endOutline.right !== '0px') {
+        throw new Error('end-of-groups outline is indented');
       }
       document.getElementById('result').textContent = 'PASS';
     } catch (error) {

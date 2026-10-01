@@ -13,8 +13,8 @@
 .group-item.drop-after::after {
     content: "";
     position: absolute;
-    left: 1.5rem;
-    right: calc(var(--control-height) + 0.25rem);
+    left: 0;
+    right: 0;
     height: var(--drop-slot-height);
     border: 1px dashed rgba(var(--blue-colour-RGB), 0.85);
     border-radius: 0.25rem;

@@ -78,10 +78,12 @@
     top: 100%;
 }
 
-#tabs-list > .tab-item:has(> .tab-row.drop-before),
-#tabs-list > .tab-item:has(> .tab-row.drop-before) ~ .tab-item,
-#tabs-list > .tab-item:has(> .tab-row.drop-after) ~ .tab-item {
-    transform: translateY(calc(var(--drop-slot-height) - 0.25rem));
+#tabs-list > .tab-item:has(> .tab-row.drop-before) {
+    margin-top: var(--drop-slot-height);
+}
+
+#tabs-list > .tab-item:has(> .tab-row.drop-after) {
+    margin-bottom: calc(var(--drop-slot-height) + 0.25rem);
 }
 
 .group-tabs > .tab-item:has(> .tab-row.drop-before) {

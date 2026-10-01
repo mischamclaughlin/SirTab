@@ -97,23 +97,37 @@
       const originalGap = second.li.getBoundingClientRect().top - first.li.getBoundingClientRect().bottom;
       first.row.classList.add('drop-after');
       const openGap = second.li.getBoundingClientRect().top - first.li.getBoundingClientRect().bottom;
-      if (openGap <= originalGap || lists[1].getBoundingClientRect().top !== groupTop) {
-        throw new Error('tab insertion gap moved the group section');
+      if (openGap <= originalGap || lists[1].getBoundingClientRect().top <= groupTop) {
+        throw new Error('tab insertion gap did not reserve space before groups');
       }
       first.row.classList.remove('drop-after');
+      if (lists[1].getBoundingClientRect().top !== groupTop) {
+        throw new Error('group section did not return after tab drag left');
+      }
       second.row.classList.add('drop-before');
       if (second.li.getBoundingClientRect().top - first.li.getBoundingClientRect().bottom <= originalGap ||
-          lists[1].getBoundingClientRect().top !== groupTop) {
-        throw new Error('before-tab gap did not open without moving groups');
+          lists[1].getBoundingClientRect().top <= groupTop) {
+        throw new Error('before-tab gap did not reserve space before groups');
       }
       second.row.classList.remove('drop-before');
       lists[0].classList.add('drop-append');
-      if (lists[1].getBoundingClientRect().top !== groupTop ||
+      if (lists[1].getBoundingClientRect().top <= groupTop ||
           getComputedStyle(lists[0], '::after').content === 'none') {
-        throw new Error('drag append marker moved the group section');
+        throw new Error('tab append marker did not reserve space before groups');
       }
       lists[0].classList.remove('drop-append');
-      second.row.classList.add('drop-before');
+      third.row.classList.add('drop-after');
+      const markerBottom = third.row.getBoundingClientRect().bottom +
+        parseFloat(getComputedStyle(third.row, '::after').height);
+      if (lists[1].getBoundingClientRect().top - markerBottom < 8) {
+        throw new Error('last tab insertion marker overlaps the group section');
+      }
+      if (!location.search.includes('show-last-tab-drop')) {
+        third.row.classList.remove('drop-after');
+        if (lists[1].getBoundingClientRect().top !== groupTop) {
+          throw new Error('group section did not return after tab append drag left');
+        }
+      }
       document.getElementById('result').textContent = 'PASS';
     } catch (error) {
       document.getElementById('result').textContent = `FAIL: ${error.message}`;

@@ -137,6 +137,11 @@ body:has(.tab-row.is-dragging) #tabs-list:empty:not([hidden]) {
 
 #tabs-list.drop-append {
   position: relative;
+  padding-bottom: calc(var(--drop-slot-height) + 0.25rem);
+}
+
+body:has(.group-item.is-dragging) #groups-list {
+  padding-bottom: calc(var(--control-height) + 0.5rem);
 }
 
 #tabs-list.drop-append::after,
@@ -153,8 +158,10 @@ body:has(.tab-row.is-dragging) #tabs-list:empty:not([hidden]) {
   pointer-events: none;
 }
 
-#tabs-list.drop-append::after {
-  height: 0.5rem;
+#groups-list.drop-append::after {
+  left: 0;
+  right: 0;
+  bottom: 0.25rem;
 }
 
 #settings {

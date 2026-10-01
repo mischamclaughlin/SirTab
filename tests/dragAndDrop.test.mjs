@@ -231,7 +231,10 @@ test("marker follows rows during bottom auto-scroll; selected tabs drop together
     );
     const secondGroup = new FakeElement(["group-item"], groupsList, { groupId: "8" });
     secondGroup.bounds.top = 160;
-    new FakeElement(["tree-row"], secondGroup).bounds.top = 160;
+    const secondGroupRow = new FakeElement(["tree-row"], secondGroup);
+    secondGroupRow.bounds.top = 160;
+    const secondGroupHandle = new FakeElement([], secondGroupRow);
+    makeGroupDraggable(secondGroupHandle, secondGroupRow, 1, 8, enabled, requestRender);
     const thirdGroup = new FakeElement(["group-item"], groupsList, { groupId: "9" });
     thirdGroup.bounds.top = 220;
     const thirdRow = new FakeElement(["tree-row"], thirdGroup);
@@ -261,6 +264,14 @@ test("marker follows rows during bottom auto-scroll; selected tabs drop together
     await waitForDrop(() => state.storage["groupOrderByWindow:1"]?.order?.[2] === 7);
     assert.deepEqual(state.storage["groupOrderByWindow:1"].order, [8, 9, 7]);
     assert.equal(groupItem.classList.contains("is-dragging"), false);
+
+    secondGroupHandle.dispatch("dragstart", dragEvent(secondGroupHandle));
+    document.dispatch("dragover", dragEvent(groupsList, 500));
+    assert.equal(groupsList.classList.contains("drop-append"), true);
+    hitTarget = groupsList;
+    document.dispatch("drop", dragEvent(groupsList, 500));
+    await waitForDrop(() => state.storage["groupOrderByWindow:1"]?.order?.[2] === 8);
+    assert.deepEqual(state.storage["groupOrderByWindow:1"].order, [9, 7, 8]);
 
     state.tabs.find((item) => item.id === 10).title = "  Named tab  ";
     state.tabs.find((item) => item.id === 30).url = "chrome://settings";
