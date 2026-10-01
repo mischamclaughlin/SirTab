@@ -70,6 +70,21 @@ Generate a coverage report for the modules exercised by the tests:
 npm run test:coverage
 ```
 
+## Release preparation
+
+Build a Chrome Web Store upload archive from the current source:
+
+```bash
+npm run package:store
+```
+
+The archive is written to `webstore/sir-tab-<version>.zip`. Its contents are
+limited to the built extension files and exclude source maps. Review the
+[privacy policy](docs/privacy-policy.md) and
+[Store listing and disclosure draft](docs/chrome-web-store-listing.md) against
+the release before submitting it. The policy must be publicly accessible at
+the URL entered in the Chrome Web Store dashboard.
+
 > Not submitted to the Webstore yet, using and testing first.
 >
 > Works Best, with Brave using sidetabs and having them hidden.
