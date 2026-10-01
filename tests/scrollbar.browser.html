@@ -6,6 +6,7 @@
 </head>
 <body>
   <output id="result">RUNNING</output>
+  <div id="actions" style="height: 24px; border: 1px solid #aaa"></div>
   <main id="sidebar-content"></main>
   <div id="settings">
     <div class="action-panel"></div>
@@ -14,8 +15,8 @@
   <script type="module">
     try {
       const { setupAutoHideScrollbars } = await import('../dist/sidebar/helpers/scrollbar.js');
-      setupAutoHideScrollbars();
       const sidebar = document.getElementById('sidebar-content');
+      setupAutoHideScrollbars();
       const tabs = document.createElement('ul');
       tabs.id = 'tabs-list';
       const row = document.createElement('li');
@@ -23,19 +24,28 @@
       const tabRow = document.createElement('div');
       tabRow.className = 'tab-row';
       tabRow.style.height = '24px';
+      tabRow.style.border = '1px solid #aaa';
       row.append(tabRow);
       tabs.append(row);
       sidebar.append(tabs);
       const widthWithoutScrollbar = tabRow.getBoundingClientRect().width;
+      // Simulate a platform gutter appearing after the initial measurement.
+      sidebar.style.borderRight = '12px solid transparent';
       for (let index = 0; index < 80; index++) {
         tabs.append(row.cloneNode(true));
       }
       if (sidebar.scrollHeight <= sidebar.clientHeight) {
         throw new Error('tab list did not overflow');
       }
+      await new Promise((resolve) => setTimeout(resolve, 50));
       const widthWithScrollbar = tabRow.getBoundingClientRect().width;
       if (Math.abs(widthWithoutScrollbar - widthWithScrollbar) > 0.5) {
         throw new Error(`scrollbar changed tab width: ${widthWithoutScrollbar} to ${widthWithScrollbar}`);
+      }
+      const actionsRight = document.getElementById('actions').getBoundingClientRect().right;
+      const tabRight = tabRow.getBoundingClientRect().right;
+      if (Math.abs(actionsRight - tabRight) > 0.5) {
+        throw new Error(`tab rows end ${actionsRight - tabRight}px before actions`);
       }
       const areas = [
         document.getElementById('sidebar-content'),

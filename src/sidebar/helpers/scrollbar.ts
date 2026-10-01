@@ -6,8 +6,20 @@ export function setupAutoHideScrollbars() {
     const hideTimers = new WeakMap<HTMLElement, number>();
     const sidebarContent = document.getElementById("sidebar-content");
     if (sidebarContent) {
-        const gutter = sidebarContent.offsetWidth - sidebarContent.clientWidth;
-        sidebarContent.style.setProperty("--sidebar-scrollbar-gutter", `${gutter}px`);
+        const updateGutter = () => {
+            const gutter = sidebarContent.offsetWidth - sidebarContent.clientWidth;
+            const value = `${gutter}px`;
+            if (sidebarContent.style.getPropertyValue("--sidebar-scrollbar-gutter") !== value) {
+                sidebarContent.style.setProperty("--sidebar-scrollbar-gutter", value);
+            }
+        };
+        updateGutter();
+        new ResizeObserver(updateGutter).observe(sidebarContent);
+        new MutationObserver(updateGutter).observe(sidebarContent, {
+            childList: true,
+            subtree: true,
+        });
+        window.addEventListener("resize", updateGutter);
     }
 
     document.addEventListener("scroll", (event) => {
