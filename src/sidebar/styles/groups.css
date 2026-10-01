@@ -13,9 +13,9 @@
 .group-item.drop-after::after {
     content: "";
     position: absolute;
-    left: 0;
-    right: 0;
-    height: 0.5rem;
+    left: 1.5rem;
+    right: calc(var(--control-height) + 0.25rem);
+    height: var(--drop-slot-height);
     border: 1px dashed rgba(var(--blue-colour-RGB), 0.85);
     border-radius: 0.25rem;
     pointer-events: none;
@@ -29,10 +29,12 @@
     top: 100%;
 }
 
-#groups-list > .group-item.drop-before,
-#groups-list > .group-item.drop-before ~ .group-item,
-#groups-list > .group-item.drop-after ~ .group-item {
-    transform: translateY(0.25rem);
+#groups-list > .group-item.drop-before {
+    margin-top: calc(var(--drop-slot-height) - 0.5rem);
+}
+
+#groups-list > .group-item.drop-after {
+    margin-bottom: calc(var(--drop-slot-height) - 0.5rem);
 }
 
 .tree-row {
@@ -189,6 +191,17 @@
 
 .group-tabs > .tab-item {
     position: relative;
+}
+
+.group-tabs.drop-tab-preview::after {
+    content: "";
+    position: relative;
+    height: calc(var(--control-height) * var(--drop-preview-count, 1) - 0.375rem);
+    margin-left: 1.5rem;
+    margin-right: calc(var(--control-height) + 0.25rem);
+    border: 1px dashed rgba(var(--blue-colour-RGB), 0.85);
+    border-radius: 0.25rem;
+    pointer-events: none;
 }
 
 .group-tabs .tab-button {

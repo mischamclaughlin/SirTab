@@ -1,5 +1,6 @@
 html {
   --control-height: 1.5rem;
+  --drop-slot-height: calc(var(--control-height) - 0.375rem);
   --sidebar-font-family:
     "JetBrains Mono", "Fira Code", "Cascadia Mono", "SF Mono", Consolas,
     monospace;
@@ -128,9 +129,13 @@ body:has(.tab-row.is-dragging) #tabs-list:empty:not([hidden]) {
   padding-bottom: 0.5rem;
 }
 
-#tabs-list.drop-append,
 #groups-list.drop-append,
 #bookmarks-list.drop-append {
+  position: relative;
+  padding-bottom: var(--drop-slot-height);
+}
+
+#tabs-list.drop-append {
   position: relative;
 }
 
@@ -139,13 +144,17 @@ body:has(.tab-row.is-dragging) #tabs-list:empty:not([hidden]) {
 #bookmarks-list.drop-append::after {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 1.5rem;
+  right: calc(var(--control-height) + 0.25rem);
   bottom: 0;
-  height: 0.5rem;
+  height: var(--drop-slot-height);
   border: 1px dashed rgba(var(--blue-colour-RGB), 0.6);
   border-radius: 0.25rem;
   pointer-events: none;
+}
+
+#tabs-list.drop-append::after {
+  height: 0.5rem;
 }
 
 #settings {

@@ -9,6 +9,11 @@ class FakeElement {
         this.dataset = dataset;
         this.listeners = new Map();
         this.bounds = { top: 100, left: 10, width: 240, height: 40 };
+        this.hidden = false;
+        this.style = {
+            setProperty() {},
+            removeProperty() {},
+        };
         this.classList = {
             add: (name) => this.classes.add(name),
             remove: (name) => this.classes.delete(name),
@@ -201,6 +206,7 @@ test("marker follows rows during bottom auto-scroll; selected tabs drop together
 
     document.dispatch("dragover", dragEvent(groupTabs, 110));
     assert.equal(groupRow.classList.contains("drop-inside"), true);
+    assert.equal(groupTabs.classList.contains("drop-tab-preview"), true);
     assert.equal(lastRow.classList.contains("drop-after"), false);
     hitTarget = groupTabs;
     document.dispatch("drop", dragEvent(groupTabs, 110));
@@ -209,6 +215,7 @@ test("marker follows rows during bottom auto-scroll; selected tabs drop together
     assert.deepEqual(state.groupCalls, [{ groupId: 7, tabIds: [10, 30] }]);
     assert.deepEqual(state.storage["tabOrderByWindow:1"].order, [20, 40, 50, 10, 30]);
     assert.equal(sourceRow.classList.contains("is-dragging"), false);
+    assert.equal(groupTabs.classList.contains("drop-tab-preview"), false);
     assert.equal(renders, 1);
 
     groupHandle.dispatch("dragstart", dragEvent(groupHandle));

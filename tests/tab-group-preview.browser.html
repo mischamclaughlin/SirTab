@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../dist/sidebar/sidebar.css">
+  <style>
+    body { width: 360px; }
+    .tab-button { width: 100%; }
+    #result { position: fixed; top: 0; right: 0; z-index: 20; background: white; color: black; }
+  </style>
+</head>
+<body>
+  <output id="result">RUNNING</output>
+  <div id="actions"></div>
+  <main id="sidebar-content">
+    <ul id="tabs-list">
+      <li class="tab-item" data-tab-id="1"><div class="tab-row"><button class="tab-button" type="button"><span class="tab-icon">◆</span><span class="tab-label">Drag me</span></button></div></li>
+    </ul>
+    <ul id="groups-list">
+      <li class="group-item" data-group-id="10">
+        <div class="tree-row"><button class="tree-toggle" type="button" data-colour="blue">Expanded group</button></div>
+        <ul class="group-tabs" data-group-color="blue">
+          <li class="tab-item" data-tab-id="2"><div class="tab-row"><button class="tab-button" type="button"><span class="tab-icon">◆</span><span class="tab-label">Existing tab</span></button></div></li>
+        </ul>
+      </li>
+      <li class="group-item" data-group-id="20">
+        <div class="tree-row"><button class="tree-toggle" type="button" data-colour="green">Collapsed group</button></div>
+        <ul class="group-tabs" data-group-color="green" hidden></ul>
+      </li>
+    </ul>
+    <ul id="bookmarks-list"></ul>
+  </main>
+  <div id="settings"></div>
+  <script type="module">
+    try {
+      globalThis.chrome = { tabGroups: { TAB_GROUP_ID_NONE: -1 } };
+      const { makeTabDraggable, setupSidebarDropZones } = await import('../dist/sidebar/helpers/dragAndDrop.js');
+      const source = document.querySelector('#tabs-list .tab-row');
+      const expanded = document.querySelector('[data-group-id="10"]');
+      const expandedTabs = expanded.querySelector('.group-tabs');
+      const collapsed = document.querySelector('[data-group-id="20"]');
+      const collapsedTabs = collapsed.querySelector('.group-tabs');
+      const expandedHeight = expandedTabs.getBoundingClientRect().height;
+      if (collapsedTabs.getBoundingClientRect().height !== 0) {
+        throw new Error('collapsed tabs should start hidden');
+      }
+      makeTabDraggable(source.querySelector('.tab-button'), source, 1, 1, () => true, () => {});
+      setupSidebarDropZones(document.getElementById('tabs-list'), document.getElementById('groups-list'),
+        document.getElementById('bookmarks-list'), 1, () => true, () => {}, () => {});
+      const drag = (target, y, type) => target.dispatchEvent(new DragEvent(type, {
+        bubbles: true, dataTransfer: new DataTransfer(), clientX: 100, clientY: y,
+      }));
+      drag(source.querySelector('.tab-button'), source.getBoundingClientRect().top + 8, 'dragstart');
+      const expandedRow = expanded.querySelector('.tree-row');
+      drag(expandedRow, expandedRow.getBoundingClientRect().top + 8, 'dragover');
+      if (!expandedTabs.classList.contains('drop-tab-preview') ||
+          expandedTabs.getBoundingClientRect().height <= expandedHeight) {
+        throw new Error('expanded group did not grow for a tab');
+      }
+      const previewHeight = expandedTabs.getBoundingClientRect().height;
+
+      const collapsedRow = collapsed.querySelector('.tree-row');
+      drag(collapsedRow, collapsedRow.getBoundingClientRect().top + 8, 'dragover');
+      if (collapsedTabs.hidden || !collapsedTabs.classList.contains('drop-tab-preview') ||
+          collapsedTabs.getBoundingClientRect().height <= 0) {
+        throw new Error('collapsed group did not reveal a tab slot');
+      }
+      if (expandedTabs.getBoundingClientRect().height !== expandedHeight) {
+        throw new Error('previous group did not return to its original size');
+      }
+
+      const targetTab = expandedTabs.querySelector('.tab-row');
+      drag(targetTab, targetTab.getBoundingClientRect().bottom - 4, 'dragover');
+      if (!collapsedTabs.hidden || collapsedTabs.getBoundingClientRect().height !== 0 ||
+          !targetTab.classList.contains('drop-after') ||
+          expandedTabs.getBoundingClientRect().height <= expandedHeight) {
+        throw new Error('in-group insertion did not expand the colour area');
+      }
+      const markerHeight = parseFloat(getComputedStyle(targetTab, '::after').height);
+      const tabHeight = targetTab.getBoundingClientRect().height;
+      if (!(markerHeight > tabHeight / 2 && markerHeight < tabHeight)) {
+        throw new Error(`marker is not slightly smaller than a tab: ${markerHeight} vs ${tabHeight}`);
+      }
+
+      drag(expandedRow, expandedRow.getBoundingClientRect().top + 8, 'dragover');
+      if (expandedTabs.getBoundingClientRect().height !== previewHeight) {
+        throw new Error('header preview did not return to its expanded size');
+      }
+      document.getElementById('result').textContent = 'PASS';
+    } catch (error) {
+      document.getElementById('result').textContent = `FAIL: ${error.message}`;
+    }
+  </script>
+</body>
+</html>

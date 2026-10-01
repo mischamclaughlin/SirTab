@@ -62,9 +62,9 @@
 .tab-row.drop-after::after {
     content: "";
     position: absolute;
-    left: 0;
-    right: 0;
-    height: 0.5rem;
+    left: 1.5rem;
+    right: calc(var(--control-height) + 0.25rem);
+    height: var(--drop-slot-height);
     border: 1px dashed rgba(var(--blue-colour-RGB), 0.85);
     border-radius: 0.25rem;
     pointer-events: none;
@@ -80,11 +80,16 @@
 
 #tabs-list > .tab-item:has(> .tab-row.drop-before),
 #tabs-list > .tab-item:has(> .tab-row.drop-before) ~ .tab-item,
-#tabs-list > .tab-item:has(> .tab-row.drop-after) ~ .tab-item,
-.group-tabs > .tab-item:has(> .tab-row.drop-before),
-.group-tabs > .tab-item:has(> .tab-row.drop-before) ~ .tab-item,
-.group-tabs > .tab-item:has(> .tab-row.drop-after) ~ .tab-item {
-    transform: translateY(0.25rem);
+#tabs-list > .tab-item:has(> .tab-row.drop-after) ~ .tab-item {
+    transform: translateY(calc(var(--drop-slot-height) - 0.25rem));
+}
+
+.group-tabs > .tab-item:has(> .tab-row.drop-before) {
+    margin-top: calc(var(--drop-slot-height) - 0.25rem);
+}
+
+.group-tabs > .tab-item:has(> .tab-row.drop-after) {
+    margin-bottom: calc(var(--drop-slot-height) - 0.25rem);
 }
 
 .tab-icon {

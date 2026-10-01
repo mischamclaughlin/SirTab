@@ -26,6 +26,7 @@ const DROP_GAP_HIT_MARGIN_PX = 10;
 let activeDropIndicator:
     | DropTarget
     | null = null;
+let activeGroupPreview: { element: HTMLElement; wasHidden: HTMLElement["hidden"] } | null = null;
 let activeDragElement: HTMLElement | null = null;
 let activeDragPayload: DragPayload | null = null;
 let activeDragVersion = 0;
@@ -137,6 +138,12 @@ function clearDropIndicator() {
     if (!activeDropIndicator) return;
     activeDropIndicator.element.classList.remove(activeDropIndicator.className);
     activeDropIndicator = null;
+    if (activeGroupPreview) {
+        activeGroupPreview.element.classList.remove("drop-tab-preview");
+        activeGroupPreview.element.style.removeProperty("--drop-preview-count");
+        activeGroupPreview.element.hidden = activeGroupPreview.wasHidden;
+        activeGroupPreview = null;
+    }
 }
 
 function setDropIndicator(target: DropTarget) {
@@ -149,6 +156,13 @@ function setDropIndicator(target: DropTarget) {
 
     clearDropIndicator();
     target.element.classList.add(target.className);
+    if (target.preview) {
+        const { element, count } = target.preview;
+        activeGroupPreview = { element, wasHidden: element.hidden };
+        element.hidden = false;
+        element.style.setProperty("--drop-preview-count", String(count));
+        element.classList.add("drop-tab-preview");
+    }
     activeDropIndicator = target;
 }
 
@@ -366,6 +380,7 @@ type DropTarget = {
     action: () => Promise<void>;
     effect?: "copy" | "move";
     requestRender?: RequestRender;
+    preview?: { element: HTMLElement; count: number };
 };
 
 function tabInsertionTarget(
@@ -445,10 +460,14 @@ function getDropTarget(
         const groupRow = groupItem?.querySelector<HTMLElement>(".tree-row");
         if (groupItem && groupRow && Number.isInteger(groupId)) {
             if (payload.kind === "tabs") {
+                const groupTabs = groupItem.querySelector<HTMLElement>(".group-tabs");
                 return {
                     element: groupRow,
                     className: "drop-inside",
                     action: () => moveTabsToGroup(windowId, payload.ids, groupId),
+                    ...(groupTabs
+                        ? { preview: { element: groupTabs, count: payload.ids.length } }
+                        : {}),
                 };
             }
             if (payload.id !== groupId) {
