@@ -433,7 +433,9 @@ function getDropTarget(
         if (folderId) {
             const row = bookmarkItem?.querySelector<HTMLElement>(".tree-row");
             const nestedList = bookmarkItem?.querySelector<HTMLElement>(".bookmark-nested-list");
-            if (row) return {
+            // The nested list is a destination of its own: its gaps can insert
+            // before a child. Only the folder header offers append-to-folder.
+            if (row && !nestedList?.contains(target)) return {
                 element: row,
                 className: "drop-inside",
                 action: () => bookmarkTabs(payload.ids, folderId),

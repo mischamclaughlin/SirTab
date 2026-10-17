@@ -312,3 +312,170 @@ test("marker follows rows during bottom auto-scroll; selected tabs drop together
     await waitForDrop(() => state.bookmarks.length === 3);
     assert.equal(state.bookmarks.at(-1).parentId, "1");
 });
+
+let fixtureVersion = 0;
+async function fixture(tabs, selected = [10]) {
+    state.tabs = tabs;
+    state.groups = [{ id: 7, windowId: 1, title: "Group", color: "blue" }];
+    state.storage = {};
+    state.groupCalls = [];
+    state.bookmarks = [];
+    frames.clear();
+    globalThis.document = new FakeElement();
+    document.getElementById = () => null;
+    document.scrollingElement = { scrollTop: 0, scrollHeight: 1000, clientHeight: 500 };
+    document.elementFromPoint = () => hitTarget;
+    const api = await import(`../dist/sidebar/helpers/dragAndDrop.js?fixture=${++fixtureVersion}`);
+    const tabsList = new FakeElement(["tabs-list"]);
+    const groupsList = new FakeElement(["groups-list"]);
+    const bookmarksList = new FakeElement(["bookmarks-list"]);
+    let renders = 0;
+    const render = () => { renders++; };
+    api.setupSidebarDropZones(tabsList, groupsList, bookmarksList, 1, () => true, render, render);
+    const rows = new Map();
+    const handles = new Map();
+    for (const item of tabs) {
+        const li = new FakeElement(["tab-item"], tabsList, { tabId: String(item.id) });
+        const row = new FakeElement(["tab-row"], li);
+        rows.set(item.id, row);
+        const handle = new FakeElement([], row);
+        handles.set(item.id, handle);
+        api.makeTabDraggable(handle, row, 1, item.id, () => true, render, () => selected);
+    }
+    const start = (id = selected[0]) => handles.get(id).dispatch("dragstart", dragEvent(handles.get(id)));
+    const drop = (target, y = 110) => {
+        hitTarget = target;
+        document.dispatch("drop", dragEvent(target, y));
+    };
+    const settled = () => waitForDrop(() => !api.deferRenderUntilDragSettles(render));
+    return { ...api, tabsList, groupsList, bookmarksList, rows, start, drop, settled,
+        render, renders: () => renders };
+}
+
+test("tab-row drops preserve logical selection order before and after a target", async () => {
+    const f = await fixture([tab(10), tab(20), tab(30), tab(40, 7)], [30, 10]);
+    f.start(10);
+    f.drop(f.rows.get(40), 105);
+    await f.settled();
+    assert.deepEqual(state.groupCalls, [{ groupId: 7, tabIds: [10, 30] }]);
+    assert.deepEqual(state.storage["tabOrderByWindow:1"].order, [20, 10, 30, 40]);
+    f.start(10);
+    f.drop(f.rows.get(40), 135);
+    await f.settled();
+    assert.deepEqual(state.storage["tabOrderByWindow:1"].order, [20, 40, 10, 30]);
+    assert.equal(state.groupCalls.length, 1, "tabs already in the target group need no group call");
+    f.start(10);
+    f.drop(f.rows.get(20), 105);
+    await f.settled();
+    assert.equal(state.tabs.find(item => item.id === 10).groupId, -1);
+    assert.deepEqual(state.storage["tabOrderByWindow:1"].order, [10, 30, 20, 40]);
+});
+
+test("grouped selections append to populated and empty ungrouped lists", async () => {
+    for (const populated of [true, false]) {
+        const f = await fixture([tab(10, 7), ...(populated ? [tab(20)] : []), tab(30, 7)], [30, 10]);
+        f.tabsList.children = [];
+        f.start(10);
+        f.drop(f.tabsList, 300);
+        await f.settled();
+        assert.ok(state.tabs.every(item => item.groupId === -1));
+        assert.deepEqual(state.storage["tabOrderByWindow:1"]?.order ?? state.tabs.map(item => item.id),
+            populated ? [20, 10, 30] : [10, 30]);
+    }
+});
+
+test("tabs disappearing during a drag leave no grouping or ordering mutation", async () => {
+    for (const missingId of [10, 20]) {
+        const f = await fixture([tab(10), tab(20, 7)]);
+        f.start();
+        state.tabs = state.tabs.filter(item => item.id !== missingId);
+        f.drop(f.rows.get(20));
+        await f.settled();
+        assert.deepEqual(state.groupCalls, []);
+        assert.equal(f.rows.get(10).classList.contains("is-dragging"), false);
+        assert.equal(f.renders(), 1);
+    }
+});
+
+test("group-header drops safely ignore a vanished group or a vanished selection", async () => {
+    for (const missing of ["group", "selection"]) {
+        const f = await fixture([tab(10), tab(20, 7)]);
+        const group = new FakeElement(["group-item"], f.groupsList, { groupId: "7" });
+        const row = new FakeElement(["tree-row"], group);
+        new FakeElement(["group-tabs"], group);
+        f.start();
+        if (missing === "group") state.groups = [];
+        else state.tabs = state.tabs.filter(item => item.id !== 10);
+        f.drop(row);
+        await f.settled();
+        assert.deepEqual(state.groupCalls, []);
+        assert.equal(f.rows.get(10).classList.contains("is-dragging"), false);
+    }
+});
+
+test("failed grouping and storage writes settle drag state and allow retry", async () => {
+    for (const [object, key] of [[chrome.tabs, "group"], [chrome.storage.local, "set"]]) {
+        const f = await fixture([tab(10), tab(20, 7), tab(30)]);
+        // Establish migration/order records before injecting a write failure.
+        f.start(); f.drop(f.rows.get(30), 135); await f.settled();
+        const original = object[key];
+        const originalError = console.error;
+        const errors = [];
+        console.error = (...args) => errors.push(args);
+        object[key] = async () => { throw new Error("Injected drop failure"); };
+        try {
+            f.start(); f.drop(f.rows.get(20), 105); await f.settled();
+            assert.equal(errors.length, 1);
+            assert.equal(f.rows.get(10).classList.contains("is-dragging"), false);
+            assert.equal(f.rows.get(20).classList.contains("drop-before"), false);
+        } finally {
+            object[key] = original;
+            console.error = originalError;
+        }
+        f.start(); f.drop(f.rows.get(20), 105); await f.settled();
+        assert.equal(state.tabs.find(item => item.id === 10).groupId, 7);
+        assert.deepEqual(state.storage["tabOrderByWindow:1"].order, [10, 20, 30]);
+    }
+});
+
+test("an old pending drop cannot clear a newer drag or release its deferred render", async () => {
+    const f = await fixture([tab(10), tab(20, 7), tab(30)]);
+    const original = chrome.tabs.group;
+    let release;
+    let entered = false;
+    const pending = new Promise(resolve => { release = resolve; });
+    chrome.tabs.group = async (...args) => { entered = true; await pending; return original(...args); };
+    try {
+        f.start(); f.drop(f.rows.get(20), 135);
+        await waitForDrop(() => entered);
+        document.dispatch("dragend", dragEvent(f.rows.get(10)));
+        f.start();
+        release();
+        await waitForDrop(() => state.storage["tabOrderByWindow:1"]?.order?.[0] === 20);
+        await new Promise(setImmediate);
+        assert.equal(f.rows.get(10).classList.contains("is-dragging"), true);
+        assert.equal(f.renders(), 0);
+        assert.equal(f.deferRenderUntilDragSettles(f.render), true);
+        document.dispatch("dragend", dragEvent(f.rows.get(10)));
+        await f.settled();
+        assert.equal(f.renders(), 1);
+    } finally { chrome.tabs.group = original; release(); }
+});
+
+test("a direct nested bookmark gap inserts before its next child instead of appending", async () => {
+    const f = await fixture([tab(10)]);
+    const folder = new FakeElement(["tab-item"], f.bookmarksList, { bookmarkId: "24", bookmarkFolderId: "24" });
+    new FakeElement(["tree-row"], folder);
+    const list = new FakeElement(["bookmark-nested-list"], folder);
+    const child = new FakeElement(["tab-item"], list, { bookmarkId: "23" });
+    child.bounds.top = 160;
+    const row = new FakeElement(["tab-row"], child);
+    row.bounds.top = 160;
+    f.start();
+    document.dispatch("dragover", dragEvent(list, 150));
+    assert.equal(row.classList.contains("drop-before"), true);
+    f.drop(list, 150);
+    await f.settled();
+    assert.equal(state.bookmarks[0].parentId, "24");
+    assert.equal(state.bookmarks[0].index, 2);
+});
