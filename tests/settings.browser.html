@@ -14,6 +14,8 @@ const assert = (value, message) => { if (!value) throw Error(message); };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 let finishSave;
 let failSave = false;
+let failOpen = false;
+const openedTabs = [];
 globalThis.chrome = {
     runtime: { getURL: (path) => path },
     commands: { getAll: async () => [{ name: '_execute_action', shortcut: 'Alt+S' }] },
@@ -24,7 +26,11 @@ globalThis.chrome = {
             await new Promise((resolve) => { finishSave = resolve; });
         },
     } },
-    tabs: { create: async () => ({}) },
+    tabs: { create: async (options) => {
+        if (failOpen) throw Error('Settings unavailable');
+        openedTabs.push(options);
+        return {};
+    } },
 };
 const { setupSettingAction } = await import('../dist/sidebar/actions/actionSetting.js');
 await setupSettingAction(document.querySelector('#settings'), document.createElement('div'));
@@ -61,6 +67,26 @@ await settle();
 assert(document.documentElement.dataset.theme === 'mocha', 'retry should apply the theme');
 assert(mocha.getAttribute('aria-pressed') === 'true', 'retry should update selection');
 document.querySelector('.theme-options').scrollIntoView({ block: 'end' });
+const recommendations = document.querySelector('.brave-settings');
+assert(!recommendations.open, 'Brave guidance should start collapsed');
+recommendations.querySelector('summary').click();
+assert(recommendations.open, 'Brave guidance should expand');
+const openAppearance = recommendations.querySelector('button');
+failOpen = true;
+openAppearance.click();
+await settle();
+assert(!openAppearance.disabled, 'failed settings navigation should allow retry');
+assert(openedTabs.length === 0, 'failed navigation should not report an opened tab');
+failOpen = false;
+openAppearance.click();
+await settle();
+assert(openedTabs[0]?.url === 'chrome://settings/appearance', 'appearance button should open browser settings');
+for (const width of [280, 360]) {
+    document.body.style.width = `${width}px`;
+    assert(recommendations.scrollWidth <= recommendations.clientWidth, `guidance overflows at ${width}px`);
+}
+document.body.style.width = '';
+recommendations.querySelector('summary').scrollIntoView({ block: 'start' });
 await new Promise((resolve) => setTimeout(resolve, 250));
 assert(unhandled.length === 0, `unhandled errors: ${unhandled.join('; ')}`);
 result.textContent = 'PASS';

@@ -141,3 +141,51 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.5rem;
 }
+
+.brave-settings {
+    min-width: 0;
+    border-top: 1px solid var(--border-faded);
+    padding-top: 0.5rem;
+}
+
+.brave-settings > summary {
+    cursor: pointer;
+    padding-block: 0.25rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.brave-settings > summary:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+}
+
+.brave-settings > p {
+    margin-block: 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.brave-settings-list > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.7fr);
+    gap: 0.5rem;
+    padding-block: 0.4rem;
+    border-bottom: 1px solid var(--border-faded);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.brave-settings-list dd {
+    color: var(--text);
+}
+
+.brave-settings > button {
+    width: 100%;
+    height: auto;
+    min-height: var(--control-height);
+    white-space: normal;
+}

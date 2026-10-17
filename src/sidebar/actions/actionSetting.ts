@@ -275,7 +275,50 @@ export async function setupSettingAction(
     shortcutSection.append(shortcutHeading, shortcutList, shortcutActions);
 
     themeSection.append(themeHeading, themeOptions);
-    settingInfoSection.append(shortcutSection, themeSection);
+
+    const braveSettings = document.createElement("details");
+    braveSettings.className = "brave-settings";
+    const braveSummary = document.createElement("summary");
+    braveSummary.className = "setting-heading";
+    braveSummary.textContent = "recommended Brave settings";
+
+    const braveIntro = document.createElement("p");
+    braveIntro.textContent =
+        "Optional appearance settings for using Sir Tab as your main tab list. Choose these in Brave’s Appearance settings.";
+
+    const recommendations = document.createElement("dl");
+    recommendations.className = "brave-settings-list";
+    for (const [label, value] of [
+        ["Use vertical tabs", "On"],
+        ["Hide completely when minimised", "On"],
+        ["Show title bar", "Off"],
+        ["Sidebar position", "Left"],
+        ["Show Sidebar (Brave’s shortcut rail)", "Never"],
+        ["Use compact mode", "On"],
+        ["Rounded corners on main content areas", "Off"],
+        ["Show bookmarks bar", "Never"],
+    ]) {
+        const row = document.createElement("div");
+        const name = document.createElement("dt");
+        name.textContent = label;
+        const choice = document.createElement("dd");
+        choice.textContent = value;
+        row.append(name, choice);
+        recommendations.append(row);
+    }
+
+    const openBraveSettings = document.createElement("button");
+    openBraveSettings.type = "button";
+    openBraveSettings.className = "control";
+    openBraveSettings.textContent = "open appearance settings";
+    openBraveSettings.addEventListener("click", () => {
+        void runButtonAction(openBraveSettings, async () => {
+            await chrome.tabs.create({ url: "chrome://settings/appearance" });
+        }, "Open appearance settings failed:");
+    });
+
+    braveSettings.append(braveSummary, braveIntro, recommendations, openBraveSettings);
+    settingInfoSection.append(shortcutSection, themeSection, braveSettings);
 
     let isSettingOpen = false;
 
