@@ -1,19 +1,19 @@
 import type { RequestRender } from "../types.js";
 import {
-    buildTabsByLogicalGroup,
-    getTabGroupId,
-    loadLogicalTabGroupData,
-    moveStoredGroupRelative,
-    moveStoredGroupToEnd,
-    moveStoredTabsRelative,
-    moveStoredTabsToEnd,
+  buildTabsByLogicalGroup,
+  getTabGroupId,
+  loadLogicalTabGroupData,
+  moveStoredGroupRelative,
+  moveStoredGroupToEnd,
+  moveStoredTabsRelative,
+  moveStoredTabsToEnd,
 } from "../../shared/groupOrder.js";
 import type { DropPosition } from "../../shared/groupOrder.js";
 import { isAllowedBookmarkUrl } from "../bookmark/url.js";
 
 type DragPayload =
-    | { kind: "tabs"; ids: number[] }
-    | { kind: "group"; id: number };
+  | { kind: "tabs"; ids: number[] }
+  | { kind: "group"; id: number };
 
 type DragEnabledCheck = () => boolean;
 
@@ -23,10 +23,11 @@ const AUTO_SCROLL_EDGE_PX = 72;
 const AUTO_SCROLL_MAX_STEP_PX = 18;
 const DROP_GAP_HIT_MARGIN_PX = 10;
 
-let activeDropIndicator:
-    | DropTarget
-    | null = null;
-let activeListPreview: { element: HTMLElement; wasHidden: HTMLElement["hidden"] } | null = null;
+let activeDropIndicator: DropTarget | null = null;
+let activeListPreview: {
+  element: HTMLElement;
+  wasHidden: HTMLElement["hidden"];
+} | null = null;
 let activeDragElement: HTMLElement | null = null;
 let activeDragPayload: DragPayload | null = null;
 let activeDragVersion = 0;
@@ -38,680 +39,772 @@ let activeAutoScrollFrame: number | null = null;
 let updateDropAtPoint: ((x: number, y: number) => void) | null = null;
 
 function notifyDragSettled() {
-    if (activeDragPayload || pendingDropActions > 0) return;
+  if (activeDragPayload || pendingDropActions > 0) return;
 
-    const pendingRenders = [...renderAfterDrag];
-    renderAfterDrag.clear();
-    for (const requestRender of pendingRenders) requestRender();
+  const pendingRenders = [...renderAfterDrag];
+  renderAfterDrag.clear();
+  for (const requestRender of pendingRenders) requestRender();
 }
 
 /** Preserve the native drag source until dragging and its drop action finish. */
 export function deferRenderUntilDragSettles(requestRender: RequestRender) {
-    if (!activeDragPayload && pendingDropActions === 0) return false;
+  if (!activeDragPayload && pendingDropActions === 0) return false;
 
-    renderAfterDrag.add(requestRender);
-    return true;
+  renderAfterDrag.add(requestRender);
+  return true;
 }
 
 function getScrollRoot() {
-    return document.getElementById("sidebar-content") ??
-        document.scrollingElement ?? document.documentElement;
+  return (
+    document.getElementById("sidebar-content") ??
+    document.scrollingElement ??
+    document.documentElement
+  );
 }
 
 function getAutoScrollStep(clientY: number) {
-    const contentBounds = document.getElementById("sidebar-content")
-        ?.getBoundingClientRect();
-    const top = contentBounds?.top ?? 0;
-    const bottom = contentBounds?.bottom ?? window.innerHeight;
-    const edge = Math.min(AUTO_SCROLL_EDGE_PX, (bottom - top) / 2);
-    if (edge <= 0 || clientY < top || clientY > bottom) return 0;
+  const contentBounds = document
+    .getElementById("sidebar-content")
+    ?.getBoundingClientRect();
+  const top = contentBounds?.top ?? 0;
+  const bottom = contentBounds?.bottom ?? window.innerHeight;
+  const edge = Math.min(AUTO_SCROLL_EDGE_PX, (bottom - top) / 2);
+  if (edge <= 0 || clientY < top || clientY > bottom) return 0;
 
-    if (clientY < top + edge) {
-        const ratio = Math.min(
-            1,
-            (top + edge - clientY) / edge,
-        );
-        return -Math.ceil(ratio * AUTO_SCROLL_MAX_STEP_PX);
-    }
+  if (clientY < top + edge) {
+    const ratio = Math.min(1, (top + edge - clientY) / edge);
+    return -Math.ceil(ratio * AUTO_SCROLL_MAX_STEP_PX);
+  }
 
-    const bottomEdge = bottom - edge;
-    if (clientY > bottomEdge) {
-        const ratio = Math.min(
-            1,
-            (clientY - bottomEdge) / edge,
-        );
-        return Math.ceil(ratio * AUTO_SCROLL_MAX_STEP_PX);
-    }
+  const bottomEdge = bottom - edge;
+  if (clientY > bottomEdge) {
+    const ratio = Math.min(1, (clientY - bottomEdge) / edge);
+    return Math.ceil(ratio * AUTO_SCROLL_MAX_STEP_PX);
+  }
 
-    return 0;
+  return 0;
 }
 
 function stopAutoScroll() {
-    if (activeAutoScrollFrame == null) return;
+  if (activeAutoScrollFrame == null) return;
 
-    cancelAnimationFrame(activeAutoScrollFrame);
-    activeAutoScrollFrame = null;
+  cancelAnimationFrame(activeAutoScrollFrame);
+  activeAutoScrollFrame = null;
 }
 
 function stepAutoScroll() {
-    if (activeDragPoint == null) {
-        activeAutoScrollFrame = null;
-        return;
-    }
+  if (activeDragPoint == null) {
+    activeAutoScrollFrame = null;
+    return;
+  }
 
-    const scrollRoot = getScrollRoot();
-    const scrollStep = getAutoScrollStep(activeDragPoint.y);
-    const maxScrollTop = Math.max(
-        0,
-        scrollRoot.scrollHeight - scrollRoot.clientHeight,
-    );
-    const nextScrollTop = Math.min(
-        maxScrollTop,
-        Math.max(0, scrollRoot.scrollTop + scrollStep),
-    );
+  const scrollRoot = getScrollRoot();
+  const scrollStep = getAutoScrollStep(activeDragPoint.y);
+  const maxScrollTop = Math.max(
+    0,
+    scrollRoot.scrollHeight - scrollRoot.clientHeight,
+  );
+  const nextScrollTop = Math.min(
+    maxScrollTop,
+    Math.max(0, scrollRoot.scrollTop + scrollStep),
+  );
 
-    if (scrollStep === 0 || nextScrollTop === scrollRoot.scrollTop) {
-        activeAutoScrollFrame = null;
-        return;
-    }
+  if (scrollStep === 0 || nextScrollTop === scrollRoot.scrollTop) {
+    activeAutoScrollFrame = null;
+    return;
+  }
 
-    scrollRoot.scrollTop = nextScrollTop;
-    // The pointer can remain stationary while the rows scroll underneath it.
-    // Native dragover is not guaranteed to fire on every scroll frame.
-    updateDropAtPoint?.(activeDragPoint.x, activeDragPoint.y);
-    activeAutoScrollFrame = requestAnimationFrame(stepAutoScroll);
+  scrollRoot.scrollTop = nextScrollTop;
+  // The pointer can remain stationary while the rows scroll underneath it.
+  // Native dragover is not guaranteed to fire on every scroll frame.
+  updateDropAtPoint?.(activeDragPoint.x, activeDragPoint.y);
+  activeAutoScrollFrame = requestAnimationFrame(stepAutoScroll);
 }
 
 function updateAutoScroll(event: DragEvent) {
-    activeDragPoint = { x: event.clientX, y: event.clientY };
-    if (getAutoScrollStep(event.clientY) === 0) {
-        stopAutoScroll();
-        return;
-    }
+  activeDragPoint = { x: event.clientX, y: event.clientY };
+  if (getAutoScrollStep(event.clientY) === 0) {
+    stopAutoScroll();
+    return;
+  }
 
-    if (activeAutoScrollFrame == null) {
-        activeAutoScrollFrame = requestAnimationFrame(stepAutoScroll);
-    }
+  if (activeAutoScrollFrame == null) {
+    activeAutoScrollFrame = requestAnimationFrame(stepAutoScroll);
+  }
 }
 
 function clearDropIndicator() {
-    if (!activeDropIndicator) return;
-    activeDropIndicator.element.classList.remove(activeDropIndicator.className);
-    activeDropIndicator = null;
-    if (activeListPreview) {
-        activeListPreview.element.classList.remove("drop-tab-preview");
-        activeListPreview.element.style.removeProperty("--drop-preview-count");
-        activeListPreview.element.hidden = activeListPreview.wasHidden;
-        activeListPreview = null;
-    }
+  if (!activeDropIndicator) return;
+  activeDropIndicator.element.classList.remove(activeDropIndicator.className);
+  activeDropIndicator = null;
+  if (activeListPreview) {
+    activeListPreview.element.classList.remove("drop-tab-preview");
+    activeListPreview.element.style.removeProperty("--drop-preview-count");
+    activeListPreview.element.hidden = activeListPreview.wasHidden;
+    activeListPreview = null;
+  }
 }
 
 function setDropIndicator(target: DropTarget) {
-    if (
-        activeDropIndicator?.element === target.element &&
-        activeDropIndicator.className === target.className
-    ) {
-        return;
-    }
+  if (
+    activeDropIndicator?.element === target.element &&
+    activeDropIndicator.className === target.className
+  ) {
+    return;
+  }
 
-    clearDropIndicator();
-    target.element.classList.add(target.className);
-    if (target.preview) {
-        const { element, count } = target.preview;
-        activeListPreview = { element, wasHidden: element.hidden };
-        element.hidden = false;
-        element.style.setProperty("--drop-preview-count", String(count));
-        element.classList.add("drop-tab-preview");
-    }
-    activeDropIndicator = target;
+  clearDropIndicator();
+  target.element.classList.add(target.className);
+  if (target.preview) {
+    const { element, count } = target.preview;
+    activeListPreview = { element, wasHidden: element.hidden };
+    element.hidden = false;
+    element.style.setProperty("--drop-preview-count", String(count));
+    element.classList.add("drop-tab-preview");
+  }
+  activeDropIndicator = target;
 }
 
 function clearDragElement() {
-    if (!activeDragElement) return;
-    activeDragElement.classList.remove("is-dragging");
-    activeDragElement = null;
+  if (!activeDragElement) return;
+  activeDragElement.classList.remove("is-dragging");
+  activeDragElement = null;
 }
 
 function setDragElement(element: HTMLElement) {
-    clearDragElement();
-    element.classList.add("is-dragging");
-    activeDragElement = element;
+  clearDragElement();
+  element.classList.add("is-dragging");
+  activeDragElement = element;
 }
 
 function clearDragState() {
-    stopAutoScroll();
-    activeDragPoint = null;
-    clearDropIndicator();
-    clearDragElement();
-    activeDragPayload = null;
-    notifyDragSettled();
+  stopAutoScroll();
+  activeDragPoint = null;
+  clearDropIndicator();
+  clearDragElement();
+  activeDragPayload = null;
+  notifyDragSettled();
 }
 
 function serialisePayload(payload: DragPayload) {
-    return JSON.stringify(payload);
+  return JSON.stringify(payload);
 }
 
-function writePayload(event: DragEvent, payload: DragPayload, row: HTMLElement) {
-    const dataTransfer = event.dataTransfer;
-    activeDragVersion += 1;
-    activeDragPayload = payload;
-    if (!dataTransfer) return;
+function writePayload(
+  event: DragEvent,
+  payload: DragPayload,
+  row: HTMLElement,
+) {
+  const dataTransfer = event.dataTransfer;
+  activeDragVersion += 1;
+  activeDragPayload = payload;
+  if (!dataTransfer) return;
 
-    const serialisedPayload = serialisePayload(payload);
-    dataTransfer.effectAllowed = payload.kind === "tabs" ? "copyMove" : "move";
-    dataTransfer.setData(DRAG_DATA_MIME, serialisedPayload);
-    const bounds = row.getBoundingClientRect();
-    dataTransfer.setDragImage(
-        row,
-        Math.max(0, Math.min(event.clientX - bounds.left, bounds.width)),
-        Math.max(0, Math.min(event.clientY - bounds.top, bounds.height)),
-    );
+  const serialisedPayload = serialisePayload(payload);
+  dataTransfer.effectAllowed = payload.kind === "tabs" ? "copyMove" : "move";
+  dataTransfer.setData(DRAG_DATA_MIME, serialisedPayload);
+  const bounds = row.getBoundingClientRect();
+  dataTransfer.setDragImage(
+    row,
+    Math.max(0, Math.min(event.clientX - bounds.left, bounds.width)),
+    Math.max(0, Math.min(event.clientY - bounds.top, bounds.height)),
+  );
 }
 
 function getDropPosition(event: DragEvent, element: HTMLElement): DropPosition {
-    const bounds = element.getBoundingClientRect();
-    return event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+  const bounds = element.getBoundingClientRect();
+  return event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
 }
 
 async function moveTabsRelativeToTab(
-    windowId: number,
-    sourceTabIds: number[],
-    targetTabId: number,
-    position: DropPosition,
+  windowId: number,
+  sourceTabIds: number[],
+  targetTabId: number,
+  position: DropPosition,
 ) {
-    const sourceIdSet = new Set(sourceTabIds);
-    if (sourceIdSet.has(targetTabId)) return;
+  const sourceIdSet = new Set(sourceTabIds);
+  if (sourceIdSet.has(targetTabId)) return;
 
-    const { tabs } = await loadLogicalTabGroupData(windowId);
-    const targetTab = tabs.find((tab) => tab.id === targetTabId);
-    if (targetTab?.id == null) return;
+  const { tabs } = await loadLogicalTabGroupData(windowId);
+  const targetTab = tabs.find((tab) => tab.id === targetTabId);
+  if (targetTab?.id == null) return;
 
-    const orderedSourceTabIds = tabs
-        .map((tab) => tab.id)
-        .filter(
-            (tabId): tabId is number =>
-                tabId != null && sourceIdSet.has(tabId),
-        );
-    if (orderedSourceTabIds.length === 0) return;
-    const targetGroupId = getTabGroupId(targetTab);
-    await changeTabsGroup(tabs, orderedSourceTabIds, targetGroupId);
-    await moveStoredTabsRelative(windowId, orderedSourceTabIds, targetTabId, position);
+  const orderedSourceTabIds = tabs
+    .map((tab) => tab.id)
+    .filter(
+      (tabId): tabId is number => tabId != null && sourceIdSet.has(tabId),
+    );
+  if (orderedSourceTabIds.length === 0) return;
+  const targetGroupId = getTabGroupId(targetTab);
+  await changeTabsGroup(tabs, orderedSourceTabIds, targetGroupId);
+  await moveStoredTabsRelative(
+    windowId,
+    orderedSourceTabIds,
+    targetTabId,
+    position,
+  );
 }
 
 async function changeTabsGroup(
-    tabs: chrome.tabs.Tab[],
-    sourceTabIds: number[],
-    targetGroupId: number,
+  tabs: chrome.tabs.Tab[],
+  sourceTabIds: number[],
+  targetGroupId: number,
 ) {
-    const sourceIds = new Set(sourceTabIds);
-    const changing = tabs
-        .filter((tab) => tab.id != null && sourceIds.has(tab.id) &&
-            getTabGroupId(tab) !== targetGroupId)
-        .map((tab) => tab.id as number);
-    if (changing.length === 0) return;
-    const tabIds = changing as [number, ...number[]];
-    if (targetGroupId === NO_GROUP_ID) {
-        await chrome.tabs.ungroup(tabIds);
-    } else {
-        await chrome.tabs.group({ groupId: targetGroupId, tabIds });
-    }
+  const sourceIds = new Set(sourceTabIds);
+  const changing = tabs
+    .filter(
+      (tab) =>
+        tab.id != null &&
+        sourceIds.has(tab.id) &&
+        getTabGroupId(tab) !== targetGroupId,
+    )
+    .map((tab) => tab.id as number);
+  if (changing.length === 0) return;
+  const tabIds = changing as [number, ...number[]];
+  if (targetGroupId === NO_GROUP_ID) {
+    await chrome.tabs.ungroup(tabIds);
+  } else {
+    await chrome.tabs.group({ groupId: targetGroupId, tabIds });
+  }
 }
 
 async function moveTabsToGroup(
-    windowId: number,
-    sourceTabIds: number[],
-    targetGroupId: number,
+  windowId: number,
+  sourceTabIds: number[],
+  targetGroupId: number,
 ) {
-    const sourceIdSet = new Set(sourceTabIds);
-    const { tabs, groups } = await loadLogicalTabGroupData(windowId);
-    if (!groups.some((group) => group.id === targetGroupId)) return;
+  const sourceIdSet = new Set(sourceTabIds);
+  const { tabs, groups } = await loadLogicalTabGroupData(windowId);
+  if (!groups.some((group) => group.id === targetGroupId)) return;
 
-    const orderedSourceTabIds = tabs
-        .map((tab) => tab.id)
-        .filter(
-            (tabId): tabId is number =>
-                tabId != null && sourceIdSet.has(tabId),
-        );
-    if (orderedSourceTabIds.length === 0) return;
-    const { tabsByGroup } = buildTabsByLogicalGroup(tabs);
-    const targetGroupTabs = (tabsByGroup.get(targetGroupId) ?? []).filter(
-        (tab) => tab.id == null || !sourceIdSet.has(tab.id),
+  const orderedSourceTabIds = tabs
+    .map((tab) => tab.id)
+    .filter(
+      (tabId): tabId is number => tabId != null && sourceIdSet.has(tabId),
     );
+  if (orderedSourceTabIds.length === 0) return;
+  const { tabsByGroup } = buildTabsByLogicalGroup(tabs);
+  const targetGroupTabs = (tabsByGroup.get(targetGroupId) ?? []).filter(
+    (tab) => tab.id == null || !sourceIdSet.has(tab.id),
+  );
 
-    await changeTabsGroup(tabs, orderedSourceTabIds, targetGroupId);
+  await changeTabsGroup(tabs, orderedSourceTabIds, targetGroupId);
 
-    const lastTargetTabId = targetGroupTabs[targetGroupTabs.length - 1]?.id;
-    if (lastTargetTabId == null) {
-        await moveStoredTabsToEnd(windowId, orderedSourceTabIds);
-    } else {
-        await moveStoredTabsRelative(windowId, orderedSourceTabIds, lastTargetTabId, "after");
-    }
+  const lastTargetTabId = targetGroupTabs[targetGroupTabs.length - 1]?.id;
+  if (lastTargetTabId == null) {
+    await moveStoredTabsToEnd(windowId, orderedSourceTabIds);
+  } else {
+    await moveStoredTabsRelative(
+      windowId,
+      orderedSourceTabIds,
+      lastTargetTabId,
+      "after",
+    );
+  }
 }
 
-async function moveTabsToUngroupedEnd(windowId: number, sourceTabIds: number[]) {
-    const sourceIdSet = new Set(sourceTabIds);
-    const { tabs } = await loadLogicalTabGroupData(windowId);
-    const orderedSourceTabIds = tabs
-        .map((tab) => tab.id)
-        .filter(
-            (tabId): tabId is number =>
-                tabId != null && sourceIdSet.has(tabId),
-        );
-    if (orderedSourceTabIds.length === 0) return;
-    const { ungroupedTabs } = buildTabsByLogicalGroup(tabs);
-    const targetTabs = ungroupedTabs.filter(
-        (tab) => tab.id == null || !sourceIdSet.has(tab.id),
+async function moveTabsToUngroupedEnd(
+  windowId: number,
+  sourceTabIds: number[],
+) {
+  const sourceIdSet = new Set(sourceTabIds);
+  const { tabs } = await loadLogicalTabGroupData(windowId);
+  const orderedSourceTabIds = tabs
+    .map((tab) => tab.id)
+    .filter(
+      (tabId): tabId is number => tabId != null && sourceIdSet.has(tabId),
     );
+  if (orderedSourceTabIds.length === 0) return;
+  const { ungroupedTabs } = buildTabsByLogicalGroup(tabs);
+  const targetTabs = ungroupedTabs.filter(
+    (tab) => tab.id == null || !sourceIdSet.has(tab.id),
+  );
 
-    await changeTabsGroup(tabs, orderedSourceTabIds, NO_GROUP_ID);
+  await changeTabsGroup(tabs, orderedSourceTabIds, NO_GROUP_ID);
 
-    const lastTargetTabId = targetTabs[targetTabs.length - 1]?.id;
-    if (lastTargetTabId == null) {
-        await moveStoredTabsToEnd(windowId, orderedSourceTabIds);
-    } else {
-        await moveStoredTabsRelative(windowId, orderedSourceTabIds, lastTargetTabId, "after");
-    }
+  const lastTargetTabId = targetTabs[targetTabs.length - 1]?.id;
+  if (lastTargetTabId == null) {
+    await moveStoredTabsToEnd(windowId, orderedSourceTabIds);
+  } else {
+    await moveStoredTabsRelative(
+      windowId,
+      orderedSourceTabIds,
+      lastTargetTabId,
+      "after",
+    );
+  }
 }
 
 async function moveGroupRelativeToGroup(
-    windowId: number,
-    sourceGroupId: number,
-    targetGroupId: number,
-    position: DropPosition,
+  windowId: number,
+  sourceGroupId: number,
+  targetGroupId: number,
+  position: DropPosition,
 ) {
-    await moveStoredGroupRelative(
-        windowId,
-        sourceGroupId,
-        targetGroupId,
-        position,
-    );
+  await moveStoredGroupRelative(
+    windowId,
+    sourceGroupId,
+    targetGroupId,
+    position,
+  );
 }
 
-async function moveGroupToGroupListEnd(windowId: number, sourceGroupId: number) {
-    await moveStoredGroupToEnd(windowId, sourceGroupId);
+async function moveGroupToGroupListEnd(
+  windowId: number,
+  sourceGroupId: number,
+) {
+  await moveStoredGroupToEnd(windowId, sourceGroupId);
 }
 
 async function getBookmarksBarId() {
-    const tree = await chrome.bookmarks.getTree();
-    const folders = tree.flatMap((node) => node.children ?? []);
-    const bar = folders.find((node) => !node.url &&
-        (node.folderType === "bookmarks-bar" || node.id === "1"));
-    if (!bar) throw new Error("Bookmarks Bar folder not found");
-    return bar.id;
+  const tree = await chrome.bookmarks.getTree();
+  const folders = tree.flatMap((node) => node.children ?? []);
+  const bar = folders.find(
+    (node) =>
+      !node.url && (node.folderType === "bookmarks-bar" || node.id === "1"),
+  );
+  if (!bar) throw new Error("Bookmarks Bar folder not found");
+  return bar.id;
 }
 
-async function bookmarkTabs(tabIds: number[], parentId?: string, index?: number) {
-    const destinationId = parentId ?? await getBookmarksBarId();
-    let nextIndex = index;
-    for (const tabId of tabIds) {
-        const tab = await chrome.tabs.get(tabId);
-        if (!tab.url || !isAllowedBookmarkUrl(tab.url)) continue;
-        await chrome.bookmarks.create({
-            parentId: destinationId,
-            ...(nextIndex == null ? {} : { index: nextIndex++ }),
-            title: tab.title?.trim() || tab.url,
-            url: tab.url,
-        });
-    }
+async function bookmarkTabs(
+  tabIds: number[],
+  parentId?: string,
+  index?: number,
+) {
+  const destinationId = parentId ?? (await getBookmarksBarId());
+  let nextIndex = index;
+  for (const tabId of tabIds) {
+    const tab = await chrome.tabs.get(tabId);
+    if (!tab.url || !isAllowedBookmarkUrl(tab.url)) continue;
+    await chrome.bookmarks.create({
+      parentId: destinationId,
+      ...(nextIndex == null ? {} : { index: nextIndex++ }),
+      title: tab.title?.trim() || tab.url,
+      url: tab.url,
+    });
+  }
 }
 
 async function bookmarkTabsRelativeToBookmark(
-    tabIds: number[], bookmarkId: string, position: DropPosition,
+  tabIds: number[],
+  bookmarkId: string,
+  position: DropPosition,
 ) {
-    const [bookmark] = await chrome.bookmarks.get(bookmarkId);
-    if (!bookmark?.parentId || bookmark.index == null) return;
-    await bookmarkTabs(
-        tabIds,
-        bookmark.parentId,
-        bookmark.index + (position === "after" ? 1 : 0),
-    );
+  const [bookmark] = await chrome.bookmarks.get(bookmarkId);
+  if (!bookmark?.parentId || bookmark.index == null) return;
+  await bookmarkTabs(
+    tabIds,
+    bookmark.parentId,
+    bookmark.index + (position === "after" ? 1 : 0),
+  );
 }
 
 async function runDropAction(
-    action: () => Promise<void>,
-    requestRender: RequestRender,
+  action: () => Promise<void>,
+  requestRender: RequestRender,
 ) {
-    const dragVersion = activeDragVersion;
-    pendingDropActions += 1;
-    try {
-        await action();
-    } catch (error) {
-        console.error("Drag and drop action failed:", error);
-    } finally {
-        renderAfterDrag.add(requestRender);
-        pendingDropActions -= 1;
-        if (dragVersion === activeDragVersion) {
-            clearDragState();
-        } else {
-            notifyDragSettled();
-        }
+  const dragVersion = activeDragVersion;
+  pendingDropActions += 1;
+  try {
+    await action();
+  } catch (error) {
+    console.error("Drag and drop action failed:", error);
+  } finally {
+    renderAfterDrag.add(requestRender);
+    pendingDropActions -= 1;
+    if (dragVersion === activeDragVersion) {
+      clearDragState();
+    } else {
+      notifyDragSettled();
     }
+  }
 }
 
 type DropTarget = {
-    element: HTMLElement;
-    className: string;
-    action: () => Promise<void>;
-    effect?: "copy" | "move";
-    requestRender?: RequestRender;
-    preview?: { element: HTMLElement; count: number };
+  element: HTMLElement;
+  className: string;
+  action: () => Promise<void>;
+  effect?: "copy" | "move";
+  requestRender?: RequestRender;
+  preview?: { element: HTMLElement; count: number };
 };
 
 function tabInsertionTarget(
-    tabRow: HTMLElement,
-    position: DropPosition,
-    payload: DragPayload,
-    windowId: number,
+  tabRow: HTMLElement,
+  position: DropPosition,
+  payload: DragPayload,
+  windowId: number,
 ): DropTarget | null {
-    if (payload.kind !== "tabs") return null;
-    const tabId = Number(tabRow.closest<HTMLElement>(".tab-item")?.dataset.tabId);
-    if (!Number.isInteger(tabId) || payload.ids.includes(tabId)) return null;
-    return {
-        element: tabRow,
-        className: position === "before" ? "drop-before" : "drop-after",
-        action: () => moveTabsRelativeToTab(windowId, payload.ids, tabId, position),
-    };
+  if (payload.kind !== "tabs") return null;
+  const tabId = Number(tabRow.closest<HTMLElement>(".tab-item")?.dataset.tabId);
+  if (!Number.isInteger(tabId) || payload.ids.includes(tabId)) return null;
+  return {
+    element: tabRow,
+    className: position === "before" ? "drop-before" : "drop-after",
+    action: () => moveTabsRelativeToTab(windowId, payload.ids, tabId, position),
+  };
 }
 
 function getDropTarget(
-    target: EventTarget | null,
-    clientY: number,
-    payload: DragPayload,
-    tabsList: HTMLElement,
-    groupsList: HTMLElement,
-    bookmarksList: HTMLElement,
-    windowId: number,
-    requestBookmarkRender: RequestRender,
+  target: EventTarget | null,
+  clientY: number,
+  payload: DragPayload,
+  tabsList: HTMLElement,
+  groupsList: HTMLElement,
+  bookmarksList: HTMLElement,
+  windowId: number,
+  requestBookmarkRender: RequestRender,
 ): DropTarget | null {
-    if (!(target instanceof Element)) return null;
+  if (!(target instanceof Element)) return null;
 
-    if (bookmarksList.contains(target) && payload.kind === "tabs") {
-        const item = target.closest<HTMLElement>(".tab-item");
-        const bookmarkItem = item && bookmarksList.contains(item) ? item : null;
-        const folderId = bookmarkItem?.dataset.bookmarkFolderId;
-        const bookmarkId = bookmarkItem?.dataset.bookmarkId;
-        if (folderId) {
-            const row = bookmarkItem?.querySelector<HTMLElement>(".tree-row");
-            const nestedList = bookmarkItem?.querySelector<HTMLElement>(".bookmark-nested-list");
-            // The nested list is a destination of its own: its gaps can insert
-            // before a child. Only the folder header offers append-to-folder.
-            if (row && !nestedList?.contains(target)) return {
-                element: row,
-                className: "drop-inside",
-                action: () => bookmarkTabs(payload.ids, folderId),
-                effect: "copy",
-                requestRender: requestBookmarkRender,
-                ...(nestedList
-                    ? { preview: { element: nestedList, count: payload.ids.length } }
-                    : {}),
-            };
-        }
-        if (bookmarkId && bookmarkItem) {
-            const row = bookmarkItem.querySelector<HTMLElement>(".tab-row");
-            if (row) {
-                const position = getDropPosition({ clientY } as DragEvent, row);
-                return {
-                    element: row,
-                    className: position === "before" ? "drop-before" : "drop-after",
-                    action: () => bookmarkTabsRelativeToBookmark(payload.ids, bookmarkId, position),
-                    effect: "copy",
-                    requestRender: requestBookmarkRender,
-                };
-            }
-        }
-        const nestedList = target.closest<HTMLElement>(".bookmark-nested-list");
-        const list = nestedList && bookmarksList.contains(nestedList)
-            ? nestedList : bookmarksList;
-        const parentId = list === bookmarksList
-            ? undefined : list.closest<HTMLElement>(".tab-item")?.dataset.bookmarkFolderId;
-        for (const child of Array.from(list.children)) {
-            if (!(child instanceof HTMLElement) ||
-                !child.classList.contains("tab-item") ||
-                clientY >= child.getBoundingClientRect().top) continue;
-            const nextBookmarkId = child.dataset.bookmarkId;
-            const nextRow = child.querySelector<HTMLElement>(".tab-row");
-            if (nextBookmarkId && nextRow) return {
-                element: nextRow,
-                className: "drop-before",
-                action: () => bookmarkTabsRelativeToBookmark(
-                    payload.ids, nextBookmarkId, "before"),
-                effect: "copy",
-                requestRender: requestBookmarkRender,
-            };
-            break;
-        }
+  if (bookmarksList.contains(target) && payload.kind === "tabs") {
+    const item = target.closest<HTMLElement>(".tab-item");
+    const bookmarkItem = item && bookmarksList.contains(item) ? item : null;
+    const folderId = bookmarkItem?.dataset.bookmarkFolderId;
+    const bookmarkId = bookmarkItem?.dataset.bookmarkId;
+    if (folderId) {
+      const row = bookmarkItem?.querySelector<HTMLElement>(".tree-row");
+      const nestedList = bookmarkItem?.querySelector<HTMLElement>(
+        ".bookmark-nested-list",
+      );
+      // The nested list is a destination of its own: its gaps can insert
+      // before a child. Only the folder header offers append-to-folder.
+      if (row && !nestedList?.contains(target))
         return {
-            element: list,
-            className: "drop-append",
-            action: () => bookmarkTabs(payload.ids, parentId),
-            effect: "copy",
-            requestRender: requestBookmarkRender,
+          element: row,
+          className: "drop-inside",
+          action: () => bookmarkTabs(payload.ids, folderId),
+          effect: "copy",
+          requestRender: requestBookmarkRender,
+          ...(nestedList
+            ? { preview: { element: nestedList, count: payload.ids.length } }
+            : {}),
         };
     }
-
-    const tabRow = target.closest<HTMLElement>(".tab-row");
-    if (payload.kind === "tabs" && tabRow &&
-        (tabsList.contains(tabRow) || groupsList.contains(tabRow))) {
-        const position = getDropPosition({ clientY } as DragEvent, tabRow);
-        return tabInsertionTarget(tabRow, position, payload, windowId);
-    }
-
-    // A pointer directly in the space between rows hits the list, not a row.
-    // Resolve it to the next visible tab so every inter-tab gap accepts a drop.
-    if (payload.kind === "tabs") {
-        const nestedList = target.closest<HTMLElement>(".group-tabs");
-        const list = nestedList && groupsList.contains(nestedList)
-            ? nestedList : tabsList.contains(target) ? tabsList : null;
-        if (list) {
-            for (const item of Array.from(list.children)) {
-                if (!(item instanceof HTMLElement) ||
-                    !item.classList.contains("tab-item")) continue;
-                const row = item.querySelector<HTMLElement>(".tab-row");
-                if (row && clientY < row.getBoundingClientRect().top) {
-                    const insertion = tabInsertionTarget(row, "before", payload, windowId);
-                    if (insertion) return insertion;
-                }
-            }
-        }
-    }
-
-    if (groupsList.contains(target)) {
-        const groupItem = target.closest<HTMLElement>(".group-item");
-        const groupId = Number(groupItem?.dataset.groupId);
-        const groupRow = groupItem?.querySelector<HTMLElement>(".tree-row");
-        if (groupItem && groupRow && Number.isInteger(groupId)) {
-            if (payload.kind === "tabs") {
-                const groupTabs = groupItem.querySelector<HTMLElement>(".group-tabs");
-                return {
-                    element: groupRow,
-                    className: "drop-inside",
-                    action: () => moveTabsToGroup(windowId, payload.ids, groupId),
-                    ...(groupTabs
-                        ? { preview: { element: groupTabs, count: payload.ids.length } }
-                        : {}),
-                };
-            }
-            if (payload.id !== groupId && groupRow.contains(target)) {
-                const position = getDropPosition({ clientY } as DragEvent, groupRow);
-                return {
-                    element: groupItem,
-                    className: position === "before" ? "drop-before" : "drop-after",
-                    action: () => moveGroupRelativeToGroup(windowId, payload.id, groupId, position),
-                };
-            }
-            return null;
-        }
-        if (payload.kind === "group") {
-            for (const item of Array.from(groupsList.children)) {
-                if (!(item instanceof HTMLElement) ||
-                    !item.classList.contains("group-item") ||
-                    clientY >= item.getBoundingClientRect().top) continue;
-                const targetId = Number(item.dataset.groupId);
-                if (!Number.isInteger(targetId) || targetId === payload.id) return null;
-                return {
-                    element: item,
-                    className: "drop-before",
-                    action: () => moveGroupRelativeToGroup(windowId, payload.id, targetId, "before"),
-                };
-            }
-            return {
-                element: groupsList,
-                className: "drop-append",
-                action: () => moveGroupToGroupListEnd(windowId, payload.id),
-            };
-        }
-    }
-
-    if (tabsList.contains(target) && payload.kind === "tabs") {
+    if (bookmarkId && bookmarkItem) {
+      const row = bookmarkItem.querySelector<HTMLElement>(".tab-row");
+      if (row) {
+        const position = getDropPosition({ clientY } as DragEvent, row);
         return {
-            element: tabsList,
-            className: "drop-append",
-            action: () => moveTabsToUngroupedEnd(windowId, payload.ids),
+          element: row,
+          className: position === "before" ? "drop-before" : "drop-after",
+          action: () =>
+            bookmarkTabsRelativeToBookmark(payload.ids, bookmarkId, position),
+          effect: "copy",
+          requestRender: requestBookmarkRender,
         };
+      }
     }
-    return null;
+    const nestedList = target.closest<HTMLElement>(".bookmark-nested-list");
+    const list =
+      nestedList && bookmarksList.contains(nestedList)
+        ? nestedList
+        : bookmarksList;
+    const parentId =
+      list === bookmarksList
+        ? undefined
+        : list.closest<HTMLElement>(".tab-item")?.dataset.bookmarkFolderId;
+    for (const child of Array.from(list.children)) {
+      if (
+        !(child instanceof HTMLElement) ||
+        !child.classList.contains("tab-item") ||
+        clientY >= child.getBoundingClientRect().top
+      )
+        continue;
+      const nextBookmarkId = child.dataset.bookmarkId;
+      const nextRow = child.querySelector<HTMLElement>(".tab-row");
+      if (nextBookmarkId && nextRow)
+        return {
+          element: nextRow,
+          className: "drop-before",
+          action: () =>
+            bookmarkTabsRelativeToBookmark(
+              payload.ids,
+              nextBookmarkId,
+              "before",
+            ),
+          effect: "copy",
+          requestRender: requestBookmarkRender,
+        };
+      break;
+    }
+    return {
+      element: list,
+      className: "drop-append",
+      action: () => bookmarkTabs(payload.ids, parentId),
+      effect: "copy",
+      requestRender: requestBookmarkRender,
+    };
+  }
+
+  const tabRow = target.closest<HTMLElement>(".tab-row");
+  if (
+    payload.kind === "tabs" &&
+    tabRow &&
+    (tabsList.contains(tabRow) || groupsList.contains(tabRow))
+  ) {
+    const position = getDropPosition({ clientY } as DragEvent, tabRow);
+    return tabInsertionTarget(tabRow, position, payload, windowId);
+  }
+
+  // A pointer directly in the space between rows hits the list, not a row.
+  // Resolve it to the next visible tab so every inter-tab gap accepts a drop.
+  if (payload.kind === "tabs") {
+    const nestedList = target.closest<HTMLElement>(".group-tabs");
+    const list =
+      nestedList && groupsList.contains(nestedList)
+        ? nestedList
+        : tabsList.contains(target)
+          ? tabsList
+          : null;
+    if (list) {
+      for (const item of Array.from(list.children)) {
+        if (
+          !(item instanceof HTMLElement) ||
+          !item.classList.contains("tab-item")
+        )
+          continue;
+        const row = item.querySelector<HTMLElement>(".tab-row");
+        if (row && clientY < row.getBoundingClientRect().top) {
+          const insertion = tabInsertionTarget(
+            row,
+            "before",
+            payload,
+            windowId,
+          );
+          if (insertion) return insertion;
+        }
+      }
+    }
+  }
+
+  if (groupsList.contains(target)) {
+    const groupItem = target.closest<HTMLElement>(".group-item");
+    const groupId = Number(groupItem?.dataset.groupId);
+    const groupRow = groupItem?.querySelector<HTMLElement>(".tree-row");
+    if (groupItem && groupRow && Number.isInteger(groupId)) {
+      if (payload.kind === "tabs") {
+        const groupTabs = groupItem.querySelector<HTMLElement>(".group-tabs");
+        return {
+          element: groupRow,
+          className: "drop-inside",
+          action: () => moveTabsToGroup(windowId, payload.ids, groupId),
+          ...(groupTabs
+            ? { preview: { element: groupTabs, count: payload.ids.length } }
+            : {}),
+        };
+      }
+      if (payload.id !== groupId && groupRow.contains(target)) {
+        const position = getDropPosition({ clientY } as DragEvent, groupRow);
+        return {
+          element: groupItem,
+          className: position === "before" ? "drop-before" : "drop-after",
+          action: () =>
+            moveGroupRelativeToGroup(windowId, payload.id, groupId, position),
+        };
+      }
+      return null;
+    }
+    if (payload.kind === "group") {
+      for (const item of Array.from(groupsList.children)) {
+        if (
+          !(item instanceof HTMLElement) ||
+          !item.classList.contains("group-item") ||
+          clientY >= item.getBoundingClientRect().top
+        )
+          continue;
+        const targetId = Number(item.dataset.groupId);
+        if (!Number.isInteger(targetId) || targetId === payload.id) return null;
+        return {
+          element: item,
+          className: "drop-before",
+          action: () =>
+            moveGroupRelativeToGroup(windowId, payload.id, targetId, "before"),
+        };
+      }
+      return {
+        element: groupsList,
+        className: "drop-append",
+        action: () => moveGroupToGroupListEnd(windowId, payload.id),
+      };
+    }
+  }
+
+  if (tabsList.contains(target) && payload.kind === "tabs") {
+    return {
+      element: tabsList,
+      className: "drop-append",
+      action: () => moveTabsToUngroupedEnd(windowId, payload.ids),
+    };
+  }
+  return null;
 }
 
 export function setupSidebarDropZones(
-    tabsList: HTMLElement,
-    groupsList: HTMLElement,
-    bookmarksList: HTMLElement,
-    windowId: number,
-    isDragEnabled: DragEnabledCheck,
-    requestRender: RequestRender,
-    requestBookmarkRender: RequestRender,
+  tabsList: HTMLElement,
+  groupsList: HTMLElement,
+  bookmarksList: HTMLElement,
+  windowId: number,
+  isDragEnabled: DragEnabledCheck,
+  requestRender: RequestRender,
+  requestBookmarkRender: RequestRender,
 ) {
-    if (!documentListenersInstalled) {
-        documentListenersInstalled = true;
-        const hitTest = (x: number, y: number) => document.elementFromPoint(x, y);
-        const resolveAt = (target: EventTarget | null, y: number) => {
-            if (!activeDragPayload || !isDragEnabled()) return null;
-            const bookmarkGap = target instanceof Element &&
-                activeDropIndicator != null &&
-                bookmarksList.contains(target) &&
-                bookmarksList.contains(activeDropIndicator.element);
-            // The open visual gap belongs to its current insertion target even
-            // when hit testing lands on the list background between rows.
-            if (target instanceof Element &&
-                activeDropIndicator &&
-                (tabsList.contains(target) || groupsList.contains(target) ||
-                    bookmarksList.contains(target)) &&
-                ((tabsList.contains(target) && tabsList.contains(activeDropIndicator.element)) ||
-                    (groupsList.contains(target) && groupsList.contains(activeDropIndicator.element)) ||
-                    (bookmarksList.contains(target) &&
-                        bookmarksList.contains(activeDropIndicator.element))) &&
-                (bookmarkGap || (!target.closest(".tab-row") &&
-                    !target.closest(".tree-row"))) &&
-                (activeDragPayload.kind === "tabs" || !target.closest(".group-item")) &&
-                (activeDropIndicator.className === "drop-before" ||
-                    activeDropIndicator.className === "drop-after") &&
-                (activeDropIndicator.element.classList.contains("tab-row") ||
-                    activeDropIndicator.element.classList.contains("group-item"))) {
-                const bounds = activeDropIndicator.element.getBoundingClientRect();
-                const boundary = activeDropIndicator.className === "drop-before"
-                    ? bounds.top : bounds.bottom;
-                const inBookmarkSlot = bookmarkGap &&
-                    (activeDropIndicator.className === "drop-before"
-                        ? y >= boundary - bounds.height && y < boundary
-                        : y > boundary && y <= boundary + bounds.height);
-                if (inBookmarkSlot || (!bookmarkGap &&
-                    Math.abs(y - boundary) <= DROP_GAP_HIT_MARGIN_PX)) {
-                    return activeDropIndicator;
-                }
-            }
-            return getDropTarget(target, y, activeDragPayload, tabsList,
-                groupsList, bookmarksList, windowId, requestBookmarkRender);
-        };
-        updateDropAtPoint = (x, y) => {
-            const dropTarget = resolveAt(hitTest(x, y), y);
-            if (dropTarget) {
-                setDropIndicator(dropTarget);
-            } else {
-                clearDropIndicator();
-            }
-        };
-        document.addEventListener("dragover", (event) => {
-            if (!activeDragPayload) return;
-            const dropTarget = resolveAt(event.target, event.clientY);
-            if (dropTarget) {
-                event.preventDefault();
-                if (event.dataTransfer) event.dataTransfer.dropEffect = dropTarget.effect ?? "move";
-                setDropIndicator(dropTarget);
-            } else {
-                clearDropIndicator();
-            }
-            updateAutoScroll(event);
-        });
-        document.addEventListener("drop", (event) => {
-            const dropTarget = resolveAt(
-                hitTest(event.clientX, event.clientY) ?? event.target,
-                event.clientY,
-            );
-            if (!dropTarget) {
-                clearDragState();
-                return;
-            }
-            event.preventDefault();
-            void runDropAction(dropTarget.action, dropTarget.requestRender ?? requestRender);
-        });
-        document.addEventListener("dragend", clearDragState);
-    }
+  if (!documentListenersInstalled) {
+    documentListenersInstalled = true;
+    const hitTest = (x: number, y: number) => document.elementFromPoint(x, y);
+    const resolveAt = (target: EventTarget | null, y: number) => {
+      if (!activeDragPayload || !isDragEnabled()) return null;
+      const bookmarkGap =
+        target instanceof Element &&
+        activeDropIndicator != null &&
+        bookmarksList.contains(target) &&
+        bookmarksList.contains(activeDropIndicator.element);
+      // The open visual gap belongs to its current insertion target even
+      // when hit testing lands on the list background between rows.
+      if (
+        target instanceof Element &&
+        activeDropIndicator &&
+        (tabsList.contains(target) ||
+          groupsList.contains(target) ||
+          bookmarksList.contains(target)) &&
+        ((tabsList.contains(target) &&
+          tabsList.contains(activeDropIndicator.element)) ||
+          (groupsList.contains(target) &&
+            groupsList.contains(activeDropIndicator.element)) ||
+          (bookmarksList.contains(target) &&
+            bookmarksList.contains(activeDropIndicator.element))) &&
+        (bookmarkGap ||
+          (!target.closest(".tab-row") && !target.closest(".tree-row"))) &&
+        (activeDragPayload.kind === "tabs" || !target.closest(".group-item")) &&
+        (activeDropIndicator.className === "drop-before" ||
+          activeDropIndicator.className === "drop-after") &&
+        (activeDropIndicator.element.classList.contains("tab-row") ||
+          activeDropIndicator.element.classList.contains("group-item"))
+      ) {
+        const bounds = activeDropIndicator.element.getBoundingClientRect();
+        const boundary =
+          activeDropIndicator.className === "drop-before"
+            ? bounds.top
+            : bounds.bottom;
+        const inBookmarkSlot =
+          bookmarkGap &&
+          (activeDropIndicator.className === "drop-before"
+            ? y >= boundary - bounds.height && y < boundary
+            : y > boundary && y <= boundary + bounds.height);
+        if (
+          inBookmarkSlot ||
+          (!bookmarkGap && Math.abs(y - boundary) <= DROP_GAP_HIT_MARGIN_PX)
+        ) {
+          return activeDropIndicator;
+        }
+      }
+      return getDropTarget(
+        target,
+        y,
+        activeDragPayload,
+        tabsList,
+        groupsList,
+        bookmarksList,
+        windowId,
+        requestBookmarkRender,
+      );
+    };
+    updateDropAtPoint = (x, y) => {
+      const dropTarget = resolveAt(hitTest(x, y), y);
+      if (dropTarget) {
+        setDropIndicator(dropTarget);
+      } else {
+        clearDropIndicator();
+      }
+    };
+    document.addEventListener("dragover", (event) => {
+      if (!activeDragPayload) return;
+      const dropTarget = resolveAt(event.target, event.clientY);
+      if (dropTarget) {
+        event.preventDefault();
+        if (event.dataTransfer)
+          event.dataTransfer.dropEffect = dropTarget.effect ?? "move";
+        setDropIndicator(dropTarget);
+      } else {
+        clearDropIndicator();
+      }
+      updateAutoScroll(event);
+    });
+    document.addEventListener("drop", (event) => {
+      const dropTarget = resolveAt(
+        hitTest(event.clientX, event.clientY) ?? event.target,
+        event.clientY,
+      );
+      if (!dropTarget) {
+        clearDragState();
+        return;
+      }
+      event.preventDefault();
+      void runDropAction(
+        dropTarget.action,
+        dropTarget.requestRender ?? requestRender,
+      );
+    });
+    document.addEventListener("dragend", clearDragState);
+  }
 }
 
 export function makeTabDraggable(
-    handle: HTMLElement,
-    row: HTMLElement,
-    windowId: number,
-    tabId: number,
-    isDragEnabled: DragEnabledCheck,
-    requestRender: RequestRender,
-    getDragTabIds?: (tabId: number) => number[],
+  handle: HTMLElement,
+  row: HTMLElement,
+  windowId: number,
+  tabId: number,
+  isDragEnabled: DragEnabledCheck,
+  requestRender: RequestRender,
+  getDragTabIds?: (tabId: number) => number[],
 ) {
-    handle.draggable = true;
-    handle.classList.add("is-draggable");
+  handle.draggable = true;
+  handle.classList.add("is-draggable");
 
-    handle.addEventListener("dragstart", (event) => {
-        if (!isDragEnabled()) {
-            event.preventDefault();
-            return;
-        }
+  handle.addEventListener("dragstart", (event) => {
+    if (!isDragEnabled()) {
+      event.preventDefault();
+      return;
+    }
 
-        writePayload(event, {
-            kind: "tabs",
-            ids: getDragTabIds?.(tabId) ?? [tabId],
-        }, row);
-        setDragElement(row);
-    });
+    writePayload(
+      event,
+      {
+        kind: "tabs",
+        ids: getDragTabIds?.(tabId) ?? [tabId],
+      },
+      row,
+    );
+    setDragElement(row);
+  });
 
-    handle.addEventListener("dragend", () => {
-        clearDragState();
-    });
-
+  handle.addEventListener("dragend", () => {
+    clearDragState();
+  });
 }
 
 export function makeGroupDraggable(
-    handle: HTMLElement,
-    row: HTMLElement,
-    windowId: number,
-    groupId: number,
-    isDragEnabled: DragEnabledCheck,
-    requestRender: RequestRender,
+  handle: HTMLElement,
+  row: HTMLElement,
+  windowId: number,
+  groupId: number,
+  isDragEnabled: DragEnabledCheck,
 ) {
-    handle.draggable = true;
-    handle.classList.add("is-draggable");
+  handle.draggable = true;
+  handle.classList.add("is-draggable");
 
-    handle.addEventListener("dragstart", (event) => {
-        if (!isDragEnabled()) {
-            event.preventDefault();
-            return;
-        }
+  handle.addEventListener("dragstart", (event) => {
+    if (!isDragEnabled()) {
+      event.preventDefault();
+      return;
+    }
 
-        writePayload(event, { kind: "group", id: groupId }, row);
-        setDragElement(row.closest<HTMLElement>(".group-item") ?? row);
-    });
+    writePayload(event, { kind: "group", id: groupId }, row);
+    setDragElement(row.closest<HTMLElement>(".group-item") ?? row);
+  });
 
-    handle.addEventListener("dragend", () => {
-        clearDragState();
-    });
-
+  handle.addEventListener("dragend", () => {
+    clearDragState();
+  });
 }

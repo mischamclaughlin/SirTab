@@ -71,6 +71,20 @@ Displaying browser-supplied favicons may contact their hosts. See the
 
 ## Development
 
+Use Node.js 26 and install dependencies with `npm ci` for a reproducible setup.
+Run the checks used by GitHub Actions locally:
+
+```bash
+npm run lint
+npm run typecheck
+npm run test:unit
+```
+
+The CI workflow runs these checks on pull requests and pushes to `main`, and can
+also be started manually from the Actions tab. The unit-test command builds the
+extension before running the Node tests. Browser integration and coverage checks
+remain separate local commands below; CI does not run them yet.
+
 Watch TypeScript and static files during development:
 
 ```bash
