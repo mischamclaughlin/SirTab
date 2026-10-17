@@ -107,7 +107,7 @@ export async function setupGroupAction(
                     throw error;
                 }
 
-                actionPanel.close("group");
+                if (groupForm.isConnected) actionPanel.close("group");
             }, "Create group failed:");
         });
     });

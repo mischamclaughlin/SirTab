@@ -73,9 +73,15 @@ export async function setupBookmarkAction(
             updateCurrentTabToggle();
         });
 
-        const bookmarkTree: chrome.bookmarks.BookmarkTreeNode[] =
-            await chrome.bookmarks.getTree();
-        if (!actionPanel.isOpen("bookmark")) return;
+        let bookmarkTree: chrome.bookmarks.BookmarkTreeNode[];
+        try {
+            bookmarkTree = await chrome.bookmarks.getTree();
+        } catch (error) {
+            console.error("Load bookmark folders failed:", error);
+            if (bookmarkForm.isConnected) actionPanel.close("bookmark");
+            return;
+        }
+        if (!bookmarkForm.isConnected) return;
 
         const folderChoices = collectBookmarkFolderChoices(bookmarkTree);
         if (folderChoices.length === 0) {
@@ -154,7 +160,7 @@ export async function setupBookmarkAction(
                     });
                 }
 
-                actionPanel.close("bookmark");
+                if (bookmarkForm.isConnected) actionPanel.close("bookmark");
             }, "Create bookmark entry failed:");
         });
     });

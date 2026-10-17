@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Action safety and recovery</title>
+<div id="controls"></div><div id="panel"></div><ul id="groups"></ul>
+<output id="result">RUNNING</output>
+<script type="module">
+const result = document.getElementById('result');
+const unhandled = [];
+addEventListener('unhandledrejection', event => { unhandled.push(String(event.reason)); });
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+const equal = (actual, expected, message) => assert(JSON.stringify(actual) === JSON.stringify(expected), message);
+const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
+try {
+  const errors = [];
+  console.error = (...args) => errors.push(args);
+  let removed = [], created = [], grouped = [], updates = [], bookmarks = [], writes = [];
+  let remove = async () => {}, create = async () => ({ id: 42 }), group = async () => 7, update = async () => {};
+  let tree = async () => [{ id: '1', title: 'Bar', children: [] }];
+  let bookmark = async () => {}, currentTab = { url: 'https://example.test/page' };
+  globalThis.chrome = {
+    runtime: { getURL: path => path },
+    windows: { getCurrent: async () => ({ id: 1 }) },
+    storage: { local: { set: async value => writes.push(value) } },
+    tabs: {
+      create: async value => { created.push(value); return create(); },
+      group: async value => { grouped.push(value); return group(); },
+      remove: async ids => { removed.push(ids); return remove(); },
+      query: async query => { equal(query, { active: true, windowId: 1 }, 'bookmark must query its own window'); return currentTab ? [currentTab] : []; },
+    },
+    tabGroups: { update: async (...args) => { updates.push(args); return update(); } },
+    bookmarks: {
+      getTree: () => tree(),
+      create: async value => { bookmarks.push(value); return bookmark(); },
+    },
+  };
+  const { createActionPanelController } = await import('../dist/sidebar/helpers/actionPanel.js');
+  const { setupGroupAction } = await import('../dist/sidebar/actions/actionGroup.js');
+  const { setupBookmarkAction } = await import('../dist/sidebar/actions/actionBookmark.js');
+  const { setupSelectAction } = await import('../dist/sidebar/actions/actionSelect.js');
+  const { buildGroup } = await import('../dist/sidebar/group/group.js');
+  const controls = document.getElementById('controls'), panel = document.getElementById('panel');
+  const controller = createActionPanelController(panel);
+  await setupGroupAction(controls, controller);
+  await setupBookmarkAction(controls, controller, 1);
+  const [groupButton, bookmarkButton] = controls.children;
+  const button = label => panel.querySelector(`button[aria-label="${label}"]`);
+  const fail = async () => { throw new Error('injected failure'); };
+
+  // Every stage of group creation is recoverable; only a created tab is rolled back.
+  for (const stage of ['create', 'group', 'update']) {
+    created = []; grouped = []; updates = []; removed = [];
+    create = stage === 'create' ? fail : async () => ({ id: 42 });
+    group = stage === 'group' ? fail : async () => 7;
+    update = stage === 'update' ? fail : async () => {};
+    groupButton.click();
+    const save = button('Confirm group creation');
+    panel.querySelector('input').value = '  Work  ';
+    save.click(); await tick();
+    assert(controller.isOpen('group') && !save.disabled, `${stage} failure must allow retry`);
+    equal(removed, stage === 'create' ? [] : [42], `${stage} rollback`);
+    create = async () => ({ id: 43 }); group = async () => 8; update = async () => {};
+    save.click(); await tick();
+    assert(!controller.isOpen('group'), `${stage} retry must succeed`);
+    equal(updates.at(-1), [8, { title: 'Work', color: 'grey', collapsed: false }], 'group fields must be normalised');
+  }
+  const pendingGroup = deferred();
+  create = () => pendingGroup.promise;
+  groupButton.click();
+  created = [];
+  const oldGroupSave = button('Confirm group creation');
+  oldGroupSave.click(); oldGroupSave.click();
+  assert(created.length === 1 && oldGroupSave.getAttribute('aria-busy') === 'true', 'group submit must be locked');
+  controller.close(); groupButton.click();
+  pendingGroup.resolve({ id: 44 }); await tick();
+  assert(controller.isOpen('group'), 'old group completion must not close a newly opened form');
+  controller.close();
+  create = async () => ({ id: 45 }); group = fail; remove = fail;
+  groupButton.click(); button('Confirm group creation').click(); await tick();
+  assert(controller.isOpen('group') && !button('Confirm group creation').disabled, 'cleanup failure must release the submit lock');
+  assert(errors.some(([message]) => message === 'Failed to clean up group creation tab:'), 'cleanup failure must be reported');
+  group = async () => 9; remove = async () => {};
+  button('Confirm group creation').click(); await tick();
+  assert(!controller.isOpen('group'), 'group creation must remain retryable after cleanup failure');
+
+  // A stale folder request must not populate or steal focus from a reopened form.
+  const pendingTree = deferred(); tree = () => pendingTree.promise;
+  bookmarkButton.click(); controller.close();
+  tree = async () => [{ id: '2', title: 'New destination', children: [] }];
+  bookmarkButton.click(); await tick();
+  const newInput = panel.querySelector('input'); newInput.value = 'draft'; newInput.focus();
+  pendingTree.resolve([]); await tick();
+  assert(controller.isOpen('bookmark') && panel.querySelectorAll('input').length === 1 && document.activeElement === newInput, 'stale folder load must not close the new form or steal focus');
+  controller.close(); tree = fail;
+  bookmarkButton.click(); await tick();
+  assert(!controller.isOpen('bookmark') && !bookmarkButton.classList.contains('is-selected'), 'folder-load failure must reset the action');
+  tree = async () => [{ id: '1', title: 'Bar', children: [] }];
+  bookmarkButton.click(); await tick();
+  const bookmarkSave = button('Create bookmark or folder');
+  bookmark = fail; bookmarkSave.click(); await tick();
+  assert(controller.isOpen('bookmark') && !bookmarkSave.disabled, 'failed folder creation must allow retry');
+  bookmark = async () => {}; bookmarkSave.click(); await tick();
+  equal(bookmarks.at(-1), { title: 'new folder', parentId: '1' }, 'folder must have no URL and use default name');
+  bookmarkButton.click(); await tick(); panel.querySelector('.action-toggle').click();
+  bookmarks = [];
+  for (const tab of [null, { url: 'chrome://settings' }, {}]) {
+    currentTab = tab; button('Create bookmark or folder').click(); await tick();
+    assert(bookmarks.length === 0 && !panel.querySelector('[role="alert"]').hidden, 'invalid active tab must show feedback without saving');
+  }
+  currentTab = { url: 'https://example.test/page' };
+  const pendingBookmark = deferred(); bookmark = () => pendingBookmark.promise;
+  button('Create bookmark or folder').click(); button('Create bookmark or folder').click();
+  await tick();
+  assert(bookmarks.length === 1, 'bookmark submit must be locked');
+  controller.close(); bookmarkButton.click(); await tick();
+  pendingBookmark.resolve(); await tick();
+  assert(controller.isOpen('bookmark'), 'old bookmark completion must not close a newly opened form');
+  controller.close();
+
+  // Bulk close preserves selection on cancellation or API failure and retries safely.
+  let ids = [10, 20], selecting = true, refreshes = 0, confirmations = [];
+  const selection = {
+    isSelectionMode: () => selecting, getSelectedTabIds: () => [...ids],
+    clear: () => { ids = []; selecting = false; }, clearSelected: () => { ids = []; },
+    toggleSelectionMode: () => { selecting = !selecting; },
+  };
+  const renderSelect = setupSelectAction(controls, controller, selection, () => { refreshes++; });
+  window.confirm = message => { confirmations.push(message); return false; };
+  removed = []; button('Close selected tabs').click(); await tick();
+  equal(removed, [], 'cancelled close must not remove tabs'); equal(ids, [10, 20], 'cancelled close must preserve selection');
+  window.confirm = () => true; remove = fail;
+  button('Close selected tabs').click(); await tick();
+  equal(ids, [10, 20], 'failed close must preserve selection');
+  const pendingRemove = deferred(); remove = () => pendingRemove.promise; removed = [];
+  const closeSelected = button('Close selected tabs'); closeSelected.click(); closeSelected.click();
+  renderSelect(); button('Close selected tabs').click();
+  equal(removed, [[10, 20]], 'bulk close must submit once');
+  pendingRemove.resolve(); await tick();
+  assert(ids.length === 0 && !selecting && refreshes === 1 && !controller.isOpen('select'), 'successful close must clear and refresh');
+  ids = [30]; selecting = true; renderSelect(); confirmations = [];
+  window.confirm = message => { confirmations.push(message); return false; }; remove = async () => {};
+  button('Close selected tabs').click(); await tick();
+  equal(confirmations, [], 'single tab close must not prompt');
+
+  // Group close removes the whole group even when search only shows one member.
+  const collapsed = new Set(['7', '8']);
+  const host = document.getElementById('groups');
+  const tabs = [{ id: 10, title: 'match', url: 'https://example.test' }, { id: 20, title: 'other', url: 'https://example.test/other' }];
+  buildGroup(false, [{ id: 7, title: 'Work', color: 'grey' }], new Map([[7, tabs]]), collapsed, true, 'match', host, 1, () => {}, false);
+  const closeGroup = host.querySelector('.row-delete-btn');
+  window.confirm = () => false; removed = []; closeGroup.click(); await tick();
+  assert(removed.length === 0 && collapsed.has('7'), 'cancelled group close must preserve collapse state');
+  window.confirm = () => true; remove = fail; closeGroup.click(); await tick();
+  assert(collapsed.has('7') && !closeGroup.disabled, 'failed group close must preserve collapse state and allow retry');
+  const pendingClose = deferred(); remove = () => pendingClose.promise; removed = []; writes = [];
+  closeGroup.click(); closeGroup.click();
+  host.replaceChildren();
+  buildGroup(false, [{ id: 7, title: 'Work', color: 'grey' }], new Map([[7, tabs]]), collapsed, true, 'match', host, 1, () => {}, false);
+  host.querySelector('.row-delete-btn').click();
+  equal(removed, [[10, 20]], 'group close must close all members once, including after rerender');
+  pendingClose.resolve(); await tick();
+  assert(!collapsed.has('7') && collapsed.has('8'), 'successful group close must clean only its collapse state');
+  equal(writes, [{ 'collapsedGroupsByWindow:1': ['8'] }], 'group close must persist surviving collapse state');
+  assert(errors.length >= 6, 'injected errors must be handled and reported');
+  assert(unhandled.length === 0, `unhandled rejections: ${unhandled.join('; ')}`);
+  result.textContent = 'PASS';
+} catch (error) { result.textContent = `FAIL: ${error.stack ?? error}`; }
+</script>
+</html>

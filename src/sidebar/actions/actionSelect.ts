@@ -18,6 +18,7 @@ export function setupSelectAction(
     const selectPanel = document.createElement("div");
     selectPanel.className = "selection-actions";
     let isClosingSelectPanel = false;
+    let isClosingTabs = false;
 
     const closeSelectPanel = () => {
         if (!actionPanel.isOpen("select")) return;
@@ -46,9 +47,10 @@ export function setupSelectAction(
         deleteBtn.type = "button";
         deleteBtn.className = "control selection-delete";
         setButtonIcon(deleteBtn, "delete", "Close selected tabs");
-        deleteBtn.disabled = count === 0;
+        deleteBtn.disabled = count === 0 || isClosingTabs;
 
         deleteBtn.addEventListener("click", () => {
+            if (isClosingTabs) return;
             void runButtonAction(deleteBtn, async () => {
                 const selectedTabIds = tabSelection.getSelectedTabIds();
                 if (selectedTabIds.length === 0) return;
@@ -60,10 +62,16 @@ export function setupSelectAction(
                     if (!confirmed) return;
                 }
 
-                await chrome.tabs.remove(selectedTabIds);
-                tabSelection.clear();
-                requestTabGroupRefresh();
-                closeSelectPanel();
+                isClosingTabs = true;
+                try {
+                    await chrome.tabs.remove(selectedTabIds);
+                    tabSelection.clear();
+                    requestTabGroupRefresh();
+                    closeSelectPanel();
+                } finally {
+                    isClosingTabs = false;
+                    update();
+                }
             }, "Close selected tabs failed:");
         });
 

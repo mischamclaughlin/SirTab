@@ -20,6 +20,9 @@ import {
     finishEditSession,
 } from "../helpers/preserveInteraction.js";
 
+// A refresh can replace a close button while its Chrome operation is pending.
+const closingGroups = new Set<string>();
+
 function getGroupColorChoice(color: chrome.tabGroups.TabGroup["color"]) {
     const choices = Object.keys(groupColorMap) as GroupColorChoice[];
 
@@ -175,6 +178,8 @@ export function buildGroup(
             }, "Add tab to group failed:");
         });
         const deleteGroupBtn = createDeleteButton(`Close group ${groupTitle}`, async () => {
+            const closeKey = `${windowId}:${groupId}`;
+            if (closingGroups.has(closeKey)) return;
             const tabIds = (tabsByGroup.get(groupId) ?? [])
                 .map((tab) => tab.id)
                 .filter((tabId): tabId is number => tabId != null);
@@ -186,10 +191,15 @@ export function buildGroup(
             );
             if (!confirmed) return;
 
-            await chrome.tabs.remove(tabIds);
-            if (collapsedGroups.has(String(groupId))) {
-                collapsedGroups.delete(String(groupId));
-                await persistCollapse(collapsedGroups, "tab");
+            closingGroups.add(closeKey);
+            try {
+                await chrome.tabs.remove(tabIds);
+                if (collapsedGroups.has(String(groupId))) {
+                    collapsedGroups.delete(String(groupId));
+                    await persistCollapse(collapsedGroups, "tab");
+                }
+            } finally {
+                closingGroups.delete(closeKey);
             }
         });
 
