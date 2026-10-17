@@ -284,3 +284,84 @@ test("quick search opens a fixed-size window centred on the last focused one", a
         },
     ]);
 });
+
+test("moving backwards crosses into the ungrouped section and persists order", async () => {
+    reset({
+        tabs: [tab(1, 0), tab(2, 1, 10, true), tab(3, 2, 10)],
+        groups: [group(10)], tabOrder: [1, 2, 3], groupOrder: [10],
+    });
+    await dispatchCommand("move_active_tab_previous");
+    assert.deepEqual(state.ungrouped, [[2]]);
+    assert.deepEqual(state.storage[`${TAB_ORDER_WINDOW_PREFIX}${WINDOW_ID}`].order, [1, 2, 3]);
+    assert.deepEqual(state.tabUpdates, [{ tabId: 2, changes: { active: true } }]);
+});
+
+test("shortcuts safely handle missing windows, missing active tabs and hidden inventories", async () => {
+    reset();
+    state.currentWindow = {};
+    await dispatchCommand("cycle_next_visible_tab");
+    await dispatchCommand("move_active_tab_previous");
+    reset();
+    await dispatchCommand("cycle_previous_visible_tab");
+    await dispatchCommand("move_active_tab_next");
+    reset({ tabs: [tab(1, 0, 10, true)], groups: [group(10)] });
+    state.storage[HIDDEN_SECTIONS_STORAGE_KEY] = ['tabs', 'groups'];
+    await dispatchCommand("cycle_next_visible_tab");
+    await dispatchCommand("move_active_tab_previous");
+    assert.deepEqual(state.tabUpdates, []);
+    assert.deepEqual(state.grouped, []);
+    assert.deepEqual(state.ungrouped, []);
+    await dispatchCommand("unknown_command");
+    await dispatchCommand("toString");
+    assert.deepEqual(state.createdWindows, []);
+});
+
+test("cycling from a hidden active tab chooses the first or last visible tab", async () => {
+    for (const [command, expected] of [['cycle_next_visible_tab', 2], ['cycle_previous_visible_tab', 3]]) {
+        reset({ tabs: [tab(1, 0, 10, true), tab(2, 1), tab(3, 2)], groups: [group(10)], collapsedGroups: ['10'] });
+        await dispatchCommand(command);
+        assert.deepEqual(state.tabUpdates, [{ tabId: expected, changes: { active: true } }]);
+    }
+});
+
+test("quick search tolerates missing bounds and clamps off-screen positions", async (t) => {
+    reset();
+    const lookup = t.mock.method(chrome.windows, 'getLastFocused', async () => ({ id: WINDOW_ID }));
+    await dispatchCommand('open_quick_search');
+    assert.deepEqual(state.createdWindows[0], { type: 'normal', state: 'normal', width: 720, height: 520, focused: true });
+    lookup.mock.mockImplementation(async () => ({ id: WINDOW_ID, left: -1000, top: -1000, width: 200, height: 200 }));
+    await dispatchCommand('open_quick_search');
+    assert.equal(state.createdWindows[1].left, 0);
+    assert.equal(state.createdWindows[1].top, 0);
+});
+
+test("every command contains API rejections and a later command still succeeds", async (t) => {
+    for (const [command, api, method] of [
+        ['cycle_next_visible_tab', chrome.windows, 'getCurrent'],
+        ['cycle_previous_visible_tab', chrome.tabs, 'query'],
+        ['cycle_next_visible_tab', chrome.tabs, 'update'],
+        ['move_active_tab_next', chrome.tabs, 'group'],
+        ['move_active_tab_previous', chrome.tabs, 'ungroup'],
+        ['move_active_tab_next', chrome.storage.local, 'set'],
+        ['open_quick_search', chrome.windows, 'getLastFocused'],
+        ['open_quick_search', chrome.windows, 'create'],
+    ]) {
+        await t.test(`${command}: ${method}`, async (t) => {
+            reset({
+                tabs: [tab(1, 0, -1, command !== 'move_active_tab_previous'), tab(2, 1, 10, command === 'move_active_tab_previous')],
+                groups: [group(10)], tabOrder: [1, 2], groupOrder: [10],
+            });
+            const expected = new Error(`injected ${method} failure`);
+            const failing = t.mock.method(api, method, async () => { throw expected; });
+            const errors = t.mock.method(console, 'error', () => {});
+            await dispatchCommand(command);
+            assert.equal(errors.mock.callCount(), 1);
+            assert.deepEqual(errors.mock.calls[0].arguments, [`Background command ${command} failed:`, expected]);
+            failing.mock.restore();
+            await dispatchCommand(command);
+            assert.equal(errors.mock.callCount(), 1, 'retry should not fail');
+            if (command === 'open_quick_search') assert.equal(state.createdWindows.length, 1);
+            else assert.equal(state.tabUpdates.length, 1, 'retry should complete activation');
+        });
+    }
+});

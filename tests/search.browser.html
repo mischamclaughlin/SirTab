@@ -1,0 +1,42 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Search keyboard and focus</title>
+<div id="controls"></div><button id="other">Other control</button>
+<output id="result">RUNNING</output>
+<script type="module">
+const result = document.getElementById('result'), unexpected = [];
+addEventListener('unhandledrejection', event => { unexpected.push(String(event.reason)); result.textContent = `FAIL: ${event.reason}`; });
+const assert = (value, message) => { if (!value) throw Error(message); };
+try {
+    const opened = new Set();
+    globalThis.chrome = { sidePanel: { onOpened: {
+        addListener: fn => opened.add(fn), removeListener: fn => opened.delete(fn),
+    } } };
+    const { setupSearchAction } = await import('../dist/sidebar/actions/actionSearch.js');
+    let renders = 0;
+    const query = setupSearchAction(document.getElementById('controls'), () => { renders++; });
+    const input = document.querySelector('.search-input'), other = document.getElementById('other');
+    other.focus();
+    for (const listener of opened) listener();
+    assert(document.activeElement === input, 'opening panel should focus search');
+    for (const modifier of ['ctrlKey', 'metaKey']) {
+        other.focus();
+        const event = new KeyboardEvent('keydown', { key: 'B', [modifier]: true, bubbles: true, cancelable: true });
+        other.dispatchEvent(event);
+        assert(event.defaultPrevented && document.activeElement === input, `${modifier} shortcut should focus search and prevent the default`);
+    }
+    input.value = '  Something  ';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    assert(input.value === '' && query() === '' && renders === 1 && document.activeElement === input, 'Escape should clear and retain focus with one coalesced render');
+    input.value = 'Pending'; input.dispatchEvent(new Event('input', { bubbles: true }));
+    window.dispatchEvent(new Event('pagehide'));
+    other.focus();
+    other.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true }));
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    assert(renders === 1 && document.activeElement === other && opened.size === 0, 'closed panel should stop rendering and handling focus events');
+    assert(unexpected.length === 0, 'unexpected asynchronous errors');
+    result.textContent = 'PASS';
+} catch (error) { result.textContent = `FAIL: ${error.stack}`; }
+</script>

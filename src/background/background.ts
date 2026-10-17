@@ -73,16 +73,6 @@ async function cycleVisibleTabs(direction: 1 | -1) {
     await chrome.tabs.update(nextTabId, { active: true });
 }
 
-chrome.commands.onCommand.addListener((command) => {
-    if (command === "cycle_next_visible_tab") {
-        void cycleVisibleTabs(1);
-    } else if (command === "cycle_previous_visible_tab") {
-        void cycleVisibleTabs(-1);
-    } else if (command === "open_quick_search") {
-        void openQuickSearchWindow();
-    }
-});
-
 function getCenteredWindowBounds(
     baseWindow: chrome.windows.Window,
     width: number,
@@ -172,10 +162,18 @@ async function moveVisibleTab(direction: 1 | -1) {
     await chrome.tabs.update(activeTab.id, { active: true });
 }
 
+const commandActions = new Map<string, () => Promise<void>>([
+    ["cycle_next_visible_tab", () => cycleVisibleTabs(1)],
+    ["cycle_previous_visible_tab", () => cycleVisibleTabs(-1)],
+    ["move_active_tab_next", () => moveVisibleTab(1)],
+    ["move_active_tab_previous", () => moveVisibleTab(-1)],
+    ["open_quick_search", openQuickSearchWindow],
+]);
+
 chrome.commands.onCommand.addListener((command) => {
-    if (command === "move_active_tab_next") {
-        void moveVisibleTab(1);
-    } else if (command == "move_active_tab_previous") {
-        void moveVisibleTab(-1);
-    }
+    const action = commandActions.get(command);
+    if (!action) return;
+    void action().catch((error) => {
+        console.error(`Background command ${command} failed:`, error);
+    });
 });
