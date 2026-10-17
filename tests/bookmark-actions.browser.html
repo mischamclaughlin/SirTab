@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Bookmark removal and opening safety</title>
+<ul id="bookmarks"></ul><output id="result">RUNNING</output>
+<script type="module">
+const result = document.getElementById('result'), unexpected = [];
+addEventListener('unhandledrejection', event => { unexpected.push(event.reason); result.textContent = `FAIL: ${event.reason}`; });
+addEventListener('error', event => { unexpected.push(event.error ?? event.message); result.textContent = `FAIL: ${event.message}`; });
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+const equal = (actual, expected, message) => assert(JSON.stringify(actual) === JSON.stringify(expected), message);
+const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+try {
+  const errors = [], calls = [], prompts = [];
+  console.error = (...args) => errors.push(args);
+  let remove = async () => {}, removeTree = async () => {}, save = async () => {}, createTab = async () => {};
+  let saved = ['folder', 'nested', 'other'], refreshes = 0;
+  const key = 'collapsedBookmarkFolders';
+  const fail = async () => { throw new Error('injected failure'); };
+  globalThis.chrome = {
+    runtime: { getURL: path => path },
+    bookmarks: {
+      remove: async id => { calls.push(['remove', id]); return remove(); },
+      removeTree: async id => { calls.push(['removeTree', id]); return removeTree(); },
+    },
+    storage: { local: { set: async value => { calls.push(['save', value[key]]); await save(); saved = value[key]; } } },
+    tabs: { create: async value => { calls.push(['open', value]); return createTab(); } },
+  };
+  const { cycleBookmarks } = await import('../dist/sidebar/bookmark/bookmark.js');
+  const host = document.getElementById('bookmarks');
+  const collapsed = new Set(saved);
+  const leaf = { id: 'bookmark', title: 'Page', url: 'https://example.test/page' };
+  const folder = { id: 'folder', title: 'Work', children: [{ id: 'nested', title: 'Nested', children: [leaf] }] };
+  const render = (nodes = [folder]) => { host.replaceChildren(); cycleBookmarks(host, nodes, false, collapsed, () => { refreshes++; }); };
+  const deleteButton = id => host.querySelector(`[data-bookmark-id="${id}"] > div > .row-delete-btn`);
+  const confirm = allowed => { window.confirm = message => { prompts.push(message); return allowed; }; };
+
+  render(); confirm(false); deleteButton('folder').click(); await tick();
+  equal(calls, [], 'cancelled nonempty folder deletion must do nothing');
+  equal([...collapsed], ['folder', 'nested', 'other'], 'cancellation must preserve collapse state');
+  equal(saved, ['folder', 'nested', 'other'], 'cancellation must preserve saved state');
+
+  confirm(true); removeTree = fail; deleteButton('folder').click(); await tick();
+  equal([...collapsed], ['folder', 'nested', 'other'], 'failed folder deletion must preserve collapse memory');
+  equal(saved, ['folder', 'nested', 'other'], 'failed folder deletion must preserve saved state');
+  equal(calls, [['removeTree', 'folder']], 'delete must happen before collapse persistence');
+  assert(!deleteButton('folder').disabled, 'failed deletion must release the button');
+  calls.length = 0; removeTree = async () => {};
+  deleteButton('folder').click(); await tick();
+  equal(calls, [['removeTree', 'folder'], ['save', ['other']]], 'successful retry must delete then prune and persist the subtree');
+  equal([...collapsed], ['other'], 'successful delete must clear nested collapsed folders');
+  equal(saved, ['other'], 'successful delete must persist surviving collapse IDs');
+
+  // Empty folders need no confirmation, but still retain state if remove fails.
+  const empty = { id: 'empty', title: 'Empty', children: [] };
+  collapsed.add('empty'); saved = [...collapsed]; render([empty]); prompts.length = 0; calls.length = 0;
+  remove = fail; deleteButton('empty').click(); await tick();
+  assert(collapsed.has('empty') && saved.includes('empty'), 'failed empty-folder deletion must preserve state');
+  equal(prompts, [], 'empty folder must not prompt');
+  remove = async () => {}; deleteButton('empty').click(); await tick();
+  assert(!collapsed.has('empty') && !saved.includes('empty'), 'successful empty-folder retry must clean state');
+
+  // A successful deletion is irreversible even if saving collapse cleanup fails.
+  collapsed.add('folder'); collapsed.add('nested'); saved = [...collapsed]; render(); calls.length = 0;
+  const beforeRefresh = refreshes; save = fail;
+  deleteButton('folder').click(); await tick();
+  equal(calls, [['removeTree', 'folder'], ['save', ['other']]], 'collapse-save failure must occur after actual deletion');
+  equal([...collapsed], ['other'], 'successful deletion must keep removed folders out of memory despite save failure');
+  equal(saved, ['other', 'folder', 'nested'], 'failed persistence must not pretend storage was updated');
+  assert(refreshes === beforeRefresh + 1, 'successful deletion must refresh even when collapse persistence fails');
+  assert(errors.some(([message]) => message === 'Save bookmark collapse state after deletion failed:'), 'collapse-save failure must be reported distinctly');
+  save = async () => {};
+
+  // Operation guards must survive row replacement, not only repeated clicks.
+  render(); calls.length = 0; const pending = deferred(); removeTree = () => pending.promise;
+  deleteButton('folder').click(); deleteButton('folder').click(); render(); deleteButton('folder').click();
+  equal(calls, [['removeTree', 'folder']], 'folder deletion must submit once across rerenders');
+  pending.resolve(); await tick();
+  render([leaf]); calls.length = 0; remove = fail;
+  deleteButton('bookmark').click(); await tick();
+  assert(!deleteButton('bookmark').disabled, 'failed bookmark removal must allow retry');
+  const pendingLeaf = deferred(); remove = () => pendingLeaf.promise; calls.length = 0;
+  deleteButton('bookmark').click(); deleteButton('bookmark').click(); render([leaf]); deleteButton('bookmark').click();
+  equal(calls, [['remove', 'bookmark']], 'bookmark removal must submit once across rerenders');
+  pendingLeaf.resolve(); await tick();
+
+  const unsafe = { id: 'unsafe', title: 'Unsafe', url: 'javascript:alert(1)' };
+  render([unsafe]); calls.length = 0; host.querySelector('.tab-button').click(); await tick();
+  equal(calls, [], 'unsafe URL must never reach tabs.create');
+  assert(host.querySelector('[role="alert"]')?.textContent.includes('cannot be opened'), 'unsafe URL must show feedback');
+  render([leaf]); createTab = fail; const open = host.querySelector('.tab-button');
+  open.click(); await tick();
+  assert(!open.disabled, 'tab-create rejection must release open button');
+  createTab = async () => {}; open.click(); await tick();
+  equal(calls, [['open', { url: leaf.url }], ['open', { url: leaf.url }]], 'safe URL must support opening again after failure');
+  await tick(); assert(unexpected.length === 0, 'unexpected browser errors must fail the fixture');
+  result.textContent = 'PASS';
+} catch (error) { result.textContent = `FAIL: ${error.stack ?? error}`; }
+</script>
+</html>

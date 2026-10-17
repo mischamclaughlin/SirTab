@@ -15,6 +15,9 @@ import {
     finishEditSession,
 } from "../helpers/preserveInteraction.js";
 
+// Refreshes can replace a row before its deletion finishes.
+const deletingBookmarkIds = new Set<string>();
+
 function getBookmarkNodeTitle(node: chrome.bookmarks.BookmarkTreeNode) {
     return node.title?.trim() ?? "";
 }
@@ -229,13 +232,15 @@ export function cycleBookmarks(
             const feedback = document.createElement("p");
             feedback.className = "action-feedback";
             feedback.setAttribute("role", "alert");
-            btn.addEventListener("click", async () => {
-                if (!isAllowedBookmarkUrl(node.url!)) {
-                    feedback.textContent = "This bookmark's address cannot be opened.";
-                    li.append(feedback);
-                    return;
-                }
-                await chrome.tabs.create({ url: node.url });
+            btn.addEventListener("click", () => {
+                void runButtonAction(btn, async () => {
+                    if (!isAllowedBookmarkUrl(node.url!)) {
+                        feedback.textContent = "This bookmark's address cannot be opened.";
+                        li.append(feedback);
+                        return;
+                    }
+                    await chrome.tabs.create({ url: node.url });
+                }, "Open bookmark failed:");
             });
 
             const icon = document.createElement("img");
@@ -258,7 +263,14 @@ export function cycleBookmarks(
             const deleteBookmarkBtn = createDeleteButton(
                 `Delete bookmark ${nodeTitle || node.url || "(untitled)"}`,
                 async () => {
-                    await chrome.bookmarks.remove(node.id);
+                    if (deletingBookmarkIds.has(node.id)) return;
+                    deletingBookmarkIds.add(node.id);
+                    try {
+                        await chrome.bookmarks.remove(node.id);
+                        onToggle?.();
+                    } finally {
+                        deletingBookmarkIds.delete(node.id);
+                    }
                 },
             );
             let editBookmarkBtn: HTMLButtonElement | null = null;
@@ -329,6 +341,7 @@ export function cycleBookmarks(
         const deleteFolderBtn = createDeleteButton(
             `Delete folder ${nodeTitle || "(untitled)"}`,
             async () => {
+                if (deletingBookmarkIds.has(node.id)) return;
                 if (hasChildren) {
                     const folderName = nodeTitle || "(untitled)";
                     const confirmed = window.confirm(
@@ -337,13 +350,22 @@ export function cycleBookmarks(
                     if (!confirmed) return;
                 }
 
-                removeNodeFromCollapsed(node, collapsedBookmarkFoldersSet);
-                await persistCollapse(collapsedBookmarkFoldersSet, "bookmark");
-
-                if (hasChildren) {
-                    await chrome.bookmarks.removeTree(node.id);
-                } else {
-                    await chrome.bookmarks.remove(node.id);
+                deletingBookmarkIds.add(node.id);
+                try {
+                    if (hasChildren) {
+                        await chrome.bookmarks.removeTree(node.id);
+                    } else {
+                        await chrome.bookmarks.remove(node.id);
+                    }
+                    removeNodeFromCollapsed(node, collapsedBookmarkFoldersSet);
+                    try {
+                        await persistCollapse(collapsedBookmarkFoldersSet, "bookmark");
+                    } catch (error) {
+                        console.error("Save bookmark collapse state after deletion failed:", error);
+                    }
+                    onToggle?.();
+                } finally {
+                    deletingBookmarkIds.delete(node.id);
                 }
             },
         );
