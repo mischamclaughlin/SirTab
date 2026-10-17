@@ -6,6 +6,7 @@
     "scripts": {
         "build": "node scripts/copy-static.mjs --clean && tsc",
         "package:store": "npm run build && node scripts/package-store.mjs",
+        "screenshots": "npm run build && node scripts/screenshots.mjs",
         "test": "npm run build && node --test",
         "test:browser": "npm run build && node tests/browser-suite.mjs",
         "test:coverage": "npm run build && node --experimental-test-coverage --test-coverage-include=\"dist/**/*.js\" --test",

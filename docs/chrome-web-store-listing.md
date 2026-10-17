@@ -51,7 +51,7 @@ Sir Tab reads tab addresses, titles and group details to show and manage your ta
 ## Assets and owner choices before submission
 
 - Use the packaged 128 × 128 icon at `src/sidebar/assets/sir-tab-icon-128.png` as the store icon if it meets the dashboard's image requirements.
-- Supply at least one current 1280 × 800 or 640 × 400 screenshot. The existing `docs/images/*.png` files are 1800 × 1163, so they need a properly framed export; do not stretch them. Chrome recommends up to five screenshots that show the actual current interface.
+- Supply at least one current 1280 × 800 or 640 × 400 screenshot. The README screenshots in `docs/images/*.png` are 880 × 1600 captures of the sidebar with demo data, so they need a properly framed export; do not stretch them. Chrome recommends up to five screenshots that show the actual current interface.
 - Review the dashboard's current requirements for any additional promotional images, video, language, distribution, developer identity and contact fields. Choose those values as the publisher; this draft does not invent them.
 - Confirm the public privacy-policy URL and ensure the dashboard privacy selections match the published policy and uploaded version.
 
