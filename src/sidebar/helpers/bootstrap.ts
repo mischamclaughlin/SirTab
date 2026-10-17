@@ -118,19 +118,20 @@ export async function bootstrapSidebar() {
 
     let tabs: chrome.tabs.Tab[] = [];
     let groups: chrome.tabGroups.TabGroup[] = [];
+    let tabGroupDataLoaded = false;
     let bookmarkTree: chrome.bookmarks.BookmarkTreeNode[] = [];
     let activationVersion = 0;
     let activatedTabId: number | null = null;
 
     function activateTab(tabId: number) {
+        activationVersion += 1;
+        activatedTabId = tabId;
         // A newly created tab may activate before its creation refresh finishes.
         if (!tabs.some((tab) => tab.id === tabId)) {
             requestTabGroupRefresh();
             return;
         }
 
-        activationVersion += 1;
-        activatedTabId = tabId;
         for (const tab of tabs) tab.active = tab.id === tabId;
 
         for (const list of [elements.tabsList, elements.groupsList]) {
@@ -149,6 +150,9 @@ export async function bootstrapSidebar() {
     });
 
     async function renderTabGroups(isStale: RenderStaleCheck) {
+        // An empty cache during startup is not a live group inventory. In
+        // particular, search must not prune saved collapse state before loading.
+        if (!tabGroupDataLoaded) return;
         await groupCollapse(groups, collapsedGroups);
         if (isStale()) return;
 
@@ -233,6 +237,7 @@ export async function bootstrapSidebar() {
         }
         tabs = loadedTabs;
         groups = loadedGroups;
+        tabGroupDataLoaded = true;
         tabSelection.prune(
             tabs
                 .map((tab) => tab.id)
@@ -298,22 +303,13 @@ export async function bootstrapSidebar() {
     await loadThemePreference();
     await setupSettingAction(elements.settings, elements.actionBtnSection);
 
-    const loadInitialData = async () => {
-        const [[loadedTabs, loadedGroups], loadedBookmarkTree] =
-            await Promise.all([
-                loadTabAndGroupData(currentWindowId),
-                loadBookmarkTree(),
-            ]);
-
-        tabs = loadedTabs;
-        groups = loadedGroups;
-        bookmarkTree = loadedBookmarkTree;
-    };
-
     await Promise.all([
-        loadInitialData(),
-        loadCollapse(collapsedBookmarkFolders, "bookmark"),
-        loadCollapse(collapsedGroups, "tab"),
+        loadCollapse(collapsedBookmarkFolders, "bookmark").catch((error) => {
+            console.error("Load bookmark collapse state failed:", error);
+        }),
+        loadCollapse(collapsedGroups, "tab").catch((error) => {
+            console.error("Load group collapse state failed:", error);
+        }),
     ]);
 
     setupEventListeners(currentWindowId, {
@@ -327,5 +323,9 @@ export async function bootstrapSidebar() {
         tabSelection.clear();
     });
 
-    requestRender();
+    // Install listeners before loading so events during the initial requests
+    // invalidate stale results. Load each section independently: a bookmark
+    // failure must not prevent tabs from rendering or future events retrying.
+    requestTabGroupRefresh();
+    requestBookmarkRefresh();
 }

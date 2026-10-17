@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Filter persistence ordering and recovery</title>
+<div id="controls"></div><ul id="tabs"></ul><ul id="groups"></ul><ul id="bookmarks"></ul>
+<output id="result">RUNNING</output>
+<script type="module">
+const result = document.getElementById('result');
+const unexpected = [];
+addEventListener('unhandledrejection', event => { unexpected.push(event.reason); result.textContent = `FAIL: ${event.reason}`; });
+addEventListener('error', event => { unexpected.push(event.error ?? event.message); result.textContent = `FAIL: ${event.message}`; });
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+const equal = (actual, expected, message) => assert(JSON.stringify(actual) === JSON.stringify(expected), message);
+const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+try {
+  const errors = [], listeners = new Set(), writes = [];
+  console.error = (...args) => errors.push(args);
+  const key = 'hiddenSidebarSections';
+  const emit = (value, area = 'local') => {
+    for (const listener of listeners) listener({ [key]: { newValue: value } }, area);
+  };
+  globalThis.chrome = {
+    runtime: { getURL: path => path },
+    storage: {
+      local: {
+        get: async () => { throw new Error('initial read unavailable'); },
+        set: value => new Promise((resolve, reject) => {
+          writes.push({ value: value[key], finish: () => { emit(value[key]); resolve(); }, settle: resolve, reject });
+        }),
+      },
+      onChanged: { addListener: listener => listeners.add(listener), removeListener: listener => listeners.delete(listener) },
+    },
+  };
+  const { setupFilterAction } = await import('../dist/sidebar/actions/actionFilter.js');
+  const hidden = new Set(), sections = Object.fromEntries(['tabs', 'groups', 'bookmarks'].map(name => [name, document.getElementById(name)]));
+  let renders = 0;
+  await setupFilterAction(document.getElementById('controls'), sections, hidden, () => { renders++; });
+  const boxes = [...document.querySelectorAll('input')];
+  const expect = (names, message) => {
+    equal([...hidden].sort(), [...names].sort(), `${message}: state`);
+    equal(boxes.map(box => box.checked), ['tabs', 'groups', 'bookmarks'].map(name => names.includes(name)), `${message}: checkboxes`);
+    equal(Object.values(sections).map(section => section.hidden), ['tabs', 'groups', 'bookmarks'].map(name => names.includes(name)), `${message}: visibility`);
+  };
+  expect([], 'failed initial read keeps controls usable');
+  boxes[0].click(); boxes[1].click(); await tick();
+  assert(writes.length === 1, 'writes must be serialised');
+  expect(['tabs', 'groups'], 'latest local intent before first save');
+  writes[0].finish(); await tick();
+  expect(['tabs', 'groups'], 'older own save must not overwrite newer queued intent');
+  boxes[2].click(); await tick();
+  expect(['tabs', 'groups', 'bookmarks'], 'third click must preserve earlier choices');
+  equal(writes[1].value, ['tabs', 'groups'], 'second save snapshot');
+  writes[1].finish(); await tick();
+  expect(['tabs', 'groups', 'bookmarks'], 'second own save must not overwrite third intent');
+  equal(writes[2].value, ['tabs', 'groups', 'bookmarks'], 'third save snapshot');
+  writes[2].finish(); await tick();
+  expect(['tabs', 'groups', 'bookmarks'], 'final successful save');
+
+  boxes[0].click(); await tick();
+  writes[3].reject(new Error('save unavailable')); await tick();
+  boxes[1].click(); await tick();
+  equal(writes[4].value, ['bookmarks'], 'a failed save must not wedge subsequent changes');
+  writes[4].finish(); await tick();
+  expect(['bookmarks'], 'save recovery');
+
+  boxes[0].click(); boxes[1].click(); await tick();
+  emit([]);
+  expect(['tabs', 'groups', 'bookmarks'], 'external event must not overwrite queued local intent');
+  writes[5].finish(); await tick();
+  writes[6].finish(); await tick();
+  expect(['tabs', 'groups', 'bookmarks'], 'newer queued writes win over earlier external event');
+
+  boxes[0].click(); await tick();
+  // Chrome can emit storage events before its set promise settles. A later
+  // external write must still win once the outstanding local save completes.
+  emit(writes[7].value); emit(['tabs']);
+  writes[7].settle(); await tick();
+  expect(['tabs'], 'latest observed external state must reconcile after the queue settles');
+  const before = renders;
+  emit(['groups'], 'sync');
+  for (const listener of listeners) listener({ unrelated: { newValue: true } }, 'local');
+  assert(renders === before, 'unrelated storage events must not rerender');
+  emit(['groups', 'unknown', 9]); expect(['groups'], 'external values must be sanitised');
+  window.dispatchEvent(new Event('pagehide'));
+  assert(listeners.size === 0, 'pagehide must remove storage listener');
+  emit([]); expect(['groups'], 'closed page must stop following storage');
+  assert(errors.some(([message]) => message === 'Load section filters failed:') && errors.filter(([message]) => message === 'Save section filters failed:').length === 1, 'read and write failures must be reported');
+  await tick(); assert(unexpected.length === 0, 'unexpected browser errors must fail the fixture');
+  result.textContent = 'PASS';
+} catch (error) { result.textContent = `FAIL: ${error.stack ?? error}`; }
+</script>
+</html>

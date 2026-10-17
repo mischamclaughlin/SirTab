@@ -11,9 +11,14 @@ export async function setupFilterAction(
     hiddenSections: Set<SectionName>,
     requestRender: RequestRender,
 ) {
-    const stored = (await chrome.storage.local.get(HIDDEN_SECTIONS_STORAGE_KEY))[
-        HIDDEN_SECTIONS_STORAGE_KEY
-    ];
+    let stored: unknown;
+    try {
+        stored = (await chrome.storage.local.get(HIDDEN_SECTIONS_STORAGE_KEY))[
+            HIDDEN_SECTIONS_STORAGE_KEY
+        ];
+    } catch (error) {
+        console.error("Load section filters failed:", error);
+    }
     if (Array.isArray(stored)) {
         for (const name of stored) {
             if (SECTION_NAMES.some((section) => section === name)) {
@@ -44,7 +49,31 @@ export async function setupFilterAction(
         updateButton();
     };
     let pendingSave: Promise<unknown> = Promise.resolve();
+    let pendingSaveCount = 0;
+    let deferredStorageChange: { newValue: unknown } | undefined;
     const checkboxes = new Map<SectionName, HTMLInputElement>();
+
+    const applyStoredSections = (stored: unknown) => {
+        const nextHidden = new Set<SectionName>();
+        if (Array.isArray(stored)) {
+            for (const name of stored) {
+                if (SECTION_NAMES.some((section) => section === name)) {
+                    nextHidden.add(name as SectionName);
+                }
+            }
+        }
+        if (SECTION_NAMES.every((name) => hiddenSections.has(name) === nextHidden.has(name))) {
+            return;
+        }
+        hiddenSections.clear();
+        for (const name of nextHidden) hiddenSections.add(name);
+        for (const name of SECTION_NAMES) {
+            const checkbox = checkboxes.get(name);
+            if (checkbox) checkbox.checked = hiddenSections.has(name);
+        }
+        applyVisibility();
+        requestRender();
+    };
 
     for (const name of SECTION_NAMES) {
         const label = document.createElement("label");
@@ -65,11 +94,21 @@ export async function setupFilterAction(
             applyVisibility();
             requestRender();
             const nextHiddenSections = [...hiddenSections];
-            pendingSave = pendingSave.catch(() => {}).then(() =>
-                chrome.storage.local.set({
-                    [HIDDEN_SECTIONS_STORAGE_KEY]: nextHiddenSections,
-                }),
-            );
+            pendingSaveCount++;
+            pendingSave = pendingSave.catch(() => {}).then(async () => {
+                try {
+                    await chrome.storage.local.set({
+                        [HIDDEN_SECTIONS_STORAGE_KEY]: nextHiddenSections,
+                    });
+                } finally {
+                    pendingSaveCount--;
+                    if (pendingSaveCount === 0 && deferredStorageChange) {
+                        const { newValue } = deferredStorageChange;
+                        deferredStorageChange = undefined;
+                        applyStoredSections(newValue);
+                    }
+                }
+            });
             void pendingSave.catch((error) => {
                 console.error("Save section filters failed:", error);
             });
@@ -81,26 +120,14 @@ export async function setupFilterAction(
         areaName: string,
     ) => {
         if (areaName !== "local" || !(HIDDEN_SECTIONS_STORAGE_KEY in changes)) return;
-        const stored = changes[HIDDEN_SECTIONS_STORAGE_KEY].newValue;
-        const nextHidden = new Set<SectionName>();
-        if (Array.isArray(stored)) {
-            for (const name of stored) {
-                if (SECTION_NAMES.some((section) => section === name)) {
-                    nextHidden.add(name as SectionName);
-                }
-            }
-        }
-        if (SECTION_NAMES.every((name) => hiddenSections.has(name) === nextHidden.has(name))) {
+        const { newValue } = changes[HIDDEN_SECTIONS_STORAGE_KEY];
+        // Storage echoes from earlier saves must not reset newer local choices.
+        // Reconcile the latest observed value once every queued save has settled.
+        if (pendingSaveCount > 0) {
+            deferredStorageChange = { newValue };
             return;
         }
-        hiddenSections.clear();
-        for (const name of nextHidden) hiddenSections.add(name);
-        for (const name of SECTION_NAMES) {
-            const checkbox = checkboxes.get(name);
-            if (checkbox) checkbox.checked = hiddenSections.has(name);
-        }
-        applyVisibility();
-        requestRender();
+        applyStoredSections(newValue);
     };
     chrome.storage.onChanged.addListener(handleStorageChange);
     window.addEventListener("pagehide", () => {

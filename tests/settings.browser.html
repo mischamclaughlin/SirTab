@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en" data-theme="mocha">
+<meta charset="utf-8">
+<link rel="stylesheet" href="../dist/sidebar/sidebar.css">
+<title>Settings persistence and retry</title>
+<div id="settings"></div>
+<output id="result">RUNNING</output>
+<script type="module">
+const result = document.getElementById('result');
+const unhandled = [];
+addEventListener('error', (event) => { unhandled.push(event.error?.stack ?? event.message); result.textContent = `FAIL: ${event.message}`; });
+addEventListener('unhandledrejection', (event) => { unhandled.push(String(event.reason)); result.textContent = `FAIL: ${event.reason}`; });
+const assert = (value, message) => { if (!value) throw Error(message); };
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+let finishSave;
+let failSave = false;
+globalThis.chrome = {
+    runtime: { getURL: (path) => path },
+    commands: { getAll: async () => [{ name: '_execute_action', shortcut: 'Alt+S' }] },
+    storage: { local: {
+        get: async () => ({}),
+        set: async () => {
+            if (failSave) throw Error('Storage temporarily unavailable');
+            await new Promise((resolve) => { finishSave = resolve; });
+        },
+    } },
+    tabs: { create: async () => ({}) },
+};
+const { setupSettingAction } = await import('../dist/sidebar/actions/actionSetting.js');
+await setupSettingAction(document.querySelector('#settings'), document.createElement('div'));
+const settingsButton = document.querySelector('.settings-btn');
+settingsButton.click();
+await settle();
+assert(settingsButton.getAttribute('aria-expanded') === 'true', 'settings should expand');
+assert(!document.querySelector('.setting-info-section').hidden, 'settings panel should be visible');
+assert(document.querySelectorAll('.shortcut-row').length === 6, 'all shortcut commands should appear');
+const themes = [...document.querySelectorAll('.theme-option')];
+const light = themes.find((button) => button.textContent === 'light');
+const mocha = themes.find((button) => button.textContent === 'mocha');
+assert(mocha.getAttribute('aria-pressed') === 'true', 'saved theme selection should restore');
+light.click();
+assert(themes.every((button) => button.disabled), 'theme choices should lock during persistence');
+assert(document.documentElement.dataset.theme === 'mocha', 'pending save should preserve current theme');
+assert(light.getAttribute('aria-busy') === 'true', 'saving theme should expose busy state');
+finishSave();
+await settle();
+assert(themes.every((button) => !button.disabled), 'theme choices should unlock after save');
+assert(light.getAttribute('aria-pressed') === 'true' && light.classList.contains('is-selected'), 'saved theme should become selected');
+assert(document.documentElement.dataset.theme === 'light', 'saved theme should apply');
+failSave = true;
+mocha.click();
+await settle();
+assert(document.documentElement.dataset.theme === 'light', 'failed save should preserve current theme');
+assert(light.getAttribute('aria-pressed') === 'true', 'failed save should preserve selected control');
+assert(themes.every((button) => !button.disabled), 'failed save should release choices for retry');
+assert(getComputedStyle(light).display !== 'none', 'selected theme should remain visible');
+failSave = false;
+mocha.click();
+finishSave();
+await settle();
+assert(document.documentElement.dataset.theme === 'mocha', 'retry should apply the theme');
+assert(mocha.getAttribute('aria-pressed') === 'true', 'retry should update selection');
+document.querySelector('.theme-options').scrollIntoView({ block: 'end' });
+await new Promise((resolve) => setTimeout(resolve, 250));
+assert(unhandled.length === 0, `unhandled errors: ${unhandled.join('; ')}`);
+result.textContent = 'PASS';
+</script>
+</html>

@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runBrowserFixture } from "./helpers/browser-fixture.mjs";
 
 const root = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const candidates = [
@@ -27,75 +27,29 @@ const server = createServer(async (request, response) => {
     }
     try {
         const contents = await readFile(file);
-        response.setHeader(
-            "Content-Type",
-            file.endsWith(".js") ? "text/javascript" :
-                file.endsWith(".css") ? "text/css" : "text/html",
-        );
+        response.setHeader("Content-Type", /\.m?js$/.test(file) ? "text/javascript" :
+            file.endsWith(".css") ? "text/css" : "text/html");
         response.end(contents);
     } catch {
         response.writeHead(404).end();
     }
 });
-
 const profile = await mkdtemp(path.join(tmpdir(), "sirtab-browser-test-"));
-let child;
-let timeout;
 try {
     await new Promise((resolve, reject) => {
         server.once("error", reject);
         server.listen(0, "127.0.0.1", resolve);
     });
-    const address = server.address();
     const page = process.env.SIRTAB_TEST_PAGE ?? "tests/refresh-interaction.html";
-    const screenshotPath = process.env.SIRTAB_TEST_SCREENSHOT;
-    const url = `http://127.0.0.1:${address.port}/${page}`;
-    child = spawn(browser, [
-        "--headless=new",
-        "--no-first-run",
-        "--disable-gpu",
-        `--user-data-dir=${profile}`,
-        "--virtual-time-budget=3000",
-        ...(screenshotPath ? ["--window-size=360,600", `--screenshot=${screenshotPath}`] : []),
-        "--dump-dom",
-        url,
-    ], { stdio: ["ignore", "pipe", "pipe"] });
-
-    let output = "";
-    let errors = "";
-    const result = await new Promise((resolve, reject) => {
-        timeout = setTimeout(() => reject(new Error(
-            `Browser test timed out: ${output.slice(-1200)} ${errors.slice(-600)}`,
-        )), 30000);
-        child.on("error", reject);
-        child.stdout.on("data", (chunk) => {
-            output += chunk;
-            const match = output.match(/<output id="result">(PASS|FAIL: [^<]*)<\/output>/);
-            if (match) resolve(match[1]);
-        });
-        child.stderr.on("data", (chunk) => {
-            errors += chunk;
-        });
-        child.on("exit", (code) => {
-            const match = output.match(/<output id="result">(PASS|FAIL: [^<]*)<\/output>/);
-            if (match) resolve(match[1]);
-            else reject(new Error(`Browser exited ${code} before reporting a result: ${errors.slice(-800)}`));
-        });
+    const url = `http://127.0.0.1:${server.address().port}/${page}`;
+    const result = await runBrowserFixture({
+        browser, profile, url, root,
+        screenshotPath: process.env.SIRTAB_TEST_SCREENSHOT,
+        directory: process.env.SIRTAB_COVERAGE_DIRECTORY,
     });
     assert.equal(result, "PASS", result);
-    process.stdout.write(`PASS: ${page} in ${path.basename(browser)}\n`);
+    process.stdout.write(`PASS: ${page} in ${path.basename(browser)}${process.env.SIRTAB_COVERAGE_DIRECTORY ? " (coverage)" : ""}\n`);
 } finally {
-    clearTimeout(timeout);
-    if (child && child.exitCode == null) {
-        const exited = new Promise((resolve) => child.once("exit", resolve));
-        child.kill();
-        await exited;
-    }
     await new Promise((resolve) => server.close(resolve));
-    await rm(profile, {
-        recursive: true,
-        force: true,
-        maxRetries: 10,
-        retryDelay: 100,
-    });
+    await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }

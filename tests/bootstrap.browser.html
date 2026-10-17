@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sidebar bootstrap integration</title>
+<output id="result">RUNNING</output>
+<script type="module">
+const result = document.getElementById('result');
+try {
+    for (const scenario of ['entrypoint', 'races', 'initial-activation', 'initial-search', 'bookmark-failure', 'tab-failure', 'preference-failure']) {
+        const frame = document.createElement('iframe');
+        frame.srcdoc = `<link rel="stylesheet" href="/dist/sidebar/sidebar.css"><script type="module">try { frameElement.dataset.stage='importing'; const { run } = await import('/tests/helpers/bootstrap-fixture.mjs'); frameElement.dataset.stage='running'; await run(${JSON.stringify(scenario)}); frameElement.dataset.result='PASS'; } catch(error) { frameElement.dataset.result='FAIL: '+error.stack; }<\/script>`;
+        document.body.append(frame);
+        for (let i = 0; !frame.dataset.result && i < 250; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+        if (frame.dataset.result !== 'PASS') throw new Error(`${scenario}: ${frame.dataset.result ?? ('timed out at '+frame.dataset.stage)}`);
+        frame.remove();
+    }
+    result.textContent = 'PASS';
+} catch (error) { result.textContent = `FAIL: ${error.message}`; }
+</script>

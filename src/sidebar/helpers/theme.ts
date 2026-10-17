@@ -5,8 +5,13 @@ export function applyTheme(theme: SidebarTheme) {
 }
 
 export async function loadThemePreference() {
-    const storage = await chrome.storage.local.get(THEME_STORAGE_KEY);
-    const savedTheme = storage[THEME_STORAGE_KEY];
+    let savedTheme: unknown;
+    try {
+        const storage = await chrome.storage.local.get(THEME_STORAGE_KEY);
+        savedTheme = storage[THEME_STORAGE_KEY];
+    } catch (error) {
+        console.error("Load theme preference failed:", error);
+    }
     const normalizedSavedTheme =
         savedTheme === "standard-dark"
             ? "dark"

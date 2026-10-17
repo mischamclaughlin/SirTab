@@ -174,14 +174,21 @@ export async function setupSettingAction(
         button.type = "button";
         button.className = "control theme-option";
         button.textContent = themeLabels[theme];
-        button.addEventListener("click", async () => {
-            applyTheme(theme);
-            await chrome.storage.local.set({ [THEME_STORAGE_KEY]: theme });
-            for (const [id, btn] of themeButtons) {
-                const isSelected = id === theme;
-                btn.classList.toggle("is-selected", isSelected);
-                btn.setAttribute("aria-pressed", String(isSelected));
-            }
+        button.addEventListener("click", () => {
+            void runButtonAction(button, async () => {
+                for (const btn of themeButtons.values()) btn.disabled = true;
+                try {
+                    await chrome.storage.local.set({ [THEME_STORAGE_KEY]: theme });
+                    applyTheme(theme);
+                    for (const [id, btn] of themeButtons) {
+                        const isSelected = id === theme;
+                        btn.classList.toggle("is-selected", isSelected);
+                        btn.setAttribute("aria-pressed", String(isSelected));
+                    }
+                } finally {
+                    for (const btn of themeButtons.values()) btn.disabled = false;
+                }
+            }, "Save theme failed:");
         });
         themeButtons.set(theme, button);
         themeOptions.append(button);
@@ -277,11 +284,19 @@ export async function setupSettingAction(
         settingInfoSection.hidden = !isSettingOpen;
         settingsBtn.setAttribute("aria-expanded", String(isSettingOpen));
         if (isSettingOpen) {
-            void refreshShortcutList(shortcutList);
+            void runButtonAction(
+                settingsBtn,
+                () => refreshShortcutList(shortcutList),
+                "Load shortcuts failed:",
+            );
         }
     });
 
-    await refreshShortcutPrompt(shortcutPrompt, shortcutPromptCount);
+    try {
+        await refreshShortcutPrompt(shortcutPrompt, shortcutPromptCount);
+    } catch (error) {
+        console.error("Load shortcut prompt failed:", error);
+    }
 
     const footerControls = document.createElement("div");
     footerControls.className = "footer-controls";

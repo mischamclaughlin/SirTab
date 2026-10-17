@@ -31,6 +31,7 @@ export function setupEventListeners(
         activateTab,
     }: SidebarEventHandlers,
 ): () => void {
+    let disposed = false;
     const handleTabCreated = (tab: chrome.tabs.Tab) => {
         if (tab.windowId !== currentWindowId) return;
         requestTabGroupRefresh();
@@ -88,7 +89,7 @@ export function setupEventListeners(
     const handleTabReplaced = async (addedTabId: number) => {
         try {
             const addedTab = await chrome.tabs.get(addedTabId);
-            if (addedTab.windowId !== currentWindowId) return;
+            if (disposed || addedTab.windowId !== currentWindowId) return;
             requestTabGroupRefresh();
         } catch (error) {
             console.error("Failed to handle tab replacement:", error);
@@ -137,6 +138,8 @@ export function setupEventListeners(
     chrome.storage.onChanged.addListener(handleStorageChange);
 
     const cleanup = () => {
+        disposed = true;
+        window.removeEventListener("pagehide", cleanup);
         chrome.tabs.onCreated.removeListener(handleTabCreated);
         chrome.tabs.onRemoved.removeListener(handleTabRemoved);
         chrome.tabs.onUpdated.removeListener(handleTabUpdated);
