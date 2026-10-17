@@ -1,19 +1,43 @@
 {
     "devDependencies": {
         "@types/chrome": "^0.1.39",
+        "c8": "^12.0.0",
         "typescript": "^6.0.2"
     },
     "scripts": {
         "build": "node scripts/copy-static.mjs --clean && tsc",
         "package:store": "npm run build && node scripts/package-store.mjs",
         "screenshots": "npm run build && node scripts/screenshots.mjs",
-        "test": "npm run build && node --test",
+        "test": "npm run build && node scripts/verify.mjs",
         "test:browser": "npm run build && node tests/browser-suite.mjs",
-        "test:coverage": "npm run build && node --experimental-test-coverage --test-coverage-include=\"dist/**/*.js\" --test",
+        "test:coverage": "npm run build && c8 node scripts/verify.mjs --coverage",
         "test:order": "npm run build && node --test tests/order.test.mjs",
         "watch": "node scripts/watch.mjs",
         "watch:static": "node scripts/watch-static.mjs",
-        "watch:ts": "tsc --watch --preserveWatchOutput"
+        "watch:ts": "tsc --watch --preserveWatchOutput",
+        "test:unit": "npm run build && node --test",
+        "test:extension": "npm run build && node tests/extension.browser.mjs"
     },
-    "type": "module"
+    "type": "module",
+    "c8": {
+        "all": true,
+        "src": [
+            "dist"
+        ],
+        "include": [
+            "dist/**/*.js"
+        ],
+        "exclude": [
+            "dist/sidebar/types.js"
+        ],
+        "reporter": [
+            "text",
+            "html",
+            "json-summary"
+        ],
+        "check-coverage": true,
+        "lines": 95,
+        "branches": 85,
+        "functions": 90
+    }
 }

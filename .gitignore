@@ -1,6 +1,7 @@
 dist/
 node_modules/
 .vscode/
+coverage/
 
 # Chrome Web Store upload artifacts
 webstore/

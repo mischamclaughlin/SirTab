@@ -79,10 +79,16 @@ npm run watch
 
 Reload the unpacked extension after rebuilding to pick up changes.
 
-Run the automated behavioural tests:
+Run the complete test suite (build, Node tests, browser fixtures and unpacked-extension integration):
 
 ```bash
 npm test
+```
+
+Run only the Node tests:
+
+```bash
+npm run test:unit
 ```
 
 Run all browser interaction fixtures in Chrome or Brave:
@@ -93,11 +99,30 @@ npm run test:browser
 
 Set `SIRTAB_TEST_PAGE=tests/refresh-interaction.html` to run one fixture.
 
-Generate a coverage report for the modules exercised by the tests:
+Run the real unpacked-extension integration tests:
+
+```bash
+npm run test:extension
+```
+
+These use native mouse input and real Chrome APIs in a disposable Brave or
+Chromium profile. Set `SIRTAB_EXTENSION_BROWSER` to choose an executable that
+supports loading unpacked extensions. The suite opens the actual sidebar
+extension page; the browser's side-panel shell is not automated.
+
+Generate a combined Node and browser-fixture coverage report, including
+production modules that no test loads:
 
 ```bash
 npm run test:coverage
 ```
+
+The HTML report is written to `coverage/index.html` and a machine-readable summary
+to `coverage/coverage-summary.json`. Coverage maps back to TypeScript. The real
+extension suite also runs, but its execution is not included in the coverage
+percentage. The coverage command enforces minimums of 95% lines, 85% branches
+and 90% functions. Browser fixtures use mocks for failure injection; the unpacked
+extension suite separately checks real browser integration.
 
 Regenerate the README screenshots from the built extension's real UI:
 
