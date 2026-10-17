@@ -3,7 +3,7 @@
 Sir Tab is a Chrome side-panel extension for managing tabs, tab groups, and
 bookmarks from one place.
 
-<img src="docs/images/sir-tab-sidebar.png" alt="Sir Tab's current sidebar showing demo tabs, groups and bookmarks" width="440">
+![Sir Tab open beside Brave's new-tab page in the full browser window](docs/images/sir-tab-browser.png)
 
 ## Features
 
