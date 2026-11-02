@@ -1,3 +1,4 @@
+import { setupWorkspacePersistence } from "./workspace.js";
 import {
     buildVisibleLogicalTabIds,
     getTabGroupId,
@@ -142,7 +143,8 @@ async function moveVisibleTab(direction: 1 | -1) {
     );
     if (targetTab?.id == null) return;
 
-    const sourceGroupId = getTabGroupId(activeTab);
+    const logicalActiveTab = visibleState.logicalData.tabs.find((tab) => tab.id === activeTab.id);
+    const sourceGroupId = getTabGroupId(logicalActiveTab ?? activeTab);
     const targetGroupId = getTabGroupId(targetTab);
     const position = getVisibleMovePosition({
         sourceGroupId,
@@ -173,7 +175,11 @@ const commandActions = new Map<string, () => Promise<void>>([
 chrome.commands.onCommand.addListener((command) => {
     const action = commandActions.get(command);
     if (!action) return;
-    void action().catch((error) => {
+    return action().catch((error) => {
         console.error(`Background command ${command} failed:`, error);
     });
 });
+
+
+// Registration happens synchronously; recovery gates the first live capture.
+if (chrome.runtime?.onStartup && chrome.tabs.onCreated) setupWorkspacePersistence();

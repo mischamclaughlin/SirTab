@@ -1,3 +1,4 @@
+import { PERSISTENT_GROUPS_WINDOW_PREFIX } from "../../shared/persistentGroups.js";
 import type { RequestRender } from "../types.js";
 import {
     GROUP_ORDER_STORAGE_KEY,
@@ -108,6 +109,7 @@ export function setupEventListeners(
     ) => {
         if (areaName !== "local") return;
         if (
+            `${PERSISTENT_GROUPS_WINDOW_PREFIX}${currentWindowId}` in changes ||
             TAB_ORDER_STORAGE_KEY in changes ||
             GROUP_ORDER_STORAGE_KEY in changes ||
             `${TAB_ORDER_WINDOW_PREFIX}${currentWindowId}` in changes ||

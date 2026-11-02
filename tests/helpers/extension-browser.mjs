@@ -16,7 +16,7 @@ export async function until(read, description, timeout = 15000) {
 
 // A disposable profile is essential: these tests intentionally mutate real tabs,
 // windows, bookmarks and extension storage, never an existing browser session.
-export async function launchExtension(root) {
+export async function launchExtension(root, { profile: suppliedProfile, keepProfile = false, args = [] } = {}) {
   const browser = [
     process.env.SIRTAB_EXTENSION_BROWSER,
     process.env.SIRTAB_BROWSER,
@@ -30,9 +30,13 @@ export async function launchExtension(root) {
     throw new Error(
       "Brave or Chromium with unpacked-extension support is required",
     );
-  const profile = await mkdtemp(path.join(tmpdir(), "sirtab-extension-test-"));
+  const ownsProfile = suppliedProfile == null;
+  const profile = suppliedProfile ?? await mkdtemp(path.join(tmpdir(), "sirtab-extension-test-"));
+  // A previous process leaves this behind; do not connect to its stale port.
+  await rm(path.join(profile, "DevToolsActivePort"), { force: true });
   const sockets = [];
   let errors = "";
+  let browserConnection;
   const child = spawn(
     browser,
     [
@@ -43,6 +47,7 @@ export async function launchExtension(root) {
       "--remote-debugging-port=0",
       `--disable-extensions-except=${path.join(root, "dist")}`,
       `--load-extension=${path.join(root, "dist")}`,
+      ...args,
     ],
     { stdio: ["ignore", "ignore", "pipe"] },
   );
@@ -52,28 +57,37 @@ export async function launchExtension(root) {
   child.on("error", (error) => {
     errors += error.message;
   });
-  const close = async () => {
-    for (const socket of sockets) socket.close();
+  const stop = async ({ crash = false } = {}) => {
     if (child.exitCode == null && child.signalCode == null) {
       await new Promise((resolve) => {
+        let escalation;
         const timer = setTimeout(() => {
-          child.kill("SIGKILL");
-          resolve();
+          child.kill("SIGTERM");
+          escalation = setTimeout(() => {
+            child.kill("SIGKILL");
+            resolve();
+          }, 3000);
+          escalation.unref();
         }, 3000);
         timer.unref();
         child.once("exit", () => {
           clearTimeout(timer);
+          clearTimeout(escalation);
           resolve();
         });
-        child.kill();
+        if (crash) child.kill("SIGKILL");
+        else if (browserConnection) void browserConnection.send("Browser.close").catch(() => {});
+        else child.kill("SIGTERM");
       });
     }
-    await rm(profile, {
-      recursive: true,
-      force: true,
-      maxRetries: 10,
-      retryDelay: 100,
-    });
+    for (const socket of sockets) socket.close();
+  };
+  const close = async () => {
+    await stop();
+    // Caller-owned profiles are never removed, even if startup fails.
+    if (ownsProfile && !keepProfile) {
+      await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    }
   };
   try {
     const port = await until(async () => {
@@ -89,7 +103,7 @@ export async function launchExtension(root) {
       fetch(`http://127.0.0.1:${port}/json/list`, {
         signal: AbortSignal.timeout(5000),
       }).then((response) => response.json());
-    const connect = async (target) => {
+    const connect = async (target, initialiseRuntime = true) => {
       const socket = new WebSocket(target.webSocketDebuggerUrl);
       sockets.push(socket);
       await new Promise((resolve, reject) => {
@@ -118,6 +132,13 @@ export async function launchExtension(root) {
           pending.set(id, { resolve, reject, timeout });
           socket.send(JSON.stringify({ id, method, params }));
         });
+      socket.addEventListener("close", () => {
+        for (const callback of pending.values()) {
+          clearTimeout(callback.timeout);
+          callback.reject(new Error("Browser debugging connection closed"));
+        }
+        pending.clear();
+      });
       const evaluate = async (expression) => {
         const result = await send("Runtime.evaluate", {
           expression,
@@ -128,10 +149,16 @@ export async function launchExtension(root) {
           throw new Error(JSON.stringify(result.exceptionDetails));
         return result.result.value;
       };
-      await send("Runtime.enable");
-      await send("Runtime.runIfWaitingForDebugger");
+      if (initialiseRuntime) {
+        await send("Runtime.enable");
+        await send("Runtime.runIfWaitingForDebugger");
+      }
       return { send, evaluate };
     };
+    const version = await fetch(`http://127.0.0.1:${port}/json/version`, {
+      signal: AbortSignal.timeout(5000),
+    }).then(response => response.json());
+    browserConnection = await connect(version, false);
     const worker = await until(
       async () =>
         (await targets()).find(
@@ -151,6 +178,8 @@ export async function launchExtension(root) {
     );
     return {
       close,
+      stop,
+      profile,
       targets,
       connect,
       background,

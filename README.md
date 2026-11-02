@@ -10,16 +10,25 @@ bookmarks from one place.
 - View, switch, and organise tabs in the current browser window.
 - Search tab and bookmark titles and addresses, plus group and folder names.
 - Create colour-coded tab groups and drag individual or selected tabs between them.
-- Arrange tabs and groups in a saved sidebar order, with restoration across browser restarts.
+- Keep empty groups in the sidebar without placeholder tabs; add or drop in a tab when needed.
+- Automatically reopen the saved workspace after browser restarts, preserving tab/group sidebar order and empty groups.
+- Keep deliberately closed individual tabs closed, and reuse tabs the browser has already restored.
 - Create bookmark folders, bookmark the current tab, and rename or delete bookmarks and folders.
+- Drag tabs into bookmarks to save a copy, and move bookmarks or folders within the bookmark tree.
 - Select and close multiple tabs, with Shift-click range selection.
 - Move between visible tabs and rearrange them with configurable keyboard shortcuts.
 - Hide sidebar sections and choose from six built-in colour themes.
 
 Sidebar ordering is saved separately from the browser's native tab-strip order.
 Moving tabs between groups also changes their native browser group membership,
-which may reposition them in the tab strip. Bookmarks are shown from the
+which may reposition them in the tab strip. Empty groups are saved locally by Sir Tab
+and appear in the sidebar; a native browser group is created when a tab is added. Bookmarks are shown from the
 bookmarks bar; Other Bookmarks, Mobile Bookmarks and managed system folders are hidden.
+
+Workspace recovery reopens saved tab addresses; it does not copy page history,
+unsaved form contents or in-memory page state. Browser-restricted or temporary
+addresses such as `blob:` and `data:` cannot be restored this way. Bookmark order
+uses the browser’s saved bookmark tree.
 
 ### Search tabs and bookmarks
 
@@ -64,8 +73,8 @@ The author's preferred setup is Brave with its native vertical tabs hidden.
 ## Privacy
 
 Sir Tab processes browser data locally and saves preferences and sidebar order
-in local extension storage, including URL-derived fingerprints for restoring
-order. It has no developer-operated account, analytics or data-upload service.
+in local extension storage, including full tab addresses and titles for workspace
+recovery and URL-derived fingerprints for restoring order. Incognito windows are excluded from workspace recovery. It has no developer-operated account, analytics or data-upload service.
 Displaying browser-supplied favicons may contact their hosts. See the
 [privacy policy](docs/privacy-policy.md) for details.
 
@@ -113,7 +122,7 @@ npm run test:browser
 
 Set `SIRTAB_TEST_PAGE=tests/refresh-interaction.html` to run one fixture.
 
-Run the real unpacked-extension integration tests:
+Run the real unpacked-extension integration and process-restart tests:
 
 ```bash
 npm run test:extension
@@ -122,7 +131,8 @@ npm run test:extension
 These use native mouse input and real Chrome APIs in a disposable Brave or
 Chromium profile. Set `SIRTAB_EXTENSION_BROWSER` to choose an executable that
 supports loading unpacked extensions. The suite opens the actual sidebar
-extension page; the browser's side-panel shell is not automated.
+extension page; the browser's side-panel shell is not automated. Restart checks reuse a disposable
+profile across graceful shutdown, native session restore, worker restart and forced termination.
 
 Generate a combined Node and browser-fixture coverage report, including
 production modules that no test loads:

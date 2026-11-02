@@ -77,17 +77,17 @@ test("group changes are window scoped and every bookmark mutation refreshes book
     assert.equal(state.refreshes, 4);
 });
 
-test("storage refreshes only local ordering changes for this window or legacy keys", async (t) => {
+test("storage refreshes local group and ordering changes for this window or legacy keys", async (t) => {
     const { storage, state } = harness(t);
-    for (const key of [TAB_ORDER_STORAGE_KEY, GROUP_ORDER_STORAGE_KEY, `${TAB_ORDER_WINDOW_PREFIX}7`, `${GROUP_ORDER_WINDOW_PREFIX}7`]) {
+    for (const key of [TAB_ORDER_STORAGE_KEY, GROUP_ORDER_STORAGE_KEY, `${TAB_ORDER_WINDOW_PREFIX}7`, `${GROUP_ORDER_WINDOW_PREFIX}7`, "persistentGroups:7"]) {
         const before = state.refreshes;
         await storage.onChanged.emit({ [key]: {} }, "sync");
         assert.equal(state.refreshes, before);
         await storage.onChanged.emit({ [key]: {} }, "local");
         assert.equal(state.refreshes, before + 1);
     }
-    for (const key of [`${TAB_ORDER_WINDOW_PREFIX}8`, `${GROUP_ORDER_WINDOW_PREFIX}8`, "theme", "unrelated"]) await storage.onChanged.emit({ [key]: {} }, "local");
-    assert.equal(state.refreshes, 4);
+    for (const key of [`${TAB_ORDER_WINDOW_PREFIX}8`, `${GROUP_ORDER_WINDOW_PREFIX}8`, "persistentGroups:8", "theme", "unrelated"]) await storage.onChanged.emit({ [key]: {} }, "local");
+    assert.equal(state.refreshes, 5);
 });
 
 test("replacement lookup filters windows, contains failures, and stops after cleanup", async (t) => {

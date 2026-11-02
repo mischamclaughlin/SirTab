@@ -16,6 +16,7 @@
     });
     const saved = { group: null, bookmark: null };
     globalThis.chrome = {
+        storage: { local: { get: async () => ({}) } },
         runtime: { getURL: (path) => `chrome-extension://test/${path}` },
         tabGroups: { update: async (_id, details) => { saved.group = details; } },
         bookmarks: { update: async (_id, details) => { saved.bookmark = details; } },
@@ -43,6 +44,14 @@
 
     function assert(condition, message) {
         if (!condition) throw Error(message);
+    }
+
+    async function until(read) {
+        const deadline = Date.now() + 2000;
+        while (!read()) {
+            if (Date.now() > deadline) throw Error('Timed out waiting for group save');
+            await new Promise(resolve => setTimeout(resolve, 1));
+        }
     }
 
     function render() {
@@ -89,7 +98,7 @@
         assert(document.activeElement.selectionStart === 5 && document.activeElement.selectionEnd === 10,
             "group input selection was lost on refresh");
         groupItem().querySelector(".group-edit-form button").click();
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await until(() => saved.group && !groupItem().querySelector(".group-edit-form"));
         assert(saved.group?.title === "Draft group name" && saved.group?.color === "red",
             "restored group form did not save its draft");
 
@@ -105,8 +114,9 @@
             "group form disappeared before the pending save completed");
         assert(groupItem().querySelector("[data-edit-save]").disabled,
             "restored group save button allowed a duplicate pending save");
+        await until(() => resolveGroupUpdate);
         resolveGroupUpdate();
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await until(() => !groupItem().querySelector(".group-edit-form"));
         assert(!groupItem().querySelector(".group-edit-form"),
             "successful group save left the restored form open");
 
@@ -115,7 +125,7 @@
         groupItem().querySelector(".group-edit-form input").value = "Retry group";
         groupItem().querySelector("[data-edit-save]").click();
         render();
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await until(() => !groupItem().querySelector("[data-edit-save]").disabled);
         assert(groupItem().querySelector(".group-edit-form input").value === "Retry group",
             "failed group save lost the restored draft");
         assert(!groupItem().querySelector("[data-edit-save]").disabled,

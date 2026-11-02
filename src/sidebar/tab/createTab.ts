@@ -1,3 +1,5 @@
+import { groupTabsPersistently } from "../../shared/persistentGroups.js";
+
 export function createNewTab(windowId?: number) {
     return chrome.tabs.create({
         url: "chrome://newtab",
@@ -11,7 +13,7 @@ export async function createNewTabInGroup(groupId: number, windowId: number) {
     if (tab.id == null) throw new Error("New tab has no ID");
 
     try {
-        await chrome.tabs.group({ tabIds: tab.id, groupId });
+        await groupTabsPersistently([tab.id], groupId, windowId);
     } catch (error) {
         try {
             await chrome.tabs.remove(tab.id);

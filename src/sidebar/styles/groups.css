@@ -9,6 +9,16 @@
     opacity: 0.45;
 }
 
+.group-item.is-empty > .tree-row {
+    opacity: 0.7;
+}
+
+.group-item.is-empty > .tree-row:hover,
+.group-item.is-empty > .tree-row:focus-within,
+.group-item.is-empty > .tree-row.drop-inside {
+    opacity: 1;
+}
+
 .group-item.drop-before::before,
 .group-item.drop-after::after {
     content: "";

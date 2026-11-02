@@ -45,7 +45,8 @@
         throw new Error('group add button is not between title and close');
       }
       add.click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      const deadline = Date.now() + 2000;
+      while (calls.renders === 0 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 1));
       if (calls.created.length !== 1 || calls.created[0].windowId !== 1 ||
           calls.grouped[0]?.groupId !== 21 || collapsed.has('21') ||
           calls.stored.length !== 1 || calls.renders !== 1) {

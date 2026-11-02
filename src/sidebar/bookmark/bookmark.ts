@@ -1,3 +1,4 @@
+import { makeBookmarkDraggable } from "../helpers/dragAndDrop.js";
 import type { BookmarkFolderChoice, TabSelectionView } from "../types.js";
 import { persistCollapse, isCollapsedCheck } from "../helpers/collapseState.js";
 import { matchesNodeQuery } from "../helpers/nodeSearch.js";
@@ -78,28 +79,6 @@ export function collectBookmarkFolderChoices(
     }
 
     return choices;
-}
-
-function orderBookmarkNodesForDisplay(
-    nodes: chrome.bookmarks.BookmarkTreeNode[],
-) {
-    const passthroughNodes: chrome.bookmarks.BookmarkTreeNode[] = [];
-    const bookmarkNodes: chrome.bookmarks.BookmarkTreeNode[] = [];
-    const folderNodes: chrome.bookmarks.BookmarkTreeNode[] = [];
-
-    for (const node of nodes) {
-        if (isHiddenSystemFolder(node)) continue;
-
-        if (isRootPlaceholder(node) || isBookmarksBarFolder(node)) {
-            passthroughNodes.push(node);
-            continue;
-        }
-
-        if (node.url) bookmarkNodes.push(node);
-        else folderNodes.push(node);
-    }
-
-    return [...passthroughNodes, ...bookmarkNodes, ...folderNodes];
 }
 
 function createBookmarkEditForm(
@@ -196,9 +175,7 @@ export function cycleBookmarks(
     const collapsedBookmarkFoldersSet = collapsedBookmarkFolders
         ? collapsedBookmarkFolders
         : new Set<string>();
-    const orderedNodes = orderBookmarkNodesForDisplay(nodes);
-
-    for (const node of orderedNodes) {
+    for (const node of nodes) {
         if (isHiddenSystemFolder(node)) continue;
 
         if (isRootPlaceholder(node) || isBookmarksBarFolder(node)) {
@@ -287,6 +264,7 @@ export function cycleBookmarks(
             } else {
                 row.append(btn, deleteBookmarkBtn);
             }
+            makeBookmarkDraggable(btn, row, node.id, () => !forceExpandFolders && !node.unmodifiable);
             li.appendChild(row);
             let editForm: HTMLElement | null = null;
             editBookmarkBtn?.addEventListener("click", () => {
@@ -383,6 +361,7 @@ export function cycleBookmarks(
         } else {
             row.append(btn, deleteFolderBtn);
         }
+        makeBookmarkDraggable(btn, row, node.id, () => !forceExpandFolders && !node.unmodifiable);
         li.appendChild(row);
         let editForm: HTMLElement | null = null;
         editFolderBtn?.addEventListener("click", () => {

@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="../dist/sidebar/sidebar.css">
+  <style>body { width: 360px; } #bookmarks-list { min-height: 40px; padding-bottom: 30px; }</style>
+</head>
+<body>
+  <output id="result">RUNNING</output>
+  <main id="sidebar-content">
+    <ul id="tabs-list"></ul><ul id="groups-list"></ul><ul id="bookmarks-list"></ul>
+  </main>
+  <script type="module">
+    const assert = (condition, message) => { if (!condition) throw Error(message); };
+    const equal = (actual, expected, message) => assert(JSON.stringify(actual) === JSON.stringify(expected), `${message}: ${JSON.stringify(actual)}`);
+    const until = async read => {
+      const deadline = Date.now() + 2000;
+      while (!read()) {
+        if (Date.now() > deadline) throw Error('Timed out waiting for bookmark drop');
+        await new Promise(resolve => setTimeout(resolve, 1));
+      }
+    };
+    try {
+      let root;
+      const moves = [], created = [], errors = [];
+      let renders = 0, rejectMove = false;
+      const walk = (node, id) => node.id === id ? node : node.children?.map(child => walk(child, id)).find(Boolean);
+      const find = id => walk(root, id);
+      const reindex = node => node.children?.forEach((child, index) => {
+        child.parentId = node.id; child.index = index; reindex(child);
+      });
+      root = { id: '0', title: '', children: [{ id: '1', title: 'Bookmarks bar', folderType: 'bookmarks-bar', children: [
+        { id: '10', title: 'Alpha', url: 'https://alpha.example/' },
+        { id: '11', title: 'Beta', url: 'https://beta.example/' },
+        { id: '12', title: 'Gamma', url: 'https://gamma.example/' },
+        { id: '20', title: 'Folder', children: [
+          { id: '21', title: 'Inside folder', url: 'https://inside.example/' },
+          { id: '30', title: 'Nested folder', children: [{ id: '31', title: 'Deep bookmark', url: 'https://deep.example/' }] },
+        ] },
+        { id: '40', title: 'Empty folder', children: [] },
+      ] }] };
+      reindex(root);
+      const originalError = console.error;
+      console.error = (...args) => errors.push(args);
+      globalThis.chrome = {
+        runtime: { getURL: path => path },
+        tabGroups: { TAB_GROUP_ID_NONE: -1 },
+        tabs: { get: async () => ({ id: 100, title: 'Incoming tab', url: 'https://incoming.example/' }) },
+        bookmarks: {
+          getTree: async () => structuredClone([root]),
+          get: async ids => (Array.isArray(ids) ? ids : [ids]).map(id => structuredClone(find(id))),
+          getChildren: async id => structuredClone(find(id)?.children ?? []),
+          getSubTree: async id => [structuredClone(find(id))],
+          move: async (id, destination) => {
+            if (rejectMove) throw Error('Injected bookmark move failure');
+            const source = find(id), parent = find(source.parentId), target = find(destination.parentId ?? source.parentId);
+            assert(source && target && !target.url, 'move must target a live folder');
+            assert(!walk(source, target.id), 'move must not create a folder cycle');
+            const oldIndex = source.index;
+            let index = destination.index ?? target.children.length;
+            if (target === parent && index > oldIndex) index--;
+            parent.children.splice(oldIndex, 1);
+            target.children.splice(index, 0, source);
+            reindex(root);
+            moves.push({ id, ...destination });
+            return structuredClone(source);
+          },
+          create: async entry => { created.push(entry); return { id: 'new', ...entry }; },
+        },
+      };
+      const { cycleTabs } = await import('../dist/sidebar/tab/tab.js');
+      const { buildGroup } = await import('../dist/sidebar/group/group.js');
+      const { cycleBookmarks } = await import('../dist/sidebar/bookmark/bookmark.js');
+      const { setupSidebarDropZones, makeBookmarkDraggable } = await import('../dist/sidebar/helpers/dragAndDrop.js');
+      assert(typeof makeBookmarkDraggable === 'function', 'bookmark drag helper must be exported');
+      const tabs = document.getElementById('tabs-list'), groups = document.getElementById('groups-list'), bookmarks = document.getElementById('bookmarks-list');
+      cycleTabs(tabs, [{ id: 100, title: 'Incoming tab', url: 'https://incoming.example/' }], { windowId: 1, enableDragDrop: true, requestRender: () => {} });
+      buildGroup(false, [{ id: 7, title: 'Tab group', color: 'blue', windowId: 1 }], new Map(), new Set(), false, '', groups, 1, () => {}, false);
+      const render = (searching = false) => {
+        bookmarks.replaceChildren();
+        cycleBookmarks(bookmarks, [root], searching, new Set(), () => { renders++; });
+      };
+      render();
+      setupSidebarDropZones(tabs, groups, bookmarks, 1, () => true, () => {}, () => { renders++; render(); });
+      const item = id => bookmarks.querySelector(`[data-bookmark-id="${id}"]`);
+      const handle = id => item(id)?.querySelector(':scope > .tab-row .tab-button, :scope > .tree-row .tree-toggle');
+      const row = id => item(id)?.querySelector(':scope > .tab-row, :scope > .tree-row');
+      const point = (target, edge = 'middle') => {
+        target.scrollIntoView({ block: 'nearest' });
+        const bounds = target.getBoundingClientRect();
+        return { clientX: bounds.left + Math.min(12, bounds.width / 2), clientY: edge === 'before' ? bounds.top + 2 : edge === 'after' ? bounds.bottom - 2 : bounds.top + bounds.height / 2 };
+      };
+      function dispatch(target, type, coordinates, transfer) {
+        const event = new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: transfer, ...coordinates });
+        target.dispatchEvent(event);
+        return event;
+      }
+      async function drop(source, target, edge = 'middle', accepted = true) {
+        const transfer = new DataTransfer();
+        const before = renders;
+        const isBookmark = !!source.closest('[data-bookmark-id]');
+        if (isBookmark) transfer.setData('text/uri-list', 'https://must-not-drag-out.example/');
+        dispatch(source, 'dragstart', point(source), transfer);
+        if (isBookmark) assert(!transfer.types.includes('text/uri-list'), 'bookmark drags must not expose URLs outside the sidebar');
+        const over = dispatch(target, 'dragover', point(target, edge), transfer);
+        assert(over.defaultPrevented === accepted, `${accepted ? 'valid' : 'invalid'} drop acceptance`);
+        dispatch(target, 'drop', point(target, edge), transfer);
+        if (accepted) await until(() => renders > before);
+        else await new Promise(resolve => setTimeout(resolve, 0));
+        dispatch(source, 'dragend', {}, transfer);
+      }
+
+      assert(handle('10').draggable && handle('20').draggable, 'bookmark and folder handles must be draggable');
+      await drop(handle('10'), row('12'), 'after');
+      equal(find('1').children.map(node => node.id), ['11', '12', '10', '20', '40'], 'forward same-folder reorder');
+      equal(moves[0], { id: '10', parentId: '1', index: 3 }, 'forward move uses the pre-removal index');
+      await drop(handle('10'), row('11'), 'before');
+      equal(find('1').children.map(node => node.id), ['10', '11', '12', '20', '40'], 'backward same-folder reorder');
+      await drop(handle('11'), row('40'));
+      assert(find('11').parentId === '40', 'bookmark moves into an empty folder');
+      await drop(handle('11'), row('21'), 'before');
+      equal(find('20').children.map(node => node.id), ['11', '21', '30'], 'bookmark moves before a child of another folder');
+      await drop(handle('11'), bookmarks, 'after');
+      assert(find('11').parentId === '1', 'bookmark moves back to the bookmarks bar');
+      await drop(handle('20'), row('40'));
+      assert(find('20').parentId === '40', 'folders can move between bookmark folders');
+      const count = moves.length;
+      await drop(handle('40'), row('40'), 'middle', false);
+      await drop(handle('40'), row('30'), 'middle', false);
+      await drop(handle('10'), tabs.querySelector('.tab-row'), 'middle', false);
+      await drop(handle('10'), groups.querySelector('.tree-row'), 'middle', false);
+      assert(moves.length === count && created.length === 0, 'invalid destinations must not mutate bookmarks');
+
+      rejectMove = true;
+      await drop(handle('10'), row('12'), 'after');
+      assert(errors.some(([message]) => message === 'Drag and drop action failed:'), 'move failure must be reported');
+      rejectMove = false;
+      await drop(handle('10'), row('12'), 'after');
+      assert(moves.length === count + 1, 'bookmark move can retry after API rejection');
+
+      render(true);
+      const searchHandle = handle('10');
+      const searchDrag = dispatch(searchHandle, 'dragstart', point(searchHandle), new DataTransfer());
+      assert(!searchHandle.draggable || searchDrag.defaultPrevented, 'search results must not start bookmark drags');
+      render();
+      await drop(tabs.querySelector('.tab-button'), row('40'));
+      assert(created.length === 1 && created[0].parentId === '40', 'tabs still copy into bookmarks');
+      assert(moves.length === count + 1, 'copying a tab must not move a bookmark');
+      console.error = originalError;
+      document.getElementById('result').textContent = 'PASS';
+    } catch (error) {
+      document.getElementById('result').textContent = `FAIL: ${error.stack}`;
+    }
+  </script>
+</body>
+</html>

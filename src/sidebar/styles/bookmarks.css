@@ -20,13 +20,13 @@
     pointer-events: none;
 }
 
-#bookmarks-list > .tab-item:has(> .tab-row.drop-before),
-.bookmark-nested-list > .tab-item:has(> .tab-row.drop-before) {
+#bookmarks-list > .tab-item:has(> :is(.tab-row, .tree-row).drop-before),
+.bookmark-nested-list > .tab-item:has(> :is(.tab-row, .tree-row).drop-before) {
     margin-top: var(--drop-slot-height);
 }
 
-#bookmarks-list > .tab-item:has(> .tab-row.drop-after),
-.bookmark-nested-list > .tab-item:has(> .tab-row.drop-after) {
+#bookmarks-list > .tab-item:has(> :is(.tab-row, .tree-row).drop-after),
+.bookmark-nested-list > .tab-item:has(> :is(.tab-row, .tree-row).drop-after) {
     margin-bottom: calc(var(--drop-slot-height) + 0.25rem);
 }
 
@@ -51,4 +51,32 @@
     .bookmark-edit-form {
         grid-template-columns: 1fr;
     }
+}
+
+#bookmarks-list .tree-row {
+    position: relative;
+}
+
+#bookmarks-list .tree-row.is-dragging {
+    opacity: 0.45;
+}
+
+#bookmarks-list .tree-row.drop-before::before,
+#bookmarks-list .tree-row.drop-after::after {
+    content: "";
+    position: absolute;
+    left: 1.5rem;
+    right: calc(var(--control-height) + 0.25rem);
+    height: var(--drop-slot-height);
+    border: 1px dashed rgba(var(--blue-colour-RGB), 0.85);
+    border-radius: 0.25rem;
+    pointer-events: none;
+}
+
+#bookmarks-list .tree-row.drop-before::before {
+    bottom: 100%;
+}
+
+#bookmarks-list .tree-row.drop-after::after {
+    top: 100%;
 }

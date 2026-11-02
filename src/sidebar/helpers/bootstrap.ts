@@ -102,6 +102,10 @@ export async function bootstrapSidebar() {
   if (!sidebarElements) return;
   setupAutoHideScrollbars();
   const elements: SidebarElements = sidebarElements;
+  if (chrome.runtime.sendMessage) {
+    try { await chrome.runtime.sendMessage({ type: "workspace-ready" }); }
+    catch (error) { console.error("Workspace startup failed:", error); }
+  }
   const currentWindow = await chrome.windows.getCurrent();
   if (currentWindow.id == null) return;
   const currentWindowId = currentWindow.id;
@@ -225,6 +229,7 @@ export async function bootstrapSidebar() {
         createEmptySearchState("No matching bookmarks."),
       );
     }
+    if (deferRenderUntilDragSettles(requestBookmarkRefresh)) return;
     replaceListsPreservingInteraction([
       { host: elements.bookmarksList, next: nextBookmarks },
     ]);
@@ -291,7 +296,9 @@ export async function bootstrapSidebar() {
     elements.actionPanelSection,
   );
 
-  await setupGroupAction(elements.actionBtnSection, actionPanelController);
+  await setupGroupAction(
+    elements.actionBtnSection, actionPanelController, currentWindowId, requestTabGroupRefresh,
+  );
   await setupBookmarkAction(
     elements.actionBtnSection,
     actionPanelController,

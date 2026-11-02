@@ -1,3 +1,4 @@
+import { reconcilePersistentGroups, restorePersistentGroups, groupTabsPersistently } from "./persistentGroups.js";
 import {
   COLLAPSED_GROUPS_STORAGE_KEY,
   COLLAPSED_GROUPS_WINDOW_PREFIX,
@@ -9,7 +10,7 @@ import {
   TAB_ORDER_WINDOW_PREFIX,
 } from "./storageKeys.js";
 
-const NO_GROUP_ID = chrome.tabGroups.TAB_GROUP_ID_NONE;
+const NO_GROUP_ID = -1;
 
 type WindowOrderMap = Record<string, number[]>;
 type WindowCollapsedMap = Record<string, unknown>;
@@ -663,9 +664,8 @@ export async function loadLogicalTabGroupData(
     TAB_ORDER_STORAGE_KEY,
     GROUP_ORDER_STORAGE_KEY,
   ];
-  const [liveTabs, liveGroups, initialStorage] = await Promise.all([
-    chrome.tabs.query({ windowId }),
-    chrome.tabGroups.query({ windowId }),
+  const [{ tabs: liveTabs, groups: liveGroups }, initialStorage] = await Promise.all([
+    reconcilePersistentGroups(windowId),
     chrome.storage.local.get(windowKeys),
   ]);
   let storage = initialStorage;
@@ -774,6 +774,11 @@ export async function loadLogicalTabGroupData(
       });
     }
   }
+  if (restart && restart.previousWindowId !== windowId) {
+    if (await restorePersistentGroups(restart.previousWindowId, windowId)) {
+      return loadLogicalTabGroupData(windowId);
+    }
+  }
   const restoredGroupRecord =
     restart && (!directGroupRecord || needsGroupRestartMatch)
       ? restart.groupRecord
@@ -813,6 +818,7 @@ export async function loadLogicalTabGroupData(
     fingerprints.tabFingerprints,
   );
   const hasPersistedOrder = Boolean(
+    liveGroups.length > 0 ||
     directTabRecord ||
     directGroupRecord ||
     useLegacyTab ||
@@ -837,7 +843,7 @@ export async function loadLogicalTabGroupData(
       updates[groupKey] = nextGroupRecord;
     }
     if (
-      (useLegacyTab || useLegacyGroup) &&
+      (useLegacyTab || useLegacyGroup || liveGroups.length > 0) &&
       !readStoredOrder(storage[`${TAB_ORDER_SNAPSHOT_PREFIX}${windowId}`])
     ) {
       updates[`${TAB_ORDER_SNAPSHOT_PREFIX}${windowId}`] = nextTabRecord;
@@ -1173,6 +1179,22 @@ export async function setTabGroup(tabId: number, targetGroupId: number) {
   }
 
   if (currentGroupId !== targetGroupId) {
-    await chrome.tabs.group({ groupId: targetGroupId, tabIds: [tabId] });
+    await groupTabsPersistently([tabId], targetGroupId, tab.windowId);
   }
+}
+
+/** Seed exact sidebar order after workspace recovery has assigned new browser IDs. */
+export async function persistRestoredWindowOrder(windowId: number, tabIds: number[], groupIds: number[]) {
+  const { tabs, groups } = await reconcilePersistentGroups(windowId);
+  const tabOrder = normaliseStoredOrder(tabIds, tabs.flatMap((tab) => tab.id == null ? [] : [tab.id]));
+  const groupOrder = normaliseStoredOrder(groupIds, groups.map((group) => group.id));
+  const fingerprints = await itemFingerprints(tabs, groups);
+  const tabRecord = makeStoredOrder(tabOrder, fingerprints.tabFingerprints);
+  const groupRecord = makeGroupStoredOrder(groupOrder, fingerprints.groupFingerprints, tabOrder, fingerprints.tabFingerprints);
+  await chrome.storage.local.set({
+    [`${TAB_ORDER_WINDOW_PREFIX}${windowId}`]: tabRecord,
+    [`${TAB_ORDER_SNAPSHOT_PREFIX}${windowId}`]: tabRecord,
+    [`${GROUP_ORDER_WINDOW_PREFIX}${windowId}`]: groupRecord,
+    [`${GROUP_ORDER_SNAPSHOT_PREFIX}${windowId}`]: groupRecord,
+  });
 }

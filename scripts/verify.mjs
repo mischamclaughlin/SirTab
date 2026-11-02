@@ -8,6 +8,7 @@ for (const [script, args] of [
     [null, ['--test']],
     ['tests/browser-suite.mjs', []],
     ['tests/extension.browser.mjs', []],
+    ['tests/workspace-restart.browser.mjs', []],
 ]) {
     const code = await new Promise((resolve, reject) => {
         const child = spawn(process.execPath, script ? [script, ...args] : args, {

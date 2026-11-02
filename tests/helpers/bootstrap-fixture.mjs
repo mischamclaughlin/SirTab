@@ -68,7 +68,7 @@ export async function run(scenario) {
             onChanged: eventSource(),
             local: {
                 get: async (keys) => {
-                    if (scenario === 'preference-failure' && keys !== null && !String(keys).includes('Order')) throw new Error('preferences unavailable');
+                    if (scenario === 'preference-failure' && keys !== null && !String(keys).includes('Order') && !String(keys).includes('persistentGroups:')) throw new Error('preferences unavailable');
                     return structuredClone(keys == null ? storage : Object.fromEntries((Array.isArray(keys) ? keys : [keys]).map((key) => [key, storage[key]])));
                 },
                 set: async (updates) => Object.assign(storage, structuredClone(updates)),
@@ -112,6 +112,7 @@ export async function run(scenario) {
         await until(bookmark, 'bookmark event did not recover failed initial load');
     } else if (failTabs) {
         await until(bookmark, 'tab failure blocked bookmarks');
+        await until(() => errors.some(error => error.includes('tabs unavailable')), 'tab failure was not observed');
         failTabs = false;
         chrome.tabs.onCreated.emit(tabs[0]);
         await until(() => row(11), 'tab event did not recover failed initial load');

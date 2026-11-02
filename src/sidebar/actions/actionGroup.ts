@@ -1,3 +1,4 @@
+import { createPersistentGroup } from "../../shared/persistentGroups.js";
 import type { ActionPanelController } from "../types.js";
 import { groupColorMap, GroupColorChoice } from "../config.js";
 import { runButtonAction } from "../helpers/domFactory.js";
@@ -6,6 +7,8 @@ import { setButtonIcon } from "../helpers/icons.js";
 export async function setupGroupAction(
     actionBtnSection: HTMLElement,
     actionPanel: ActionPanelController,
+    windowId?: number,
+    requestRender: () => void = () => {},
 ): Promise<void> {
     const btnGroup = document.createElement("button");
     btnGroup.className = "control";
@@ -70,42 +73,14 @@ export async function setupGroupAction(
 
         confirmBtn.addEventListener("click", () => {
             void runButtonAction(confirmBtn, async () => {
-                let createdTabId: number | null = null;
-
-                try {
-                    const homeTab = await chrome.tabs.create({
-                        url: "chrome://newtab",
-                        active: false,
-                    });
-
-                    if (homeTab?.id == null) return;
-                    createdTabId = homeTab.id;
-
-                    const groupName = textInput.value.trim() || "";
-                    const selectedColour = colourSelect.value as GroupColorChoice;
-
-                    const groupId = await chrome.tabs.group({
-                        tabIds: [createdTabId],
-                    });
-                    await chrome.tabGroups.update(groupId, {
-                        title: groupName,
-                        color: groupColorMap[selectedColour] ?? "grey",
-                        collapsed: false,
-                    });
-                } catch (error) {
-                    if (createdTabId != null) {
-                        try {
-                            await chrome.tabs.remove(createdTabId);
-                        } catch (cleanupError) {
-                            console.error(
-                                "Failed to clean up group creation tab:",
-                                cleanupError,
-                            );
-                        }
-                    }
-
-                    throw error;
-                }
+                const targetWindowId = windowId ?? (await chrome.windows.getCurrent()).id;
+                if (targetWindowId == null) throw new Error("Current window has no ID");
+                await createPersistentGroup(
+                    targetWindowId,
+                    textInput.value.trim(),
+                    groupColorMap[colourSelect.value as GroupColorChoice] ?? "grey",
+                );
+                requestRender();
 
                 if (groupForm.isConnected) actionPanel.close("group");
             }, "Create group failed:");

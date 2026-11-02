@@ -1,3 +1,4 @@
+import { groupTabsPersistently } from "../../shared/persistentGroups.js";
 import type { RequestRender } from "../types.js";
 import {
   buildTabsByLogicalGroup,
@@ -13,12 +14,13 @@ import { isAllowedBookmarkUrl } from "../bookmark/url.js";
 
 type DragPayload =
   | { kind: "tabs"; ids: number[] }
-  | { kind: "group"; id: number };
+  | { kind: "group"; id: number }
+  | { kind: "bookmark"; id: string };
 
 type DragEnabledCheck = () => boolean;
 
 const DRAG_DATA_MIME = "application/x-sirtab-drag";
-const NO_GROUP_ID = chrome.tabGroups.TAB_GROUP_ID_NONE;
+const NO_GROUP_ID = -1;
 const AUTO_SCROLL_EDGE_PX = 72;
 const AUTO_SCROLL_MAX_STEP_PX = 18;
 const DROP_GAP_HIT_MARGIN_PX = 10;
@@ -264,7 +266,9 @@ async function changeTabsGroup(
   if (targetGroupId === NO_GROUP_ID) {
     await chrome.tabs.ungroup(tabIds);
   } else {
-    await chrome.tabs.group({ groupId: targetGroupId, tabIds });
+    const sourceTab = tabs.find((tab) => tab.id === tabIds[0]);
+    if (!sourceTab) return;
+    await groupTabsPersistently(tabIds, targetGroupId, sourceTab.windowId);
   }
 }
 
@@ -386,18 +390,49 @@ async function bookmarkTabs(
   }
 }
 
-async function bookmarkTabsRelativeToBookmark(
-  tabIds: number[],
+async function moveBookmark(bookmarkId: string, parentId?: string, index?: number) {
+  const destinationId = parentId ?? (await getBookmarksBarId());
+  const [source] = await chrome.bookmarks.get(bookmarkId);
+  if (!source?.parentId || source.unmodifiable || source.folderType) return;
+
+  // Recheck live ancestry at drop time: the tree may have changed while dragging.
+  const visited = new Set<string>();
+  let ancestorId: string | undefined = destinationId;
+  while (ancestorId) {
+    if (ancestorId === bookmarkId || visited.has(ancestorId)) return;
+    visited.add(ancestorId);
+    const ancestors: chrome.bookmarks.BookmarkTreeNode[] = await chrome.bookmarks.get(ancestorId);
+    const ancestor = ancestors[0];
+    if (!ancestor || ancestor.url || ancestor.unmodifiable) return;
+    ancestorId = ancestor.parentId;
+  }
+  if (source.parentId === destinationId && index != null &&
+      (index === source.index || index === (source.index ?? -2) + 1)) return;
+  // Chrome takes an insertion index before removing a same-parent source.
+  await chrome.bookmarks.move(bookmarkId, {
+    parentId: destinationId,
+    ...(index == null ? {} : { index }),
+  });
+}
+
+async function placeInBookmarks(
+  payload: Extract<DragPayload, { kind: "tabs" | "bookmark" }>,
+  parentId?: string,
+  index?: number,
+) {
+  if (payload.kind === "tabs") await bookmarkTabs(payload.ids, parentId, index);
+  else await moveBookmark(payload.id, parentId, index);
+}
+
+async function placeRelativeToBookmark(
+  payload: Extract<DragPayload, { kind: "tabs" | "bookmark" }>,
   bookmarkId: string,
   position: DropPosition,
 ) {
+  if (payload.kind === "bookmark" && payload.id === bookmarkId) return;
   const [bookmark] = await chrome.bookmarks.get(bookmarkId);
   if (!bookmark?.parentId || bookmark.index == null) return;
-  await bookmarkTabs(
-    tabIds,
-    bookmark.parentId,
-    bookmark.index + (position === "after" ? 1 : 0),
-  );
+  await placeInBookmarks(payload, bookmark.parentId, bookmark.index + (position === "after" ? 1 : 0));
 }
 
 async function runDropAction(
@@ -458,7 +493,9 @@ function getDropTarget(
 ): DropTarget | null {
   if (!(target instanceof Element)) return null;
 
-  if (bookmarksList.contains(target) && payload.kind === "tabs") {
+  if (bookmarksList.contains(target) && (payload.kind === "tabs" || payload.kind === "bookmark")) {
+    if (payload.kind === "bookmark" && activeDragElement?.closest(".tab-item")?.contains(target)) return null;
+    const effect = payload.kind === "tabs" ? "copy" : "move";
     const item = target.closest<HTMLElement>(".tab-item");
     const bookmarkItem = item && bookmarksList.contains(item) ? item : null;
     const folderId = bookmarkItem?.dataset.bookmarkFolderId;
@@ -470,19 +507,32 @@ function getDropTarget(
       );
       // The nested list is a destination of its own: its gaps can insert
       // before a child. Only the folder header offers append-to-folder.
-      if (row && !nestedList?.contains(target))
+      if (row && !nestedList?.contains(target)) {
+        const bounds = row.getBoundingClientRect();
+        if (payload.kind === "bookmark" &&
+            (clientY < bounds.top + bounds.height / 4 || clientY > bounds.bottom - bounds.height / 4)) {
+          const position = getDropPosition({ clientY } as DragEvent, row);
+          return {
+            element: row,
+            className: position === "before" ? "drop-before" : "drop-after",
+            action: () => placeRelativeToBookmark(payload, folderId, position),
+            effect,
+            requestRender: requestBookmarkRender,
+          };
+        }
         return {
           element: row,
           className: "drop-inside",
-          action: () => bookmarkTabs(payload.ids, folderId),
-          effect: "copy",
+          action: () => placeInBookmarks(payload, folderId),
+          effect,
           requestRender: requestBookmarkRender,
           ...(nestedList
-            ? { preview: { element: nestedList, count: payload.ids.length } }
+            ? { preview: { element: nestedList, count: payload.kind === "tabs" ? payload.ids.length : 1 } }
             : {}),
         };
+      }
     }
-    if (bookmarkId && bookmarkItem) {
+    if (!folderId && bookmarkId && bookmarkItem) {
       const row = bookmarkItem.querySelector<HTMLElement>(".tab-row");
       if (row) {
         const position = getDropPosition({ clientY } as DragEvent, row);
@@ -490,8 +540,8 @@ function getDropTarget(
           element: row,
           className: position === "before" ? "drop-before" : "drop-after",
           action: () =>
-            bookmarkTabsRelativeToBookmark(payload.ids, bookmarkId, position),
-          effect: "copy",
+            placeRelativeToBookmark(payload, bookmarkId, position),
+          effect,
           requestRender: requestBookmarkRender,
         };
       }
@@ -513,18 +563,18 @@ function getDropTarget(
       )
         continue;
       const nextBookmarkId = child.dataset.bookmarkId;
-      const nextRow = child.querySelector<HTMLElement>(".tab-row");
+      const nextRow = child.querySelector<HTMLElement>(".tree-row") ?? child.querySelector<HTMLElement>(".tab-row");
       if (nextBookmarkId && nextRow)
         return {
           element: nextRow,
           className: "drop-before",
           action: () =>
-            bookmarkTabsRelativeToBookmark(
-              payload.ids,
+            placeRelativeToBookmark(
+              payload,
               nextBookmarkId,
               "before",
             ),
-          effect: "copy",
+          effect,
           requestRender: requestBookmarkRender,
         };
       break;
@@ -532,11 +582,13 @@ function getDropTarget(
     return {
       element: list,
       className: "drop-append",
-      action: () => bookmarkTabs(payload.ids, parentId),
-      effect: "copy",
+      action: () => placeInBookmarks(payload, parentId),
+      effect,
       requestRender: requestBookmarkRender,
     };
   }
+
+  if (payload.kind === "bookmark") return null;
 
   const tabRow = target.closest<HTMLElement>(".tab-row");
   if (
@@ -655,6 +707,9 @@ export function setupSidebarDropZones(
     const hitTest = (x: number, y: number) => document.elementFromPoint(x, y);
     const resolveAt = (target: EventTarget | null, y: number) => {
       if (!activeDragPayload || !isDragEnabled()) return null;
+      if (activeDragPayload.kind === "bookmark" &&
+          (!(target instanceof Element) || !bookmarksList.contains(target) ||
+           activeDragElement?.closest(".tab-item")?.contains(target))) return null;
       const bookmarkGap =
         target instanceof Element &&
         activeDropIndicator != null &&
@@ -680,6 +735,7 @@ export function setupSidebarDropZones(
         (activeDropIndicator.className === "drop-before" ||
           activeDropIndicator.className === "drop-after") &&
         (activeDropIndicator.element.classList.contains("tab-row") ||
+          (bookmarkGap && activeDropIndicator.element.classList.contains("tree-row")) ||
           activeDropIndicator.element.classList.contains("group-item"))
       ) {
         const bounds = activeDropIndicator.element.getBoundingClientRect();
@@ -807,4 +863,26 @@ export function makeGroupDraggable(
   handle.addEventListener("dragend", () => {
     clearDragState();
   });
+}
+
+
+export function makeBookmarkDraggable(
+  handle: HTMLElement,
+  row: HTMLElement,
+  bookmarkId: string,
+  isDragEnabled: DragEnabledCheck,
+) {
+  handle.draggable = true;
+  handle.classList.add("is-draggable");
+  handle.addEventListener("dragstart", (event) => {
+    if (!isDragEnabled()) {
+      event.preventDefault();
+      return;
+    }
+    // Native image drags can carry a URL; expose only our internal move data.
+    event.dataTransfer?.clearData();
+    writePayload(event, { kind: "bookmark", id: bookmarkId }, row);
+    setDragElement(row);
+  });
+  handle.addEventListener("dragend", clearDragState);
 }

@@ -18,7 +18,7 @@ Sir Tab puts your open tabs, tab groups and bookmarks in one browser side panel,
 - Hide sections you do not need, collapse groups and folders, and choose a built-in theme.
 - Use configurable keyboard shortcuts for tab navigation and movement.
 
-Sir Tab reads tab addresses, titles and group details to show and manage your tabs. It reads bookmark titles and addresses to show and search your bookmarks. Preferences and tab/group ordering data, including hashed tab-address fingerprints used to restore order after a browser restart, are stored locally in the browser. The current extension does not send this data to a developer service.
+Sir Tab reads tab addresses, titles and group details to show and manage your tabs. It reads bookmark titles and addresses to show and search your bookmarks. Preferences and tab/group ordering data, including full tab addresses and titles for automatic workspace recovery, saved empty groups, and hashed tab-address fingerprints used to restore order after a browser restart, are stored locally in the browser. The current extension does not send this data to a developer service.
 
 **Suggested category:** Productivity. Confirm this option exists in the dashboard.
 
@@ -39,12 +39,12 @@ Sir Tab reads tab addresses, titles and group details to show and manage your ta
 | `tabs` | Read open-tab titles, addresses, icons, positions and active state for display and search; activate, create, move and close tabs when requested. |
 | `tabGroups` | Read group titles, colours and membership; create and update groups when requested. |
 | `bookmarks` | Read bookmark and folder titles, addresses and structure for display and search; create, rename and delete bookmarks and folders when requested. |
-| `storage` | Save themes, section visibility, collapse state, shortcut prompt state, and tab/group ordering and restart fingerprints in local browser storage. |
+| `storage` | Save themes, section visibility, collapse state, shortcut prompt state, and tab/group ordering, restart fingerprints and workspace snapshots with tab addresses in local browser storage. |
 | `sidePanel` | Open Sir Tab as a browser side panel from the extension action. |
 
 **Remote code:** No. The reviewed source uses packaged extension code and assets. Recheck the built upload package before selecting this in the dashboard.
 
-**User-data disclosure:** Disclose browsing activity/tab addresses and bookmark data in the dashboard's applicable data categories. The data is processed locally even though it is not sent to a developer server; local processing still requires disclosure. Include that SHA-256 fingerprints of tab addresses are retained for ordering restoration. Do not tick a blanket "does not collect data" option without confirming the dashboard's precise wording and its definition of collection.
+**User-data disclosure:** Disclose browsing activity/tab addresses and bookmark data in the dashboard's applicable data categories. The data is processed locally even though it is not sent to a developer server; local processing still requires disclosure. Include that full tab addresses and titles are retained for automatic workspace recovery, alongside SHA-256 fingerprints for ordering restoration. Do not tick a blanket "does not collect data" option without confirming the dashboard's precise wording and its definition of collection.
 
 **Limited Use certification:** The source reviewed for this draft uses Chrome API data for the extension's stated tab, group and bookmark management purpose and has no advertising, sale or developer-side data transfer. The publisher must confirm this remains true for the uploaded build before certifying the dashboard statements.
 

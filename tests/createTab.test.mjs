@@ -4,6 +4,7 @@ import test from "node:test";
 const calls = { created: [], grouped: [], removed: [] };
 let shouldFailGrouping = false;
 globalThis.chrome = {
+    storage: { local: { get: async () => ({}) } },
     tabs: {
         create: async (details) => {
             calls.created.push(details);
@@ -33,7 +34,7 @@ test("group add creates the tab in the right window and joins the group", async 
     assert.deepEqual(calls.created.at(-1), {
         url: "chrome://newtab", active: false, windowId: 3,
     });
-    assert.deepEqual(calls.grouped.at(-1), { tabIds: 42, groupId: 7 });
+    assert.deepEqual(calls.grouped.at(-1), { tabIds: [42], groupId: 7 });
     assert.deepEqual(calls.removed, []);
 });
 

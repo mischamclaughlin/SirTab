@@ -151,10 +151,7 @@ function reset({
 }
 
 async function dispatchCommand(command) {
-    for (const listener of commandListeners) listener(command);
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-        await new Promise((resolve) => setImmediate(resolve));
-    }
+    await Promise.all(commandListeners.map((listener) => listener(command)));
 }
 
 test("cycle commands skip collapsed groups and wrap at the ends", async () => {

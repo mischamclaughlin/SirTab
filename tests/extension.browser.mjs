@@ -87,6 +87,28 @@ try {
     assert.equal(await background(`chrome.tabs.get(${data.tabs[0]}).then(tab=>tab.groupId)`), data.second, 'copy retains original tab');
     console.log('PASS: native mouse tab-to-bookmark copy writes a real bookmark and retains tab');
 
+    const savedBookmarks = await background(`(async()=>{
+        const [first]=await chrome.bookmarks.getChildren(${JSON.stringify(data.folder)});
+        const later=await chrome.bookmarks.create({parentId:${JSON.stringify(data.folder)},title:'Later',url:${JSON.stringify(origin + '/Later')}});
+        const last=await chrome.bookmarks.create({parentId:${JSON.stringify(data.folder)},title:'Last',url:${JSON.stringify(origin + '/Last')}});
+        const [sourceFolder]=await chrome.bookmarks.get(${JSON.stringify(data.folder)});
+        const destination=await chrome.bookmarks.create({parentId:sourceFolder.parentId,title:'Destination'});
+        return {first:first.id,later:later.id,last:last.id,destination:destination.id};
+    })()`);
+    const bookmark = id => `[data-bookmark-id="${id}"] > .tab-row .tab-button`;
+    await until(() => run(`!!document.querySelector('[data-bookmark-id="${savedBookmarks.last}"]') && !!document.querySelector('[data-bookmark-folder-id="${savedBookmarks.destination}"]')`), 'bookmark move destinations rendered');
+    await drag(bookmark(savedBookmarks.first), bookmark(savedBookmarks.last));
+    await until(() => background(`chrome.bookmarks.getChildren(${JSON.stringify(data.folder)}).then(nodes=>nodes.at(-1)?.id===${JSON.stringify(savedBookmarks.first)})`), 'native forward bookmark reorder');
+    assert.deepEqual(await background(`chrome.bookmarks.getChildren(${JSON.stringify(data.folder)}).then(nodes=>nodes.map(node=>node.id))`), [savedBookmarks.later,savedBookmarks.last,savedBookmarks.first]);
+    await drag(bookmark(savedBookmarks.first), `[data-bookmark-folder-id="${savedBookmarks.destination}"] > .tree-row .tree-toggle`);
+    await until(() => background(`chrome.bookmarks.get(${JSON.stringify(savedBookmarks.first)}).then(([node])=>node.parentId===${JSON.stringify(savedBookmarks.destination)})`), 'native bookmark move between folders');
+    const tabCountBeforeBookmarkDrag=await background(`chrome.tabs.query({windowId:${data.windowId}}).then(tabs=>tabs.length)`);
+    await drag(bookmark(savedBookmarks.first), group(data.second));
+    assert.equal(await background(`chrome.tabs.query({windowId:${data.windowId}}).then(tabs=>tabs.length)`),tabCountBeforeBookmarkDrag,'dragging a bookmark into a tab group opens no tabs');
+    assert.equal(await background(`chrome.bookmarks.get(${JSON.stringify(savedBookmarks.first)}).then(([node])=>node.parentId)`),savedBookmarks.destination,'rejected drag retains the bookmark');
+    console.log('PASS: native bookmark reordering and folder moves; bookmark-to-tab-group drops rejected');
+
+
     // Persist an ordering via the production module, then verify the actual DOM
     // and the native tab strip separately after reload and a fresh sidebar page.
     const originalSidebarId = data.sidebarId;
@@ -108,6 +130,41 @@ try {
     await openPage();
     await assertRestored();
     console.log('PASS: saved order, section filter and theme survive reload and reopening');
+
+    const beforeEmpty = await background(`chrome.tabs.query({windowId:${data.windowId}}).then(tabs=>tabs.length)`);
+    await run(`document.querySelector('[aria-label="Create group"]').click(); document.querySelector('#group-name-input').value='Keep empty'; document.querySelector('[aria-label="Confirm group creation"]').click()`);
+    const emptyId = await until(() => run(`Number([...document.querySelectorAll('.group-item')].find(row=>row.querySelector('.tree-toggle')?.textContent.includes('Keep empty'))?.dataset.groupId) || null`), 'empty group creation');
+    assert.equal(await background(`chrome.tabs.query({windowId:${data.windowId}}).then(tabs=>tabs.length)`), beforeEmpty, 'group creation opens no placeholder tab');
+    await page.send('Page.reload');
+    await until(() => run(`!!document.querySelector('[data-group-id="${emptyId}"]')`), 'empty group survives reload');
+    await run(`document.querySelector('[aria-label^="Select tabs and edit"]').click()`);
+    await until(() => run(`!!document.querySelector('[data-group-id="${emptyId}"] .row-icon-btn')`), 'empty group edit control');
+    await run(`document.querySelector('[data-group-id="${emptyId}"] .row-icon-btn').click(); const form=document.querySelector('[data-group-id="${emptyId}"] .group-edit-form'); form.querySelector('input').value='Still empty'; form.querySelector('select').value='blue'; form.querySelector('[aria-label="Save group changes"]').click()`);
+    await until(() => run(`document.querySelector('[data-group-id="${emptyId}"] .tree-toggle')?.textContent.includes('Still empty')`), 'empty group rename');
+    await run(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
+    await run(`document.querySelector('[data-group-id="${emptyId}"] .row-add-btn').click()`);
+    const memberId = await until(() => run(`Number(document.querySelector('[data-group-id="${emptyId}"] [data-tab-id]')?.dataset.tabId) || null`), 'first real tab added to empty group');
+    await background(`chrome.tabs.remove(${memberId})`);
+    await until(() => run(`!!document.querySelector('[data-group-id="${emptyId}"]') && !document.querySelector('[data-group-id="${emptyId}"] [data-tab-id]')`), 'last tab closes but group remains');
+    await drag(tab(data.tabs[0]), group(emptyId));
+    await until(() => run(`!!document.querySelector('[data-group-id="${emptyId}"] [data-tab-id="${data.tabs[0]}"]')`), 'drag into empty group');
+    await drag(tab(data.tabs[0]), group(data.second));
+    await until(() => run(`!!document.querySelector('[data-group-id="${emptyId}"]') && !document.querySelector('[data-group-id="${emptyId}"] [data-tab-id]')`), 'drag out retains empty group');
+    await run(`globalThis.originalConfirm=window.confirm; window.confirm=()=>true; document.querySelector('[data-group-id="${emptyId}"] .row-delete-btn').click()`);
+    await until(() => run(`!document.querySelector('[data-group-id="${emptyId}"]')`), 'explicit empty group deletion');
+    await run('window.confirm=globalThis.originalConfirm');
+    await page.send('Page.reload');
+    await until(() => run(`!!document.querySelector('[aria-label="Create group"]')`), 'sidebar reload after group deletion');
+    assert.equal(await run(`!!document.querySelector('[data-group-id="${emptyId}"]')`), false, 'deleted empty group stays deleted');
+    console.log('PASS: empty groups survive reload, last-tab closure and drag-out; add, drop and delete work');
+    await background(`chrome.tabs.remove(${data.sidebarId})`);
+    await background(`chrome.tabs.remove(${data.tabs[1]})`);
+    data.sidebarId = await background(`chrome.tabs.create({windowId:${data.windowId},url:${JSON.stringify(browser.extensionUrl)},active:true}).then(tab=>tab.id)`);
+    await openPage();
+    await until(() => run(`!!document.querySelector('[data-group-id="${data.first}"]') && !document.querySelector('[data-group-id="${data.first}"] [data-tab-id]')`), 'last native group tab closed while sidebar absent');
+    console.log('PASS: background preserves empty native groups while the sidebar is closed');
+
+
 } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));

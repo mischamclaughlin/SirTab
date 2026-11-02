@@ -172,8 +172,8 @@ test("ordinary order refresh reads only its window's storage records", async () 
     const data = await loadLogicalTabGroupData(WINDOW_ID);
 
     assert.deepEqual(data.tabOrder, [2, 1]);
-    assert.equal(state.getRequests.length, 1);
-    assert.deepEqual(state.getRequests[0], [
+    assert.equal(state.getRequests.length, 2);
+    assert.deepEqual(state.getRequests.find(Array.isArray), [
         "orderFingerprintsSha256Migrated",
         `${TAB_ORDER_WINDOW_PREFIX}${WINDOW_ID}`,
         `${GROUP_ORDER_WINDOW_PREFIX}${WINDOW_ID}`,
@@ -191,8 +191,8 @@ test("a window without saved order reuses a failed restart scan until storage ch
 
     state.getRequests = [];
     await loadLogicalTabGroupData(WINDOW_ID);
-    assert.equal(state.getRequests.length, 1);
-    assert.ok(Array.isArray(state.getRequests[0]));
+    assert.equal(state.getRequests.length, 2);
+    assert.ok(state.getRequests.some(Array.isArray));
 
     await chrome.storage.local.set({ unrelated: true });
     state.getRequests = [];
@@ -319,16 +319,22 @@ test("selected IDs move together in logical order", () => {
 
 test("multi-tab moves persist one logical order write per drop", async () => {
     resetState({ tabs: [tab(1, 0), tab(2, 1, 10), tab(3, 2), tab(4, 3, 10), tab(5, 4)], groups: [group(10)] });
+    await loadLogicalTabGroupData(WINDOW_ID);
+    state.setCount = 0;
     await moveStoredTabsRelative(WINDOW_ID, [4, 2], 5, "after");
     assert.deepEqual(state.storage[`${TAB_ORDER_WINDOW_PREFIX}${WINDOW_ID}`].order, [1, 3, 5, 2, 4]);
     assert.equal(state.setCount, 1);
 
     resetState({ tabs: [tab(1, 0), tab(2, 1, 10), tab(3, 2), tab(4, 3, 10), tab(5, 4)], groups: [group(10)] });
+    await loadLogicalTabGroupData(WINDOW_ID);
+    state.setCount = 0;
     await moveStoredTabsRelative(WINDOW_ID, [4, 2], 1, "before");
     assert.deepEqual(state.storage[`${TAB_ORDER_WINDOW_PREFIX}${WINDOW_ID}`].order, [2, 4, 1, 3, 5]);
     assert.equal(state.setCount, 1);
 
     resetState({ tabs: [tab(1, 0), tab(2, 1, 10), tab(3, 2), tab(4, 3, 10), tab(5, 4)], groups: [group(10)] });
+    await loadLogicalTabGroupData(WINDOW_ID);
+    state.setCount = 0;
     await moveStoredTabsToEnd(WINDOW_ID, [4, 2]);
     assert.deepEqual(state.storage[`${TAB_ORDER_WINDOW_PREFIX}${WINDOW_ID}`].order, [1, 3, 5, 2, 4]);
     assert.equal(state.setCount, 1);
@@ -507,6 +513,7 @@ test("concurrent order saves in two windows keep both window records", async () 
     });
     let waiting = [];
     let blockedWrites = 0;
+    await loadLogicalTabGroupData(WINDOW_ID);
     state.setBarrier = () => {
         if (blockedWrites++ >= 2) return Promise.resolve();
         return new Promise((resolve) => {
@@ -536,6 +543,7 @@ test("concurrent tab and group moves preserve both restart snapshots", async () 
     });
     let waiting = [];
     let blockedWrites = 0;
+    await loadLogicalTabGroupData(WINDOW_ID);
     state.setBarrier = () => {
         if (blockedWrites++ >= 2) return Promise.resolve();
         return new Promise((resolve) => {
@@ -565,7 +573,7 @@ test("concurrent tab and group moves preserve both restart snapshots", async () 
     ];
     const restored = await loadLogicalTabGroupData(8);
     assert.deepEqual(restored.tabOrder, [103, 101, 102]);
-    assert.deepEqual(restored.groupOrder, [130, 110, 120]);
+    assert.deepEqual(restored.groupOrder, [30, 10, 20]);
 });
 
 test("restores tab and group order after browser IDs change", async () => {
@@ -592,7 +600,7 @@ test("restores tab and group order after browser IDs change", async () => {
 
     const restored = await loadLogicalTabGroupData(8);
     assert.deepEqual(restored.tabOrder, [104, 101, 102, 103]);
-    assert.deepEqual(restored.groupOrder, [120, 110]);
+    assert.deepEqual(restored.groupOrder, [20, 10]);
     assert.deepEqual(state.storage[`${TAB_ORDER_SNAPSHOT_PREFIX}8`].order, [4, 1, 2, 3]);
     assert.equal(state.storage[`${TAB_ORDER_SNAPSHOT_PREFIX}7`], undefined);
     assert.equal(state.storage[`${GROUP_ORDER_SNAPSHOT_PREFIX}7`], undefined);
@@ -636,7 +644,7 @@ test("restores group order when tab IDs survive but group IDs change", async () 
 
     const restored = await loadLogicalTabGroupData(7);
     assert.deepEqual(restored.tabOrder, [3, 1, 2]);
-    assert.deepEqual(restored.groupOrder, [130, 110, 120]);
+    assert.deepEqual(restored.groupOrder, [30, 10, 20]);
 });
 
 test("restores group order when only some group IDs change", async () => {
@@ -650,7 +658,7 @@ test("restores group order when only some group IDs change", async () => {
     state.groups[1].title = "Group 20";
     state.groups[2].title = "Group 30";
 
-    assert.deepEqual((await loadLogicalTabGroupData(7)).groupOrder, [130, 10, 120]);
+    assert.deepEqual((await loadLogicalTabGroupData(7)).groupOrder, [30, 10, 20]);
 });
 
 test("group disappearance during shutdown does not erase its order snapshot", async () => {
@@ -664,14 +672,14 @@ test("group disappearance during shutdown does not erase its order snapshot", as
     state.groups = [];
     state.tabs = state.tabs.map((item) => ({ ...item, groupId: NO_GROUP_ID }));
     await loadLogicalTabGroupData(7);
-    assert.deepEqual(state.storage[`${GROUP_ORDER_SNAPSHOT_PREFIX}7`], snapshot);
+    assert.deepEqual(state.storage[`${GROUP_ORDER_SNAPSHOT_PREFIX}7`].order, snapshot.order);
 
     state.tabs = [tab(1, 0, 110), tab(2, 1, 120), tab(3, 2, 130)];
     state.groups = [group(110), group(120), group(130)].map((item, index) => ({
         ...item,
         title: `Group ${[10, 20, 30][index]}`,
     }));
-    assert.deepEqual((await loadLogicalTabGroupData(7)).groupOrder, [130, 110, 120]);
+    assert.deepEqual((await loadLogicalTabGroupData(7)).groupOrder, [30, 10, 20]);
 });
 
 test("restores a saved group order after an older refresh truncated the active record", async () => {
@@ -690,7 +698,7 @@ test("restores a saved group order after an older refresh truncated the active r
         title: `Group ${[10, 20, 30][index]}`,
     }));
 
-    assert.deepEqual((await loadLogicalTabGroupData(7)).groupOrder, [130, 110, 120]);
+    assert.deepEqual((await loadLogicalTabGroupData(7)).groupOrder, [30, 10, 20]);
 });
 
 test("reused numeric tab and group IDs do not revive unrelated order", async () => {
@@ -912,7 +920,7 @@ test("URL navigation and group rename refresh their durable identities", async (
     ];
     const restored = await loadLogicalTabGroupData(8);
     assert.deepEqual(restored.tabOrder, [103, 101, 102]);
-    assert.deepEqual(restored.groupOrder, [120, 110]);
+    assert.deepEqual(restored.groupOrder, [20, 10]);
 });
 
 test("duplicate group labels use member URLs, then physical order if indistinguishable", async () => {
@@ -932,7 +940,7 @@ test("duplicate group labels use member URLs, then physical order if indistingui
         { ...group(110), windowId: 8, title: "Same" },
         { ...group(120), windowId: 8, title: "Same" },
     ];
-    assert.deepEqual((await loadLogicalTabGroupData(8)).groupOrder, [120, 110]);
+    assert.deepEqual((await loadLogicalTabGroupData(8)).groupOrder, [20, 10]);
 
     resetState({
         tabs: [
@@ -953,7 +961,7 @@ test("duplicate group labels use member URLs, then physical order if indistingui
         { ...group(110), windowId: 8, title: "Same" },
         { ...group(120), windowId: 8, title: "Same" },
     ];
-    assert.deepEqual((await loadLogicalTabGroupData(8)).groupOrder, [110, 120]);
+    assert.deepEqual((await loadLogicalTabGroupData(8)).groupOrder, [10, 20]);
 });
 
 test("setTabGroup performs only the Chrome operation needed", async () => {
@@ -974,4 +982,35 @@ test("setTabGroup performs only the Chrome operation needed", async () => {
     assert.deepEqual(state.ungrouped, [[3]]);
     assert.equal(state.tabs.find(({ id }) => id === 1).groupId, 10);
     assert.equal(state.tabs.find(({ id }) => id === 3).groupId, NO_GROUP_ID);
+});
+
+test("closing or moving the last native tab keeps its group in the logical order", async () => {
+    resetState({
+        tabs: [tab(1, 0, 10), tab(2, 1, 20)],
+        groups: [group(10), group(20)],
+    });
+    await moveStoredGroupRelative(WINDOW_ID, 20, 10, "before");
+    state.tabs = [tab(2, 0, 20)];
+    state.groups = [group(20)];
+
+    const data = await loadLogicalTabGroupData(WINDOW_ID);
+    assert.deepEqual(data.groupOrder, [20, 10]);
+    assert.equal(data.groups.find(({ id }) => id === 10).title, "Group 10");
+    assert.deepEqual(buildVisibleLogicalTabIds(data, new Set()), [2]);
+});
+
+test("new empty groups can be ordered and explicitly removed without opening tabs", async () => {
+    const { createPersistentGroup, removePersistentGroup } = await import("../dist/shared/persistentGroups.js");
+    resetState({ tabs: [tab(1, 0, 10)], groups: [group(10)] });
+    await createPersistentGroup(WINDOW_ID, "Empty", "blue");
+    let data = await loadLogicalTabGroupData(WINDOW_ID);
+    const empty = data.groups.find(({ title }) => title === "Empty");
+    assert.ok(empty);
+    assert.equal(data.tabs.length, 1);
+    await moveStoredGroupRelative(WINDOW_ID, empty.id, 10, "before");
+    assert.deepEqual((await loadLogicalTabGroupData(WINDOW_ID)).groupOrder, [empty.id, 10]);
+    await removePersistentGroup(empty.id, WINDOW_ID);
+    data = await loadLogicalTabGroupData(WINDOW_ID);
+    assert.deepEqual(data.groupOrder, [10]);
+    assert.equal(data.tabs.length, 1);
 });

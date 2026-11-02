@@ -20,7 +20,7 @@
     "watch:static": "node scripts/watch-static.mjs",
     "watch:ts": "tsc --watch --preserveWatchOutput",
     "test:unit": "npm run build && node --test",
-    "test:extension": "npm run build && node tests/extension.browser.mjs",
+    "test:extension": "npm run build && node tests/extension.browser.mjs && node tests/workspace-restart.browser.mjs",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit"

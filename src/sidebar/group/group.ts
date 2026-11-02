@@ -1,3 +1,4 @@
+import { updatePersistentGroup, removePersistentGroup } from "../../shared/persistentGroups.js";
 import type { RequestRender, TabSelectionView } from "../types.js";
 import { cycleTabs } from "../tab/tab.js";
 import {
@@ -31,6 +32,7 @@ function createGroupEditForm(
   groupTitle: string,
   groupColour: chrome.tabGroups.TabGroup["color"],
   requestRender: RequestRender,
+  windowId: number,
   onClose: () => void,
   focusName = true,
 ) {
@@ -84,7 +86,7 @@ function createGroupEditForm(
       async () => {
         if (group.id == null) return;
 
-        await chrome.tabGroups.update(group.id, {
+        await updatePersistentGroup(group.id, windowId, {
           title: nameInput.value.trim(),
           color: groupColorMap[colourSelect.value as GroupColorChoice],
         });
@@ -139,6 +141,7 @@ export function buildGroup(
 
     const groupItem = document.createElement("li");
     groupItem.className = "group-item";
+    groupItem.classList.toggle("is-empty", tabsInGroup.length === 0);
     groupItem.dataset.groupId = String(groupId);
 
     const isCollapsed =
@@ -186,21 +189,24 @@ export function buildGroup(
         const tabIds = (tabsByGroup.get(groupId) ?? [])
           .map((tab) => tab.id)
           .filter((tabId): tabId is number => tabId != null);
-        if (tabIds.length === 0) return;
 
         const tabCount = tabIds.length;
         const confirmed = window.confirm(
-          `Close group "${groupTitle}" and ${tabCount} tab${tabCount === 1 ? "" : "s"}?`,
+          tabCount === 0
+            ? `Delete empty group "${groupTitle}"?`
+            : `Close group "${groupTitle}" and ${tabCount} tab${tabCount === 1 ? "" : "s"}?`,
         );
         if (!confirmed) return;
 
         closingGroups.add(closeKey);
         try {
-          await chrome.tabs.remove(tabIds);
+          if (tabIds.length > 0) await chrome.tabs.remove(tabIds);
+          await removePersistentGroup(groupId, windowId);
           if (collapsedGroups.has(String(groupId))) {
             collapsedGroups.delete(String(groupId));
             await persistCollapse(collapsedGroups, "tab");
           }
+          requestRender();
         } finally {
           closingGroups.delete(closeKey);
         }
@@ -249,6 +255,7 @@ export function buildGroup(
         groupTitle,
         groupColour,
         requestRender,
+        windowId,
         () => {
           editForm?.remove();
           editForm = null;
